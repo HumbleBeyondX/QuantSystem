@@ -1,0 +1,297 @@
+"""Domain models used across the QuantSystem.
+
+All models use dataclasses with __slots__ for memory efficiency and speed.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+from uuid import UUID, uuid4
+
+from core.enums import (
+    AssetClass,
+    DataType,
+    OrderSide,
+    OrderStatus,
+    OrderType,
+    PositionSide,
+    SignalDirection,
+    TimeFrame,
+)
+
+
+# ============================================================
+# Market Data Models
+# ============================================================
+
+
+@dataclass(slots=True)
+class Tick:
+    """Single price tick from a data source."""
+
+    symbol: str
+    timestamp: datetime
+    bid: float = 0.0
+    ask: float = 0.0
+    last: float = 0.0
+    volume: float = 0.0
+    source: str = ""
+    asset_class: AssetClass = AssetClass.CRYPTO
+
+
+@dataclass(slots=True)
+class Bar:
+    """OHLCV candlestick bar."""
+
+    symbol: str
+    timestamp: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+    timeframe: TimeFrame = TimeFrame.M1
+    vwap: Optional[float] = None
+    trades: Optional[int] = None
+    source: str = ""
+    asset_class: AssetClass = AssetClass.CRYPTO
+    metadata: Optional[Dict[str, Any]] = None
+
+
+@dataclass(slots=True)
+class Trade:
+    """Individual trade (from exchange tape)."""
+
+    symbol: str
+    timestamp: datetime
+    price: float
+    amount: float
+    side: OrderSide
+    trade_id: str = ""
+    source: str = ""
+
+
+@dataclass(slots=True)
+class OrderBookLevel:
+    """Single price level in an order book."""
+
+    price: float
+    quantity: float
+
+
+@dataclass(slots=True)
+class OrderBookSnapshot:
+    """Point-in-time snapshot of an order book."""
+
+    symbol: str
+    timestamp: datetime
+    bids: List[OrderBookLevel]
+    asks: List[OrderBookLevel]
+    source: str = ""
+
+    @property
+    def best_bid(self) -> float:
+        return self.bids[0].price if self.bids else 0.0
+
+    @property
+    def best_ask(self) -> float:
+        return self.asks[0].price if self.asks else 0.0
+
+    @property
+    def mid_price(self) -> float:
+        bb, ba = self.best_bid, self.best_ask
+        return (bb + ba) / 2 if bb and ba else 0.0
+
+    @property
+    def spread(self) -> float:
+        return self.best_ask - self.best_bid
+
+    @property
+    def microprice(self) -> float:
+        """Volume-weighted mid price (more accurate fair value estimate)."""
+        if not self.bids or not self.asks:
+            return self.mid_price
+        bid_vol = self.bids[0].quantity
+        ask_vol = self.asks[0].quantity
+        total = bid_vol + ask_vol
+        if total == 0:
+            return self.mid_price
+        return (self.best_bid * ask_vol + self.best_ask * bid_vol) / total
+
+
+# ============================================================
+# Trading Models
+# ============================================================
+
+
+@dataclass(slots=True)
+class Order:
+    """Represents an order in the system."""
+
+    order_id: UUID
+    strategy_id: str
+    symbol: str
+    side: OrderSide
+    order_type: OrderType
+    quantity: float
+    status: OrderStatus = OrderStatus.PENDING
+    limit_price: Optional[float] = None
+    stop_price: Optional[float] = None
+    filled_quantity: float = 0.0
+    average_fill_price: float = 0.0
+    commission: float = 0.0
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=datetime.utcnow)
+    broker_order_id: Optional[str] = None
+    asset_class: AssetClass = AssetClass.CRYPTO
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class Fill:
+    """Represents a trade execution fill."""
+
+    fill_id: UUID
+    order_id: UUID
+    symbol: str
+    side: OrderSide
+    price: float
+    quantity: float
+    commission: float
+    timestamp: datetime
+    strategy_id: str = ""
+    asset_class: AssetClass = AssetClass.CRYPTO
+
+
+@dataclass(slots=True)
+class Position:
+    """Current position in a symbol."""
+
+    symbol: str
+    strategy_id: str
+    side: PositionSide
+    quantity: float
+    average_entry_price: float
+    current_price: float = 0.0
+    unrealized_pnl: float = 0.0
+    realized_pnl: float = 0.0
+    opened_at: datetime = field(default_factory=datetime.utcnow)
+    asset_class: AssetClass = AssetClass.CRYPTO
+
+    @property
+    def market_value(self) -> float:
+        return self.quantity * self.current_price
+
+    @property
+    def cost_basis(self) -> float:
+        return self.quantity * self.average_entry_price
+
+
+# ============================================================
+# Signal & Portfolio Models
+# ============================================================
+
+
+@dataclass(slots=True)
+class Signal:
+    """Trading signal generated by a strategy."""
+
+    signal_id: UUID
+    strategy_id: str
+    symbol: str
+    direction: SignalDirection
+    strength: float  # Confidence [0, 1]
+    timestamp: datetime
+    target_quantity: Optional[float] = None
+    target_price: Optional[float] = None
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class TargetPosition:
+    """Desired position output from strategy/portfolio optimizer."""
+
+    symbol: str
+    strategy_id: str
+    target_quantity: float  # Positive=long, negative=short, 0=flat
+    target_weight: float = 0.0  # Portfolio weight [0, 1]
+    urgency: float = 0.5  # Execution urgency [0=patient, 1=immediate]
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+
+
+@dataclass(slots=True)
+class PortfolioSnapshot:
+    """Point-in-time portfolio state."""
+
+    timestamp: datetime
+    total_value: float
+    cash: float
+    positions: List[Position]
+    unrealized_pnl: float = 0.0
+    realized_pnl: float = 0.0
+    daily_pnl: float = 0.0
+
+    @property
+    def invested_value(self) -> float:
+        return sum(p.market_value for p in self.positions)
+
+    @property
+    def leverage(self) -> float:
+        if self.total_value == 0:
+            return 0.0
+        return abs(self.invested_value) / self.total_value
+
+
+# ============================================================
+# Options-Specific Models
+# ============================================================
+
+
+@dataclass(slots=True)
+class OptionContract:
+    """Represents a single option contract."""
+
+    symbol: str
+    underlying: str
+    strike: float
+    expiry: datetime
+    option_type: str  # "CALL" | "PUT"
+    multiplier: int = 100
+
+    # Greeks (updated in real-time)
+    delta: float = 0.0
+    gamma: float = 0.0
+    vega: float = 0.0
+    theta: float = 0.0
+    rho: float = 0.0
+    implied_vol: float = 0.0
+
+    # Market data
+    bid: float = 0.0
+    ask: float = 0.0
+    last: float = 0.0
+    volume: int = 0
+    open_interest: int = 0
+
+    @property
+    def mid_price(self) -> float:
+        return (self.bid + self.ask) / 2 if self.bid and self.ask else self.last
+
+    @property
+    def days_to_expiry(self) -> float:
+        return max(0, (self.expiry - datetime.utcnow()).total_seconds() / 86400)
+
+
+@dataclass(slots=True)
+class GreeksExposure:
+    """Aggregated Greeks exposure for a portfolio."""
+
+    delta: float = 0.0
+    gamma: float = 0.0
+    vega: float = 0.0
+    theta: float = 0.0
+    rho: float = 0.0

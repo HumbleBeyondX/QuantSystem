@@ -1,0 +1,22 @@
+strategy_id: crypto_breakout_v1
+name: 1-Min Breakout with Volume Confirmation
+asset_class: crypto
+enabled: true
+mode: paper
+
+symbols:
+  - BTC/USDT
+  - ETH/USDT
+  - SOL/USDT
+
+timeframe: 1m
+
+parameters:
+  lookback_bars: 20                # Support/resistance lookback
+  volume_multiplier: 2.0           # Volume must be 2x average for confirmation
+  atr_period: 14
+  atr_stop_multiplier: 1.5        # Stop loss = 1.5 * ATR
+  atr_target_multiplier: 3.0      # Take profit = 3 * ATR
+  min_consolidation_bars: 5        # Min bars in range before breakout
+  max_position_size_usd: 15000
+  max_concurrent_positions: 3

@@ -1,0 +1,31 @@
+# Crypto Swing/Trend Following Strategy
+strategy:
+  name: crypto_swing
+  asset_class: crypto
+  timeframe: 4h
+  description: "Multi-timeframe EMA trend following with RSI filter"
+
+parameters:
+  ema_fast: 21
+  ema_medium: 55
+  ema_slow: 200
+  rsi_period: 14
+  rsi_oversold: 35
+  rsi_overbought: 65
+  atr_period: 14
+  atr_stop_multiplier: 2.5
+  atr_trail_multiplier: 2.0
+  position_size_pct: 5.0
+
+risk:
+  max_position_pct: 10.0
+  stop_loss_pct: 5.0
+  max_daily_loss_pct: 3.0
+  max_open_positions: 5
+
+symbols:
+  - BTC/USDT
+  - ETH/USDT
+  - SOL/USDT
+  - AVAX/USDT
+  - LINK/USDT

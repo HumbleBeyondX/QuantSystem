@@ -1,0 +1,32 @@
+# Auto-generated optimized parameters
+# Generated: 2026-03-17T00:44:21.922002
+# Sharpe: 0.064 | Return: -1.37%
+
+strategy_id: crypto_scalping_optimized
+name: Crypto Scalping (Optimized)
+asset_class: crypto
+enabled: true
+mode: paper
+
+symbols:
+  - BTC/USDT
+  - ETH/USDT
+
+timeframe: 1s
+
+parameters:
+  ema_fast: 9
+  ema_slow: 30
+  rsi_period: 14
+  rsi_overbought: 70
+  rsi_oversold: 30
+  imbalance_threshold: 0.45
+  take_profit_pct: 0.50
+  stop_loss_pct: 0.08
+  cooldown_seconds: 30
+  max_position_size_usd: 10000
+
+risk:
+  max_position_pct: 0.10
+  max_daily_loss_pct: 0.02
+  max_open_positions: 2

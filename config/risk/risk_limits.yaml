@@ -1,0 +1,30 @@
+# ============================================================
+# Risk Management Limits Configuration
+# ============================================================
+
+# --- Pre-Trade Checks (Layer 1) ---
+pre_trade:
+  max_order_value_usd: 50000       # Max single order value
+  max_position_pct: 0.15           # Max single position as % of portfolio
+  max_portfolio_leverage: 2.0      # Max total leverage
+  max_daily_loss_pct: 0.03         # Max daily loss as % of portfolio (3%)
+  max_daily_trades: 500            # Max trades per day (all strategies)
+
+# --- Real-Time Monitoring (Layer 2) ---
+realtime:
+  var_confidence: 0.99             # VaR confidence level
+  var_window_days: 252             # VaR lookback period
+  max_drawdown_pct: 0.10           # Max tolerable drawdown (10%)
+  correlation_alert_threshold: 0.85 # Alert when cross-asset corr exceeds this
+  greeks:
+    max_portfolio_delta: 1000      # Max absolute portfolio delta
+    max_portfolio_gamma: 500       # Max absolute portfolio gamma
+    max_portfolio_vega: 10000      # Max absolute portfolio vega
+
+# --- Circuit Breaker / Kill Switch (Layer 3) ---
+circuit_breaker:
+  strategy_daily_loss_pct: 0.02    # Pause strategy if daily loss > 2%
+  portfolio_daily_loss_pct: 0.05   # Liquidate all if portfolio loss > 5%
+  data_stale_seconds: 120          # Halt new orders if data > 2 min stale
+  max_latency_ms: 5000             # Halt trading if system latency > 5s
+  cooldown_minutes: 30             # Cooldown after circuit breaker triggers

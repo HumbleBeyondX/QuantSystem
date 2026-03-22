@@ -1,0 +1,58 @@
+# SPY Gamma Scalp Strategy v2.0 - Optimized Parameters
+# Optimized via 200-sample random search on 2023-01-01 to 2026-03-15 data
+# Sharpe: 1.98 | Sortino: 1.85 | Calmar: 3.58 | Max DD: 5.56%
+# Annual Return: 19.9% | Annual Vol: 7.0% | Win Rate: 80%
+
+strategy_id: spy_gamma_scalp
+name: SPY Gamma Scalp v2
+asset_class: EQUITY
+symbols:
+  - SPY
+enabled: true
+mode: paper
+
+parameters:
+  # Core options parameters
+  dte: 5                        # 5-day (weekly) straddles
+  base_contracts: 30            # Base contracts per trade
+  max_notional_pct: 0.45        # Max 45% of equity per trade
+
+  # Signal thresholds
+  sell_signal_threshold: 0.25   # Composite score > 0.25 -> sell vol
+  buy_signal_threshold: 0.80    # Effectively disabled (buy vol underperforms)
+
+  # Signal weights (5-factor composite)
+  w_vrp: 0.35                   # Volatility Risk Premium (IV - RV)
+  w_vix_mr: 0.30                # VIX mean reversion
+  w_vol_mom: 0.20               # Vol momentum (clustering)
+  w_vov: 0.10                   # Vol-of-vol (uncertainty)
+  w_gap: 0.05                   # Gap/range signal
+
+  # Risk management
+  max_loss_pct: 0.20            # 20% of straddle cost hard stop
+  max_drawdown_pct: 0.08        # 8% portfolio circuit breaker
+  max_consecutive_losses: 3     # Cooldown after 3 losses
+  cooldown_bars: 5              # 5-bar cooldown period
+
+  # Profit management
+  take_profit_pct: 0.70         # Take profit at 70% of straddle cost
+  trailing_stop_activation: 0.50 # Activate trailing stop at 50% profit
+  trailing_stop_pct: 0.40       # Trail 40% from peak P&L
+
+  # VIX regime filter
+  vix_floor: 12.0               # Don't trade when VIX < 12
+  vix_ceiling: 40.0             # Don't trade when VIX > 40
+
+  # Hedge parameters
+  hedge_delta_threshold: 0.06   # Rehedge when delta exceeds 6%
+  min_hedge_notional: 800.0     # Min $800 delta before hedge
+  max_abs_delta_shares: 500     # Max hedge position in shares
+
+  # Transaction costs (IB/CBOE realistic)
+  commission_per_contract: 0.65
+  option_spread_pct: 0.005
+  equity_spread_per_share: 0.01
+  equity_slippage_bps: 1.0
+
+  # Roll
+  roll_dte_days: 1              # Roll 1 day before expiry

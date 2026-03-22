@@ -1,0 +1,25 @@
+# Crypto Event-Driven Strategy
+strategy:
+  name: crypto_event
+  asset_class: crypto
+  timeframe: 5m
+  description: "Event-driven: funding rates, liquidations, macro events"
+
+parameters:
+  funding_rate_threshold: 0.0005
+  liquidation_surge_window: 300
+  liquidation_surge_count: 50
+  sentiment_extreme_threshold: 0.8
+  holding_period_bars: 24
+  position_size_usd: 8000
+
+risk:
+  max_position_usd: 15000
+  stop_loss_pct: 3.0
+  take_profit_pct: 5.0
+  max_daily_trades: 10
+  max_daily_loss_usd: 1000
+
+symbols:
+  - BTC/USDT
+  - ETH/USDT

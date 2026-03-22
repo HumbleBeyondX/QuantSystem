@@ -1,0 +1,160 @@
+version: "3.9"
+
+x-common-env: &common-env
+  TZ: America/New_York
+
+services:
+  # ============================================================
+  # MESSAGE BUS: Redpanda (Kafka-compatible, lighter weight)
+  # ============================================================
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.1.1
+    container_name: qs-redpanda
+    command:
+      - redpanda start
+      - --smp 1
+      - --memory 1G
+      - --reserve-memory 0M
+      - --overprovisioned
+      - --node-id 0
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://redpanda:8082,external://localhost:18082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --advertise-schema-registry-addr internal://redpanda:8081,external://localhost:18081
+    ports:
+      - "19092:19092"
+      - "18082:18082"
+      - "18081:18081"
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:v2.4.5
+    container_name: qs-redpanda-console
+    ports:
+      - "8180:8080"
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      SCHEMA_REGISTRY_URL: http://redpanda:8081
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
+  # ============================================================
+  # TIME-SERIES DATABASE: TimescaleDB (PostgreSQL 16)
+  # ============================================================
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: qs-timescaledb
+    environment:
+      <<: *common-env
+      POSTGRES_USER: ${TSDB_USER:-quant}
+      POSTGRES_PASSWORD: ${TSDB_PASSWORD:-quantpass}
+      POSTGRES_DB: ${TSDB_DB:-quantdb}
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescaledb-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quant -d quantdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # HOT CACHE: Redis
+  # ============================================================
+  redis:
+    image: redis:7-alpine
+    container_name: qs-redis
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # OBJECT STORAGE: MinIO (S3-compatible)
+  # ============================================================
+  minio:
+    image: minio/minio:latest
+    container_name: qs-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: qs-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin;
+      mc mb --ignore-existing local/historical-data;
+      mc mb --ignore-existing local/model-artifacts;
+      mc mb --ignore-existing local/backtest-results;
+      exit 0;
+      "
+
+  # ============================================================
+  # MONITORING: Prometheus
+  # ============================================================
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: qs-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+
+  # ============================================================
+  # MONITORING: Grafana
+  # ============================================================
+  grafana:
+    image: grafana/grafana:10.4.1
+    container_name: qs-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-piechart-panel
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+      - timescaledb
+
+volumes:
+  redpanda-data:
+  timescaledb-data:
+  redis-data:
+  minio-data:
+  prometheus-data:
+  grafana-data:

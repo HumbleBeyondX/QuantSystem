@@ -1,0 +1,28 @@
+strategy_id: options_delta_neutral_v1
+name: Delta-Neutral Options Hedging
+asset_class: options
+enabled: true
+mode: paper
+
+underlyings:
+  - SPY
+  - QQQ
+  - AAPL
+
+parameters:
+  # Delta hedging
+  delta_tolerance: 0.05            # Rebalance when |portfolio delta| > 0.05 * notional
+  rebalance_interval_minutes: 15   # Check delta every 15 min
+  hedge_instrument: stock          # stock | futures
+
+  # Options selection
+  min_dte: 7                       # Min days to expiration
+  max_dte: 45                      # Max days to expiration
+  min_iv_percentile: 30            # Only trade when IV percentile > 30
+  preferred_delta: 0.30            # Target delta for new options positions
+
+  # Risk limits
+  max_vega_exposure: 5000
+  max_gamma_exposure: 200
+  max_theta_daily: -500            # Max daily theta decay allowed
+  max_position_notional: 100000

@@ -1,0 +1,34 @@
+# Alpaca Markets Configuration
+# Free paper trading API - https://alpaca.markets
+#
+# API keys are loaded from .env file or environment variables
+# NEVER commit API keys directly in this file
+
+connection:
+  paper_url: "https://paper-api.alpaca.markets"
+  live_url: "https://api.alpaca.markets"
+  data_url: "https://data.alpaca.markets"
+  mode: paper
+
+market_data:
+  bar_timeframes:
+    - 1Min
+    - 5Min
+    - 15Min
+    - 1Hour
+    - 1Day
+  feed: iex
+
+execution:
+  order_types:
+    - market
+    - limit
+    - stop
+    - stop_limit
+    - trailing_stop
+  default_tif: day
+  fractional_shares: false
+
+paper_trading:
+  initial_equity: 100000
+  reset_on_start: false

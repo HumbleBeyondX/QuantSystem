@@ -1,0 +1,110 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quantsystem"
+version = "0.1.0"
+description = "Production-grade quantitative trading system for US Equities and Crypto"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+
+dependencies = [
+    # Core
+    "pydantic>=2.5",
+    "pydantic-settings>=2.1",
+    "pyyaml>=6.0",
+    "structlog>=24.1",
+    "python-dotenv>=1.0",
+
+    # Async
+    "asyncio>=3.4",
+    "aiohttp>=3.9",
+    "aiofiles>=23.2",
+
+    # Data
+    "pandas>=2.1",
+    "numpy>=1.26",
+    "pyarrow>=14.0",
+
+    # Database
+    "asyncpg>=0.29",
+    "redis[hiredis]>=5.0",
+    "minio>=7.2",
+
+    # Messaging
+    "aiokafka>=0.10",
+
+    # Trading - Crypto
+    "ccxt>=4.2",
+
+    # Trading - US Equities
+    "ib_insync>=0.9.86",
+
+    # Technical Analysis
+    "pandas_ta>=0.3.14b",
+
+    # Portfolio
+    "pyportfolioopt>=1.5",
+    "scipy>=1.11",
+
+    # ML
+    "scikit-learn>=1.3",
+    "lightgbm>=4.1",
+    "torch>=2.1",
+
+    # RL
+    "gymnasium>=0.29",
+    "stable-baselines3>=2.2",
+
+    # Web Backend
+    "fastapi>=0.108",
+    "uvicorn[standard]>=0.25",
+    "websockets>=12.0",
+
+    # Monitoring
+    "prometheus-client>=0.19",
+
+    # ML Tracking
+    "mlflow>=2.10",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=4.1",
+    "pytest-mock>=3.12",
+    "ruff>=0.1",
+    "mypy>=1.8",
+    "black>=24.1",
+    "pre-commit>=3.6",
+]
+
+options = [
+    "QuantLib-Python>=1.33",
+]
+
+[tool.setuptools.packages.find]
+include = ["core*", "data*", "research*", "strategies*", "portfolio*", "execution*", "backtesting*", "dashboard*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "integration: marks integration tests requiring Docker services",
+    "slow: marks slow-running tests",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true

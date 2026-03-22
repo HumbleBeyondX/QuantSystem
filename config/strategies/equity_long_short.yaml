@@ -1,0 +1,30 @@
+# Equity Long/Short Pairs Trading Strategy
+strategy:
+  name: equity_long_short
+  asset_class: equity
+  timeframe: 1d
+  description: "Market-neutral pairs trading via spread z-score"
+
+parameters:
+  lookback_period: 60
+  zscore_entry: 2.0
+  zscore_exit: 0.5
+  zscore_stop: 3.5
+  hedge_ratio_method: ols  # "ols" | "kalman"
+  min_correlation: 0.7
+  min_cointegration_pvalue: 0.05
+  position_size_pct: 5.0
+  max_pairs: 10
+
+risk:
+  max_position_pct: 10.0
+  max_net_exposure: 0.10
+  max_gross_exposure: 2.0
+  max_daily_loss_pct: 2.0
+
+pairs:
+  - [AAPL, MSFT]
+  - [XOM, CVX]
+  - [JPM, BAC]
+  - [KO, PEP]
+  - [HD, LOW]

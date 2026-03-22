@@ -1,0 +1,22 @@
+# Interactive Brokers TWS/Gateway Configuration
+connection:
+  host: ${IB_HOST:-127.0.0.1}
+  port: ${IB_PORT:-7497}        # 7497=TWS Paper, 7496=TWS Live
+  client_id: ${IB_CLIENT_ID:-1}
+  timeout: 30
+  readonly: false
+
+market_data:
+  use_rth: true                  # Regular Trading Hours only
+  bar_sizes:
+    - "1 min"
+    - "5 mins"
+    - "1 hour"
+    - "1 day"
+  generic_tick_list: ""          # Empty = all default ticks
+
+execution:
+  account: ""                    # Leave empty for default account
+  smart_routing: true
+  default_exchange: SMART
+  currency: USD

@@ -1,0 +1,29 @@
+# Crypto Orderbook Imbalance Strategy
+strategy:
+  name: crypto_orderbook
+  asset_class: crypto
+  timeframe: tick
+  description: "L2 orderbook imbalance and microprice signals"
+
+parameters:
+  depth_levels: 10
+  imbalance_threshold: 0.65
+  microprice_momentum_window: 50
+  wall_size_multiplier: 5.0
+  min_spread_bps: 2.0
+  max_spread_bps: 20.0
+  position_size_usd: 5000
+  max_holding_seconds: 300
+  cooldown_seconds: 10
+
+risk:
+  max_position_usd: 10000
+  stop_loss_bps: 15.0
+  take_profit_bps: 10.0
+  max_daily_trades: 200
+  max_daily_loss_usd: 500
+
+symbols:
+  - BTC/USDT
+  - ETH/USDT
+  - SOL/USDT

@@ -1,0 +1,26 @@
+strategy_id: crypto_scalping_v1
+name: Crypto Scalping (EMA+VWAP+Microprice)
+asset_class: crypto
+enabled: true
+mode: paper  # paper | live
+
+symbols:
+  - BTC/USDT
+  - ETH/USDT
+
+timeframe: 1s  # tick/1s/1m
+
+parameters:
+  ema_fast: 9
+  ema_slow: 21
+  rsi_period: 14
+  rsi_overbought: 70
+  rsi_oversold: 30
+  vwap_deviation_threshold: 0.002  # 0.2% from VWAP
+  microprice_weight: 0.6
+  take_profit_pct: 0.003           # 0.3%
+  stop_loss_pct: 0.0015            # 0.15%
+  trailing_stop_pct: 0.002
+  max_position_size_usd: 10000
+  cooldown_seconds: 30
+  max_trades_per_hour: 20

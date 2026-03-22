@@ -1,0 +1,33 @@
+# BTC Momentum Strategy Configuration
+# Trend-following momentum for daily/4H timeframes
+
+strategy_id: crypto_momentum
+name: crypto_momentum
+asset_class: crypto
+enabled: true
+
+parameters:
+  # EMA periods
+  ema_fast: 20
+  ema_slow: 50
+  ema_trend: 200
+
+  # Momentum indicators
+  roc_period: 20
+  rsi_period: 14
+  adx_period: 14
+  adx_threshold: 20
+
+  # Entry filters
+  rsi_long_max: 75
+  rsi_long_min: 35
+  rsi_short_max: 65
+  rsi_short_min: 25
+  roc_threshold: 0.02  # 2% momentum required
+
+  # Risk management
+  atr_period: 14
+  atr_stop_mult: 3.0
+  atr_tp_mult: 5.0
+  trailing_stop_atr: 2.5
+  max_position_usd: 50000

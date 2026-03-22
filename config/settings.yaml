@@ -1,0 +1,108 @@
+# ============================================================
+# QuantSystem Master Configuration
+# ============================================================
+# Secrets are loaded from environment variables (.env file).
+# This file contains non-secret configuration only.
+
+environment: development  # development | staging | production
+
+# --- Database ---
+database:
+  timescaledb:
+    host: ${TSDB_HOST:-localhost}
+    port: ${TSDB_PORT:-5432}
+    user: ${TSDB_USER:-quant}
+    password: ${TSDB_PASSWORD:-quantpass}
+    database: ${TSDB_DB:-quantdb}
+    pool_min: 2
+    pool_max: 10
+  redis:
+    url: ${REDIS_URL:-redis://localhost:6379/0}
+    max_connections: 20
+
+# --- Kafka/Redpanda ---
+kafka:
+  bootstrap_servers: ${KAFKA_BOOTSTRAP_SERVERS:-localhost:19092}
+  consumer_group: quant-system
+  auto_offset_reset: latest
+  batch_size: 100
+  linger_ms: 10
+
+# --- Object Storage (MinIO/S3) ---
+storage:
+  minio:
+    endpoint: ${MINIO_ENDPOINT:-localhost:9000}
+    access_key: ${MINIO_ACCESS_KEY:-minioadmin}
+    secret_key: ${MINIO_SECRET_KEY:-minioadmin}
+    secure: false
+  buckets:
+    historical_data: historical-data
+    model_artifacts: model-artifacts
+    backtest_results: backtest-results
+
+# --- Symbols to Track ---
+symbols:
+  crypto:
+    - BTC/USDT
+    - ETH/USDT
+    - SOL/USDT
+    - BNB/USDT
+    - XRP/USDT
+  equity:
+    - AAPL
+    - MSFT
+    - GOOGL
+    - AMZN
+    - NVDA
+    - META
+    - SPY
+    - QQQ
+  options:
+    - SPY
+    - QQQ
+    - AAPL
+    - NVDA
+
+# --- Data Types per Connector ---
+connectors:
+  ccxt:
+    exchanges:
+      - binance
+      - okx
+      - bybit
+    data_types:
+      - trade
+      - orderbook
+      - ohlcv
+  polygon:
+    data_types:
+      - trade
+      - quote
+      - bar
+  ib:
+    data_types:
+      - tick
+      - bar
+      - orderbook
+
+# --- Feature Computation ---
+features:
+  technical:
+    ema_periods: [9, 21, 55, 200]
+    rsi_period: 14
+    macd_fast: 12
+    macd_slow: 26
+    macd_signal: 9
+    bollinger_period: 20
+    bollinger_std: 2.0
+    atr_period: 14
+  microstructure:
+    orderbook_depth: 20
+    vpin_bucket_size: 50
+    ofi_window: 100
+
+# --- Logging ---
+logging:
+  level: INFO
+  format: json  # json | console
+  file: logs/quantsystem.log

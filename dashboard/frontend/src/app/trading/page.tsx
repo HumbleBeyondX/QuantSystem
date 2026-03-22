@@ -1,0 +1,698 @@
+'use client'
+
+import { useCallback, useEffect, useState } from 'react'
+
+const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000'
+
+// ── Types ────────────────────────────────────────────────────
+
+interface TradingStatus {
+  is_running: boolean
+  data_source: string
+  execution_mode: string
+  last_bar_date: string | null
+  spy_price: number
+  vix: number
+  implied_vol: number
+  rv_20d: number
+  vrp: number
+  position_open: boolean
+  trade_direction: string
+  contracts: number
+  strike: number
+  hedge_shares: number
+  realized_pnl: number
+  unrealized_pnl: number
+  total_equity: number
+  initial_capital: number
+  portfolio_delta: number
+  portfolio_gamma: number
+  portfolio_theta: number
+  portfolio_vega: number
+  total_trades: number
+  consecutive_losses: number
+  peak_equity: number
+  broker_connected: boolean
+  broker_equity: number | null
+  broker_cash: number | null
+}
+
+interface DailySnapshot {
+  date: string
+  spy_close: number
+  vix: number
+  implied_vol: number
+  rv_20d: number
+  actions: string[]
+  position_open: boolean
+  trade_direction: string
+  contracts: number
+  realized_pnl: number
+  unrealized_pnl: number
+  total_equity: number
+  total_trades: number
+}
+
+interface TradeRecord {
+  timestamp: string
+  direction: string
+  reason: string
+  entry_spot: number
+  exit_spot: number
+  strike: number
+  entry_iv: number
+  exit_iv: number
+  contracts: number
+  total_pnl: number
+  option_pnl: number
+  hedge_pnl: number
+  gamma_pnl: number
+  theta_pnl: number
+  vega_pnl: number
+  txn_costs: number
+  running_total: number
+}
+
+interface EquityPoint {
+  date: string
+  equity: number
+  drawdown: number
+}
+
+interface TradingConfig {
+  available_sources: string[]
+  strategies: Array<{
+    id: string
+    name: string
+    description: string
+    sharpe: number
+    backtest_trades: number
+    backtest_win_rate: number
+  }>
+  execution_modes: string[]
+  state_exists: boolean
+}
+
+// ── Helper Components ────────────────────────────────────────
+
+function MetricCard({ title, value, sub, color = 'text-gray-100' }: {
+  title: string; value: string; sub?: string; color?: string
+}) {
+  return (
+    <div className="bg-surface rounded-xl border border-border p-4">
+      <p className="text-[11px] text-gray-500 uppercase tracking-wider">{title}</p>
+      <p className={`text-lg font-bold mt-1 font-mono ${color}`}>{value}</p>
+      {sub && <p className="text-[10px] text-gray-500 mt-0.5">{sub}</p>}
+    </div>
+  )
+}
+
+function GreekGauge({ label, value, min, max, color }: {
+  label: string; value: number; min: number; max: number; color: string
+}) {
+  const range = max - min
+  const pct = range > 0 ? Math.max(0, Math.min(100, ((value - min) / range) * 100)) : 50
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs text-gray-400 w-14 text-right">{label}</span>
+      <div className="flex-1 h-2 bg-background rounded-full overflow-hidden relative">
+        <div
+          className={`h-full rounded-full ${color}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className="text-xs font-mono text-gray-300 w-16 text-right">
+        {value > 0 ? '+' : ''}{value.toFixed(1)}
+      </span>
+    </div>
+  )
+}
+
+function EquityCurveChart({ data }: { data: EquityPoint[] }) {
+  if (data.length < 2) {
+    return (
+      <div className="h-48 flex items-center justify-center text-gray-500 text-sm">
+        Insufficient data for chart. Run paper trading for a few days.
+      </div>
+    )
+  }
+
+  const equities = data.map(d => d.equity)
+  const minE = Math.min(...equities) * 0.998
+  const maxE = Math.max(...equities) * 1.002
+  const rangeE = maxE - minE || 1
+
+  const w = 600
+  const h = 160
+  const pts = data.map((d, i) => ({
+    x: (i / (data.length - 1)) * w,
+    y: h - ((d.equity - minE) / rangeE) * h,
+  }))
+  const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+  const area = `${line} L${w},${h} L0,${h} Z`
+
+  const isUp = equities[equities.length - 1] >= equities[0]
+  const gradId = 'eq-grad'
+  const strokeColor = isUp ? '#10b981' : '#ef4444'
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-48" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor={strokeColor} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={strokeColor} stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${gradId})`} />
+      <path d={line} fill="none" stroke={strokeColor} strokeWidth="2" />
+    </svg>
+  )
+}
+
+// ── Main Page ────────────────────────────────────────────────
+
+export default function TradingPage() {
+  const [tab, setTab] = useState<'monitor' | 'control'>('monitor')
+  const [status, setStatus] = useState<TradingStatus | null>(null)
+  const [dailyLog, setDailyLog] = useState<DailySnapshot[]>([])
+  const [trades, setTrades] = useState<TradeRecord[]>([])
+  const [equityCurve, setEquityCurve] = useState<EquityPoint[]>([])
+  const [config, setConfig] = useState<TradingConfig | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [running, setRunning] = useState(false)
+  const [selectedSource, setSelectedSource] = useState('alpaca')
+  const [useExecution, setUseExecution] = useState(true)
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [statusRes, dailyRes, tradesRes, equityRes, configRes] = await Promise.all([
+        fetch(`${API}/api/paper-trading/status`).then(r => r.json()),
+        fetch(`${API}/api/paper-trading/daily-log?limit=100`).then(r => r.json()),
+        fetch(`${API}/api/paper-trading/trades?limit=50`).then(r => r.json()),
+        fetch(`${API}/api/paper-trading/equity-curve`).then(r => r.json()),
+        fetch(`${API}/api/paper-trading/config`).then(r => r.json()),
+      ])
+      setStatus(statusRes)
+      setDailyLog(dailyRes)
+      setTrades(tradesRes)
+      setEquityCurve(equityRes)
+      setConfig(configRes)
+    } catch (e) {
+      console.error('Failed to fetch trading data:', e)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchData()
+    const interval = setInterval(fetchData, 10000) // Poll every 10s
+    return () => clearInterval(interval)
+  }, [fetchData])
+
+  const handleRunOnce = async () => {
+    setRunning(true)
+    try {
+      await fetch(`${API}/api/paper-trading/run-once`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data_source: selectedSource,
+          execution: useExecution,
+          initial_capital: status?.initial_capital ?? 100000,
+        }),
+      })
+      // Wait a bit then refresh
+      setTimeout(fetchData, 5000)
+    } catch (e) {
+      console.error('Failed to run:', e)
+    } finally {
+      setTimeout(() => setRunning(false), 5000)
+    }
+  }
+
+  const handleReset = async () => {
+    if (!confirm('Reset paper trading state? This will clear all history.')) return
+    try {
+      await fetch(`${API}/api/paper-trading/reset`, { method: 'POST' })
+      fetchData()
+    } catch (e) {
+      console.error('Failed to reset:', e)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-gray-500">Loading trading data...</div>
+      </div>
+    )
+  }
+
+  const s = status ?? {} as TradingStatus
+  const totalPnl = (s.realized_pnl ?? 0) + (s.unrealized_pnl ?? 0)
+  const pnlPct = s.initial_capital ? (totalPnl / s.initial_capital * 100) : 0
+
+  return (
+    <div className="space-y-6 max-w-[1400px]">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Paper Trading</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            SPY Gamma Scalp Strategy - Live Monitoring & Control
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          {/* Broker status */}
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-surface rounded-lg border border-border">
+            <span className={`w-2 h-2 rounded-full ${s.broker_connected ? 'bg-success animate-pulse' : 'bg-gray-600'}`} />
+            <span className="text-xs text-gray-400">
+              {s.broker_connected ? `Alpaca $${(s.broker_equity ?? 0).toLocaleString()}` : 'Broker Offline'}
+            </span>
+          </div>
+          {/* Tab toggle */}
+          <div className="flex bg-surface rounded-lg border border-border overflow-hidden">
+            <button
+              onClick={() => setTab('monitor')}
+              className={`px-4 py-1.5 text-xs font-medium transition-colors ${tab === 'monitor' ? 'bg-primary text-white' : 'text-gray-400 hover:text-gray-200'}`}
+            >
+              Monitor
+            </button>
+            <button
+              onClick={() => setTab('control')}
+              className={`px-4 py-1.5 text-xs font-medium transition-colors ${tab === 'control' ? 'bg-primary text-white' : 'text-gray-400 hover:text-gray-200'}`}
+            >
+              Control
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {tab === 'monitor' ? (
+        <>
+          {/* ── KPI Cards ── */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            <MetricCard
+              title="Total Equity"
+              value={`$${(s.total_equity ?? 100000).toLocaleString(undefined, { minimumFractionDigits: 0 })}`}
+              sub={`${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}% all time`}
+              color={totalPnl >= 0 ? 'text-success' : 'text-danger'}
+            />
+            <MetricCard
+              title="Realized P&L"
+              value={`${s.realized_pnl >= 0 ? '+' : ''}$${(s.realized_pnl ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+              color={s.realized_pnl >= 0 ? 'text-success' : 'text-danger'}
+            />
+            <MetricCard
+              title="Unrealized P&L"
+              value={`${s.unrealized_pnl >= 0 ? '+' : ''}$${(s.unrealized_pnl ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+              color={s.unrealized_pnl >= 0 ? 'text-success' : 'text-danger'}
+            />
+            <MetricCard
+              title="SPY Price"
+              value={`$${(s.spy_price ?? 0).toFixed(2)}`}
+              sub={`Last: ${s.last_bar_date ?? 'N/A'}`}
+            />
+            <MetricCard
+              title="VIX"
+              value={(s.vix ?? 0).toFixed(2)}
+              sub={`IV: ${((s.implied_vol ?? 0) * 100).toFixed(1)}%`}
+              color={s.vix > 30 ? 'text-danger' : s.vix > 20 ? 'text-warning' : 'text-success'}
+            />
+            <MetricCard
+              title="VRP (IV - RV)"
+              value={`${s.vrp >= 0 ? '+' : ''}${((s.vrp ?? 0) * 100).toFixed(1)}%`}
+              sub={`RV20: ${((s.rv_20d ?? 0) * 100).toFixed(1)}%`}
+              color={s.vrp > 0 ? 'text-success' : 'text-danger'}
+            />
+          </div>
+
+          {/* ── Position & Greeks ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Active Position */}
+            <div className="bg-surface rounded-xl border border-border p-5">
+              <h3 className="text-sm font-semibold text-gray-300 mb-4">Active Position</h3>
+              {s.position_open ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                      s.trade_direction === 'sell_vol'
+                        ? 'bg-danger/20 text-danger'
+                        : 'bg-success/20 text-success'
+                    }`}>
+                      {s.trade_direction === 'sell_vol' ? 'SHORT STRADDLE' : 'LONG STRADDLE'}
+                    </span>
+                    <span className="text-xs text-gray-500">SPY</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div><span className="text-gray-500">Strike:</span> <span className="font-mono">${s.strike}</span></div>
+                    <div><span className="text-gray-500">Contracts:</span> <span className="font-mono">{s.contracts}</span></div>
+                    <div><span className="text-gray-500">Hedge:</span> <span className="font-mono">{s.hedge_shares} shr</span></div>
+                    <div><span className="text-gray-500">Trades:</span> <span className="font-mono">{s.total_trades}</span></div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-6">
+                  <p className="text-gray-500 text-sm">No active position</p>
+                  <p className="text-[11px] text-gray-600 mt-1">
+                    Waiting for signal (composite &gt; threshold)
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Greeks */}
+            <div className="bg-surface rounded-xl border border-border p-5">
+              <h3 className="text-sm font-semibold text-gray-300 mb-4">Portfolio Greeks</h3>
+              <div className="space-y-3">
+                <GreekGauge label="Delta" value={s.portfolio_delta ?? 0} min={-500} max={500} color="bg-primary" />
+                <GreekGauge label="Gamma" value={s.portfolio_gamma ?? 0} min={0} max={1000} color="bg-success" />
+                <GreekGauge label="Theta" value={s.portfolio_theta ?? 0} min={-2000} max={0} color="bg-danger" />
+                <GreekGauge label="Vega" value={s.portfolio_vega ?? 0} min={-3000} max={3000} color="bg-accent" />
+              </div>
+            </div>
+
+            {/* Risk */}
+            <div className="bg-surface rounded-xl border border-border p-5">
+              <h3 className="text-sm font-semibold text-gray-300 mb-4">Risk Metrics</h3>
+              <div className="space-y-2.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Total Trades</span>
+                  <span className="font-mono">{s.total_trades}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Consec. Losses</span>
+                  <span className={`font-mono ${s.consecutive_losses >= 3 ? 'text-danger' : ''}`}>
+                    {s.consecutive_losses}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Peak Equity</span>
+                  <span className="font-mono">${(s.peak_equity ?? 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Drawdown</span>
+                  <span className={`font-mono ${
+                    s.peak_equity > 0 && s.total_equity < s.peak_equity + s.initial_capital ? 'text-warning' : ''
+                  }`}>
+                    {s.peak_equity > 0
+                      ? `${(((s.peak_equity + s.initial_capital - s.total_equity) / (s.peak_equity + s.initial_capital)) * 100).toFixed(2)}%`
+                      : '0.00%'
+                    }
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Win Rate</span>
+                  <span className="font-mono">
+                    {s.total_trades > 0
+                      ? `${((trades.filter(t => t.total_pnl > 0).length / Math.max(trades.length, 1)) * 100).toFixed(0)}%`
+                      : 'N/A'
+                    }
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Equity Curve ── */}
+          <div className="bg-surface rounded-xl border border-border p-5">
+            <h3 className="text-sm font-semibold text-gray-300 mb-3">Equity Curve</h3>
+            <EquityCurveChart data={equityCurve} />
+            {equityCurve.length > 0 && (
+              <div className="flex justify-between text-[10px] text-gray-600 mt-1 px-1">
+                <span>{equityCurve[0]?.date}</span>
+                <span>{equityCurve[equityCurve.length - 1]?.date}</span>
+              </div>
+            )}
+          </div>
+
+          {/* ── Daily Activity Log ── */}
+          <div className="bg-surface rounded-xl border border-border p-5">
+            <h3 className="text-sm font-semibold text-gray-300 mb-3">Daily Activity Log</h3>
+            <div className="overflow-x-auto max-h-64 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-surface">
+                  <tr className="text-gray-500 border-b border-border">
+                    <th className="text-left py-2 px-2">Date</th>
+                    <th className="text-right px-2">SPY</th>
+                    <th className="text-right px-2">VIX</th>
+                    <th className="text-right px-2">VRP</th>
+                    <th className="text-left px-2">Action</th>
+                    <th className="text-left px-2">Position</th>
+                    <th className="text-right px-2">Equity</th>
+                    <th className="text-right px-2">P&L</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...dailyLog].reverse().map((d, i) => (
+                    <tr key={i} className="border-b border-border/30 hover:bg-background/50 transition-colors">
+                      <td className="py-1.5 px-2 font-mono">{d.date}</td>
+                      <td className="text-right px-2 font-mono">${d.spy_close?.toFixed(2)}</td>
+                      <td className="text-right px-2 font-mono">{d.vix?.toFixed(1)}</td>
+                      <td className="text-right px-2 font-mono">
+                        <span className={(d.implied_vol - d.rv_20d) > 0 ? 'text-success' : 'text-danger'}>
+                          {((d.implied_vol - d.rv_20d) * 100).toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="px-2">
+                        {d.actions?.map((a: string, j: number) => (
+                          <span key={j} className={`px-1.5 py-0.5 rounded text-[10px] mr-1 ${
+                            a.includes('OPEN') ? 'bg-primary/20 text-primary' :
+                            a.includes('CLOSE') ? 'bg-warning/20 text-warning' :
+                            a.includes('HEDGE') ? 'bg-accent/20 text-accent' :
+                            'bg-gray-700/50 text-gray-400'
+                          }`}>
+                            {a}
+                          </span>
+                        ))}
+                      </td>
+                      <td className="px-2">
+                        {d.position_open ? (
+                          <span className="text-[10px] bg-danger/20 text-danger px-1 rounded">
+                            {d.trade_direction} x{d.contracts}
+                          </span>
+                        ) : (
+                          <span className="text-gray-600">flat</span>
+                        )}
+                      </td>
+                      <td className="text-right px-2 font-mono">${d.total_equity?.toLocaleString()}</td>
+                      <td className={`text-right px-2 font-mono ${d.realized_pnl >= 0 ? 'text-success' : 'text-danger'}`}>
+                        {d.realized_pnl >= 0 ? '+' : ''}${d.realized_pnl?.toFixed(0)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {dailyLog.length === 0 && (
+                <p className="text-center text-gray-500 py-6 text-sm">No daily logs yet. Run paper trading to generate data.</p>
+              )}
+            </div>
+          </div>
+
+          {/* ── Trade History ── */}
+          <div className="bg-surface rounded-xl border border-border p-5">
+            <h3 className="text-sm font-semibold text-gray-300 mb-3">
+              Trade History
+              {trades.length > 0 && <span className="text-gray-500 font-normal ml-2">({trades.length} trades)</span>}
+            </h3>
+            <div className="overflow-x-auto max-h-72 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-surface">
+                  <tr className="text-gray-500 border-b border-border">
+                    <th className="text-left py-2 px-2">Date</th>
+                    <th className="text-left px-2">Type</th>
+                    <th className="text-left px-2">Reason</th>
+                    <th className="text-right px-2">Entry</th>
+                    <th className="text-right px-2">Exit</th>
+                    <th className="text-right px-2">Contracts</th>
+                    <th className="text-right px-2">Option P&L</th>
+                    <th className="text-right px-2">Hedge P&L</th>
+                    <th className="text-right px-2">Costs</th>
+                    <th className="text-right px-2 font-semibold">Total P&L</th>
+                    <th className="text-right px-2">Cumulative</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...trades].reverse().map((t, i) => (
+                    <tr key={i} className="border-b border-border/30 hover:bg-background/50 transition-colors">
+                      <td className="py-1.5 px-2 font-mono">{t.timestamp?.split('T')[0]}</td>
+                      <td className="px-2">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                          t.direction === 'sell_vol' ? 'bg-danger/20 text-danger' : 'bg-success/20 text-success'
+                        }`}>
+                          {t.direction}
+                        </span>
+                      </td>
+                      <td className="px-2 text-gray-400">{t.reason}</td>
+                      <td className="text-right px-2 font-mono">${t.entry_spot?.toFixed(2)}</td>
+                      <td className="text-right px-2 font-mono">${t.exit_spot?.toFixed(2)}</td>
+                      <td className="text-right px-2 font-mono">{t.contracts}</td>
+                      <td className={`text-right px-2 font-mono ${t.option_pnl >= 0 ? 'text-success' : 'text-danger'}`}>
+                        {t.option_pnl >= 0 ? '+' : ''}${t.option_pnl?.toFixed(0)}
+                      </td>
+                      <td className={`text-right px-2 font-mono ${t.hedge_pnl >= 0 ? 'text-success' : 'text-danger'}`}>
+                        {t.hedge_pnl >= 0 ? '+' : ''}${t.hedge_pnl?.toFixed(0)}
+                      </td>
+                      <td className="text-right px-2 font-mono text-gray-500">-${t.txn_costs?.toFixed(0)}</td>
+                      <td className={`text-right px-2 font-mono font-semibold ${t.total_pnl >= 0 ? 'text-success' : 'text-danger'}`}>
+                        {t.total_pnl >= 0 ? '+' : ''}${t.total_pnl?.toFixed(0)}
+                      </td>
+                      <td className={`text-right px-2 font-mono ${t.running_total >= 0 ? 'text-success' : 'text-danger'}`}>
+                        ${t.running_total?.toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {trades.length === 0 && (
+                <p className="text-center text-gray-500 py-6 text-sm">No trades yet. Strategy will trade when signal threshold is met.</p>
+              )}
+            </div>
+          </div>
+        </>
+      ) : (
+        /* ── Control Panel Tab ── */
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Strategy Selector */}
+          <div className="bg-surface rounded-xl border border-border p-6">
+            <h3 className="text-sm font-semibold text-gray-300 mb-4">Strategy Configuration</h3>
+
+            {config?.strategies.map(strat => (
+              <div key={strat.id} className="p-4 bg-background rounded-lg border border-border mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-semibold text-sm">{strat.name}</h4>
+                  <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded">
+                    Sharpe {strat.sharpe}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mb-3">{strat.description}</p>
+                <div className="flex gap-4 text-xs text-gray-400">
+                  <span>Trades: {strat.backtest_trades}</span>
+                  <span>Win Rate: {(strat.backtest_win_rate * 100).toFixed(0)}%</span>
+                </div>
+              </div>
+            ))}
+
+            {/* Data Source */}
+            <div className="mt-4">
+              <label className="text-xs text-gray-500 mb-2 block">Data Source</label>
+              <div className="flex gap-2">
+                {(config?.available_sources ?? ['yahoo']).map(src => (
+                  <button
+                    key={src}
+                    onClick={() => setSelectedSource(src)}
+                    className={`px-4 py-2 rounded-lg text-xs font-medium transition-colors border ${
+                      selectedSource === src
+                        ? 'bg-primary/20 text-primary border-primary/50'
+                        : 'bg-background text-gray-400 border-border hover:border-gray-600'
+                    }`}
+                  >
+                    {src === 'yahoo' ? 'Yahoo Finance' : src === 'alpaca' ? 'Alpaca Paper' : 'IB TWS'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Execution Toggle */}
+            <div className="mt-4 flex items-center justify-between">
+              <div>
+                <label className="text-xs text-gray-500">Broker Execution</label>
+                <p className="text-[10px] text-gray-600">Route delta hedge orders to broker</p>
+              </div>
+              <button
+                onClick={() => setUseExecution(!useExecution)}
+                className={`w-12 h-6 rounded-full transition-colors ${
+                  useExecution ? 'bg-primary' : 'bg-gray-700'
+                }`}
+              >
+                <div className={`w-5 h-5 rounded-full bg-white shadow-md transform transition-transform ${
+                  useExecution ? 'translate-x-6' : 'translate-x-0.5'
+                }`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="bg-surface rounded-xl border border-border p-6">
+            <h3 className="text-sm font-semibold text-gray-300 mb-4">Trading Actions</h3>
+
+            <div className="space-y-3">
+              {/* Run Once */}
+              <button
+                onClick={handleRunOnce}
+                disabled={running}
+                className={`w-full py-3 rounded-lg text-sm font-semibold transition-colors ${
+                  running
+                    ? 'bg-gray-700 text-gray-500 cursor-wait'
+                    : 'bg-primary hover:bg-primary-light text-white'
+                }`}
+              >
+                {running ? 'Running...' : 'Run Paper Trading (One Bar)'}
+              </button>
+
+              <p className="text-[10px] text-gray-600 text-center">
+                Fetches latest market data, feeds to strategy, executes signals
+              </p>
+
+              <hr className="border-border" />
+
+              {/* Reset */}
+              <button
+                onClick={handleReset}
+                className="w-full py-2.5 rounded-lg text-sm font-medium bg-background border border-border text-gray-400 hover:text-danger hover:border-danger/50 transition-colors"
+              >
+                Reset State (Start Fresh)
+              </button>
+
+              {/* Status Info */}
+              <div className="mt-4 p-3 bg-background rounded-lg">
+                <h4 className="text-xs font-semibold text-gray-400 mb-2">Current State</h4>
+                <div className="space-y-1.5 text-[11px]">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">State File</span>
+                    <span className={config?.state_exists ? 'text-success' : 'text-gray-600'}>
+                      {config?.state_exists ? 'Exists' : 'Not found'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Last Bar</span>
+                    <span className="text-gray-300 font-mono">{s.last_bar_date ?? 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Broker</span>
+                    <span className={s.broker_connected ? 'text-success' : 'text-gray-600'}>
+                      {s.broker_connected ? 'Connected' : 'Disconnected'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Source</span>
+                    <span className="text-gray-300">{selectedSource}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Execution</span>
+                    <span className={useExecution ? 'text-primary' : 'text-gray-600'}>
+                      {useExecution ? 'Enabled' : 'Internal Only'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Guide */}
+              <div className="mt-3 p-3 bg-background rounded-lg border border-border/50">
+                <h4 className="text-xs font-semibold text-gray-400 mb-2">Quick Guide</h4>
+                <ul className="text-[10px] text-gray-500 space-y-1 list-disc list-inside">
+                  <li>Strategy checks VRP signal daily at market close</li>
+                  <li>Sells ATM straddles when IV &gt;&gt; RV (VRP positive)</li>
+                  <li>Delta hedges with SPY shares via broker</li>
+                  <li>Avg trade duration: ~5 days (weekly straddles)</li>
+                  <li>Backtest Sharpe: 1.98 | Win Rate: 80%</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

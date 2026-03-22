@@ -1,0 +1,118 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "quant-trading-metrics",
+    "title": "QuantSystem - Trading Metrics",
+    "tags": ["quantsystem", "trading"],
+    "timezone": "utc",
+    "refresh": "30s",
+    "time": { "from": "now-24h", "to": "now" },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Portfolio Equity",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "rawSql": "SELECT timestamp, equity FROM portfolio_snapshots ORDER BY timestamp",
+            "format": "time_series",
+            "datasource": "TimescaleDB"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Daily P&L",
+        "type": "barchart",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+        "targets": [
+          {
+            "rawSql": "SELECT time_bucket('1 day', timestamp) AS time, SUM(realized_pnl) AS pnl FROM trades GROUP BY time ORDER BY time",
+            "format": "time_series",
+            "datasource": "TimescaleDB"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Drawdown",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+        "targets": [
+          {
+            "rawSql": "SELECT timestamp, drawdown FROM portfolio_snapshots ORDER BY timestamp",
+            "format": "time_series",
+            "datasource": "TimescaleDB"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": { "fixedColor": "#ef4444", "mode": "fixed" }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Trades per Strategy",
+        "type": "piechart",
+        "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+        "targets": [
+          {
+            "rawSql": "SELECT strategy_id, COUNT(*) as trades FROM orders WHERE status='FILLED' GROUP BY strategy_id",
+            "datasource": "TimescaleDB"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Win Rate by Strategy",
+        "type": "bargauge",
+        "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
+        "targets": [
+          {
+            "rawSql": "SELECT strategy_id, AVG(CASE WHEN realized_pnl > 0 THEN 1.0 ELSE 0.0 END) AS win_rate FROM trades GROUP BY strategy_id",
+            "datasource": "TimescaleDB"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Position Sizes (USD)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
+        "targets": [
+          {
+            "rawSql": "SELECT timestamp, symbol, ABS(quantity * current_price) AS position_value FROM positions ORDER BY timestamp",
+            "format": "time_series",
+            "datasource": "TimescaleDB"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Signal Generation Rate",
+        "type": "timeseries",
+        "gridPos": { "h": 6, "w": 12, "x": 0, "y": 24 },
+        "targets": [
+          {
+            "expr": "rate(signals_generated_total[5m])",
+            "legendFormat": "{{strategy}}"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Order Fill Rate",
+        "type": "stat",
+        "gridPos": { "h": 6, "w": 12, "x": 12, "y": 24 },
+        "targets": [
+          {
+            "expr": "orders_filled_total / orders_submitted_total",
+            "legendFormat": "Fill Rate"
+          }
+        ]
+      }
+    ]
+  }
+}

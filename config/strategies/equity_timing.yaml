@@ -1,0 +1,37 @@
+# Equity Quantitative Timing Strategy
+strategy:
+  name: equity_timing
+  asset_class: equity
+  timeframe: 1d
+  description: "HMM regime detection with dynamic allocation"
+
+parameters:
+  vol_window: 21
+  trend_window: 63
+  vol_threshold: 0.20
+  regime_allocation:
+    bull:
+      equity: 0.90
+      bonds: 0.05
+      cash: 0.05
+    neutral:
+      equity: 0.50
+      bonds: 0.30
+      cash: 0.20
+    bear:
+      equity: 0.10
+      bonds: 0.40
+      cash: 0.50
+  smoothing_window: 5
+  rebalance_frequency: weekly
+
+risk:
+  max_equity_allocation: 1.0
+  max_daily_loss_pct: 2.0
+  max_drawdown_pct: 10.0
+
+symbols:
+  - SPY
+  - TLT
+  - GLD
+  - VIX

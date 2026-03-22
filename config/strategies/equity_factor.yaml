@@ -1,0 +1,35 @@
+# Equity Multi-Factor Stock Selection Strategy
+strategy:
+  name: equity_factor
+  asset_class: equity
+  timeframe: 1d
+  description: "Multi-factor ranking (momentum, vol, quality) with weekly rebalance"
+
+parameters:
+  factors:
+    - name: momentum_12_1
+      weight: 0.3
+    - name: realized_vol
+      weight: -0.2
+    - name: rsi_factor
+      weight: 0.15
+    - name: turnover
+      weight: -0.1
+    - name: distance_from_high
+      weight: 0.25
+  top_n: 20
+  bottom_n: 10
+  rebalance_day: "Monday"
+  min_market_cap_usd: 1_000_000_000
+  position_size_pct: 3.0
+
+risk:
+  max_position_pct: 8.0
+  max_sector_pct: 25.0
+  max_daily_loss_pct: 2.0
+  max_leverage: 1.5
+
+universe:
+  - SPY
+  - QQQ
+  # Individual stocks loaded from universe file

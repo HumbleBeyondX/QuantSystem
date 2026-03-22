@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(E:/CodingDownload/Anaconda/envs/quantsystem/python.exe scripts/fetch_spy_options_data.py --start 2023-01-01 --end 2026-03-15)"
+    ]
+  }
+}

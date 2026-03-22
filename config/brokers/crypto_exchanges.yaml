@@ -1,0 +1,20 @@
+# Crypto Exchange Configuration
+# API keys are loaded from environment variables
+
+binance:
+  sandbox: false
+  default_type: swap             # spot | swap (perpetual futures)
+  rate_limit: true
+  options:
+    adjustForTimeDifference: true
+    recvWindow: 10000
+
+okx:
+  sandbox: false
+  default_type: swap
+  rate_limit: true
+
+bybit:
+  sandbox: false
+  default_type: swap
+  rate_limit: true
