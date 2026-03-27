@@ -227,13 +227,15 @@ export default function TradingPage() {
 
   // Fetch data for the selected strategy
   const fetchData = useCallback(async () => {
+    if (!selectedStrategyId) return
+    const sid = encodeURIComponent(selectedStrategyId)
     try {
       const [statusRes, dailyRes, tradesRes, equityRes, configRes] = await Promise.all([
-        fetch(`${API}/api/paper-trading/status`).then(r => r.json()),
-        fetch(`${API}/api/paper-trading/daily-log?limit=100`).then(r => r.json()),
-        fetch(`${API}/api/paper-trading/trades?limit=50`).then(r => r.json()),
-        fetch(`${API}/api/paper-trading/equity-curve`).then(r => r.json()),
-        fetch(`${API}/api/paper-trading/config`).then(r => r.json()),
+        fetch(`${API}/api/paper-trading/status?strategy_id=${sid}`).then(r => r.json()),
+        fetch(`${API}/api/paper-trading/daily-log?limit=100&strategy_id=${sid}`).then(r => r.json()),
+        fetch(`${API}/api/paper-trading/trades?limit=50&strategy_id=${sid}`).then(r => r.json()),
+        fetch(`${API}/api/paper-trading/equity-curve?strategy_id=${sid}`).then(r => r.json()),
+        fetch(`${API}/api/paper-trading/config?strategy_id=${sid}`).then(r => r.json()),
       ])
       setStatus(statusRes)
       setDailyLog(dailyRes)
@@ -245,7 +247,7 @@ export default function TradingPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [selectedStrategyId])
 
   useEffect(() => {
     fetchDeployed()
@@ -275,9 +277,9 @@ export default function TradingPage() {
   }
 
   const handleReset = async () => {
-    if (!confirm('Reset paper trading state? This will clear all history.')) return
+    if (!confirm(`Reset ${selectedStrategyId} state? This will clear all history.`)) return
     try {
-      await fetch(`${API}/api/paper-trading/reset`, { method: 'POST' })
+      await fetch(`${API}/api/paper-trading/reset?strategy_id=${encodeURIComponent(selectedStrategyId)}`, { method: 'POST' })
       fetchData()
     } catch (e) {
       console.error('Failed to reset:', e)

@@ -119,6 +119,7 @@ async def get_portfolio_overview():
     total_equity = 0.0
     total_initial = 0.0
     total_realized = 0.0
+    total_unrealized = 0.0
     total_trades = 0
     total_wins = 0
     running = 0
@@ -144,9 +145,12 @@ async def get_portfolio_overview():
         if state_file:
             state = _load_state(state_file)
             if state:
+                from dashboard.backend.routers.paper_trading import compute_unrealized_pnl
                 pnl = state.get("_running_pnl", 0)
+                unrealized = compute_unrealized_pnl(state)
                 total_realized += pnl
-                total_equity += initial + pnl
+                total_unrealized += unrealized
+                total_equity += initial + pnl + unrealized
                 results = state.get("_trade_results", [])
                 total_trades += len(results)
                 total_wins += sum(1 for r in results if r.get("total_pnl", 0) > 0)
@@ -190,7 +194,7 @@ async def get_portfolio_overview():
         initial_capital=round(total_initial, 2),
         total_return_pct=round(total_return, 2),
         realized_pnl=round(total_realized, 2),
-        unrealized_pnl=0.0,
+        unrealized_pnl=round(total_unrealized, 2),
         max_drawdown_pct=round(max_dd * 100, 2),
         sharpe_ratio=0.0,  # Would need daily returns series to compute
         total_strategies=len(deployments),

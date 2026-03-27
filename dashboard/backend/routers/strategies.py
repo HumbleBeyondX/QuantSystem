@@ -274,13 +274,16 @@ def _enrich_deployment(dep: Dict[str, Any]) -> DeployedStrategy:
     d = DeployedStrategy(**dep)
 
     if state:
+        from dashboard.backend.routers.paper_trading import compute_unrealized_pnl
         d.realized_pnl = round(state.get("_running_pnl", 0), 2)
         d.total_trades = len(state.get("_trade_results", []))
         d.spy_price = round(state.get("_last_spot", 0), 2)
 
         initial = state.get("_initial_capital", d.initial_capital)
         running_pnl = state.get("_running_pnl", 0)
-        d.total_equity = round(initial + running_pnl, 2)
+        unrealized = compute_unrealized_pnl(state)
+        d.unrealized_pnl = round(unrealized, 2)
+        d.total_equity = round(initial + running_pnl + unrealized, 2)
 
         if state.get("_straddle_open"):
             direction = state.get("_trade_direction", "none")

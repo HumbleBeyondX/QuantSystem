@@ -27,10 +27,32 @@ router = APIRouter()
 # Project root
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
-STATE_FILE = PROJECT_ROOT / "data" / "live_state" / "gamma_scalp_state.pkl"
-DAILY_LOG = PROJECT_ROOT / "logs" / "paper_trading" / "gamma_scalp_daily.jsonl"
-TRADE_LOG = PROJECT_ROOT / "logs" / "paper_trading" / "gamma_scalp_trades.jsonl"
+STATE_DIR = PROJECT_ROOT / "data" / "live_state"
+LOG_DIR = PROJECT_ROOT / "logs" / "paper_trading"
 ENV_FILE = PROJECT_ROOT / ".env"
+
+# Strategy → file mappings (add new strategies here)
+STATE_FILE_MAP = {
+    "spy_gamma_scalp": "gamma_scalp_state.pkl",
+}
+DAILY_LOG_MAP = {
+    "spy_gamma_scalp": "gamma_scalp_daily.jsonl",
+}
+TRADE_LOG_MAP = {
+    "spy_gamma_scalp": "gamma_scalp_trades.jsonl",
+}
+
+def _resolve_state_file(strategy_id: str) -> Path:
+    filename = STATE_FILE_MAP.get(strategy_id, f"{strategy_id}_state.pkl")
+    return STATE_DIR / filename
+
+def _resolve_daily_log(strategy_id: str) -> Path:
+    filename = DAILY_LOG_MAP.get(strategy_id, f"{strategy_id}_daily.jsonl")
+    return LOG_DIR / filename
+
+def _resolve_trade_log(strategy_id: str) -> Path:
+    filename = TRADE_LOG_MAP.get(strategy_id, f"{strategy_id}_trades.jsonl")
+    return LOG_DIR / filename
 
 
 # ── Schemas ───────────────────────────────────────────────────
@@ -143,12 +165,13 @@ class RunConfig(BaseModel):
 
 # ── Helper: load state ────────────────────────────────────────
 
-def _load_state() -> Optional[Dict[str, Any]]:
+def _load_state(strategy_id: str = "spy_gamma_scalp") -> Optional[Dict[str, Any]]:
     """Load strategy state from pickle file."""
-    if not STATE_FILE.exists():
+    state_file = _resolve_state_file(strategy_id)
+    if not state_file.exists():
         return None
     try:
-        with open(STATE_FILE, "rb") as f:
+        with open(state_file, "rb") as f:
             return pickle.load(f)
     except Exception:
         return None
@@ -204,42 +227,48 @@ def _check_broker_status() -> Dict[str, Any]:
     return result
 
 
+def compute_unrealized_pnl(state: Dict[str, Any]) -> float:
+    """Compute unrealized P&L from strategy state. Reusable across routers."""
+    if not state.get("_straddle_open") or state.get("_n_contracts", 0) == 0:
+        return 0.0
+    try:
+        sys.path.insert(0, str(PROJECT_ROOT))
+        from strategies.options.gamma_scalp_strategy import bs_straddle
+        spot = state.get("_last_spot", 0)
+        strike = state.get("_strike", 0)
+        iv = state.get("_implied_vol", 0.2)
+        rf = state.get("_risk_free", 0.045)
+        expiry = state.get("_expiry_time")
+        current = state.get("_current_time", datetime.now())
+        if expiry and current:
+            T = max((expiry - current).total_seconds(), 60) / (365.25 * 86400)
+        else:
+            T = 5 / 365.0
+        cp, pp = bs_straddle(spot, strike, T, rf, iv)
+        n = state.get("_n_contracts", 0) * 100
+        direction = state.get("_trade_direction", "neutral")
+        sign = -1.0 if direction == "sell_vol" else 1.0
+        entry_c = state.get("_entry_call_price", 0)
+        entry_p = state.get("_entry_put_price", 0)
+        unrealized = ((cp + pp) - (entry_c + entry_p)) * n * sign
+        unrealized += state.get("_cum_hedge_pnl", 0) - state.get("_cum_txn_costs", 0)
+        return unrealized
+    except Exception:
+        return 0.0
+
+
 # ── Endpoints ─────────────────────────────────────────────────
 
 @router.get("/status", response_model=TradingStatus)
-async def get_trading_status():
+async def get_trading_status(strategy_id: str = Query(default="spy_gamma_scalp")):
     """Get current paper trading status and strategy state."""
-    state = _load_state()
+    state = _load_state(strategy_id)
 
     if state is None:
         return TradingStatus()
 
     # Compute unrealized P&L
-    unrealized = 0.0
-    if state.get("_straddle_open") and state.get("_n_contracts", 0) > 0:
-        try:
-            sys.path.insert(0, str(PROJECT_ROOT))
-            from strategies.options.gamma_scalp_strategy import bs_straddle
-            spot = state.get("_last_spot", 0)
-            strike = state.get("_strike", 0)
-            iv = state.get("_implied_vol", 0.2)
-            rf = state.get("_risk_free", 0.045)
-            expiry = state.get("_expiry_time")
-            current = state.get("_current_time", datetime.now())
-            if expiry and current:
-                T = max((expiry - current).total_seconds(), 60) / (365.25 * 86400)
-            else:
-                T = 5 / 365.0
-            cp, pp = bs_straddle(spot, strike, T, rf, iv)
-            n = state.get("_n_contracts", 0) * 100
-            direction = state.get("_trade_direction", "neutral")
-            sign = -1.0 if direction == "sell_vol" else 1.0
-            entry_c = state.get("_entry_call_price", 0)
-            entry_p = state.get("_entry_put_price", 0)
-            unrealized = ((cp + pp) - (entry_c + entry_p)) * n * sign
-            unrealized += state.get("_cum_hedge_pnl", 0) - state.get("_cum_txn_costs", 0)
-        except Exception:
-            pass
+    unrealized = compute_unrealized_pnl(state)
 
     initial_capital = state.get("_initial_capital", 100000)
     running_pnl = state.get("_running_pnl", 0)
@@ -259,8 +288,9 @@ async def get_trading_status():
     iv = state.get("_implied_vol", 0.2)
     rv20 = state.get("_rv_20d", 0)
 
+    state_file = _resolve_state_file(strategy_id)
     return TradingStatus(
-        is_running=STATE_FILE.exists(),
+        is_running=state_file.exists(),
         last_bar_date=last_date,
         spy_price=round(state.get("_last_spot", 0), 2),
         vix=round(iv * 100, 2),
@@ -290,30 +320,30 @@ async def get_trading_status():
 
 
 @router.get("/daily-log", response_model=List[DailySnapshot])
-async def get_daily_log(limit: int = Query(default=100, ge=1, le=1000)):
+async def get_daily_log(limit: int = Query(default=100, ge=1, le=1000), strategy_id: str = Query(default="spy_gamma_scalp")):
     """Get daily paper trading snapshots."""
-    entries = _load_jsonl(DAILY_LOG, limit)
+    entries = _load_jsonl(_resolve_daily_log(strategy_id), limit)
     return [DailySnapshot(**e) for e in entries]
 
 
 @router.get("/trades", response_model=List[TradeRecord])
-async def get_trades(limit: int = Query(default=100, ge=1, le=500)):
+async def get_trades(limit: int = Query(default=100, ge=1, le=500), strategy_id: str = Query(default="spy_gamma_scalp")):
     """Get paper trading trade history."""
     # First try from state (more complete)
-    state = _load_state()
+    state = _load_state(strategy_id)
     if state and state.get("_trade_results"):
         results = state["_trade_results"][-limit:]
         return [TradeRecord(**t) for t in results]
 
     # Fallback to JSONL
-    entries = _load_jsonl(TRADE_LOG, limit)
+    entries = _load_jsonl(_resolve_trade_log(strategy_id), limit)
     return [TradeRecord(**e) for e in entries]
 
 
 @router.get("/equity-curve", response_model=List[EquityPoint])
-async def get_equity_curve():
+async def get_equity_curve(strategy_id: str = Query(default="spy_gamma_scalp")):
     """Get equity curve from daily log."""
-    entries = _load_jsonl(DAILY_LOG, 1000)
+    entries = _load_jsonl(_resolve_daily_log(strategy_id), 1000)
     if not entries:
         return []
 
@@ -332,9 +362,9 @@ async def get_equity_curve():
 
 
 @router.get("/signal-history", response_model=List[SignalDetail])
-async def get_signal_history(limit: int = Query(default=50, ge=1, le=200)):
+async def get_signal_history(limit: int = Query(default=50, ge=1, le=200), strategy_id: str = Query(default="spy_gamma_scalp")):
     """Get signal computation history from daily log."""
-    entries = _load_jsonl(DAILY_LOG, limit)
+    entries = _load_jsonl(_resolve_daily_log(strategy_id), limit)
     result = []
     for e in entries:
         result.append(SignalDetail(
@@ -375,15 +405,16 @@ async def run_paper_trading_once(
 
 
 @router.post("/reset")
-async def reset_state():
+async def reset_state(strategy_id: str = Query(default="spy_gamma_scalp")):
     """Reset paper trading state (start fresh)."""
-    if STATE_FILE.exists():
-        STATE_FILE.unlink()
-    return {"status": "reset", "message": "State cleared. Next run will start fresh with warm-up."}
+    state_file = _resolve_state_file(strategy_id)
+    if state_file.exists():
+        state_file.unlink()
+    return {"status": "reset", "message": f"State for {strategy_id} cleared."}
 
 
 @router.get("/config")
-async def get_config():
+async def get_config(strategy_id: str = Query(default="spy_gamma_scalp")):
     """Get available trading configurations."""
     # Check what data sources are available
     sources = ["yahoo"]  # Always available
@@ -424,5 +455,5 @@ async def get_config():
             }
         ],
         "execution_modes": ["internal", "alpaca", "ib"],
-        "state_exists": STATE_FILE.exists(),
+        "state_exists": _resolve_state_file(strategy_id).exists(),
     }
