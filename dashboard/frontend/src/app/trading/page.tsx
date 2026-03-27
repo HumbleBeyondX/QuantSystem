@@ -1,8 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
-const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000'
+const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8001'
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -93,6 +93,24 @@ interface TradingConfig {
   state_exists: boolean
 }
 
+interface DeployedStrategy {
+  id: string
+  strategy_id: string
+  name: string
+  mode: string
+  status: string
+  data_source: string
+  execution_broker: string
+  initial_capital: number
+  last_run: string | null
+  realized_pnl: number
+  unrealized_pnl: number
+  total_equity: number
+  total_trades: number
+  current_position: string | null
+  spy_price: number
+}
+
 // ── Helper Components ────────────────────────────────────────
 
 function MetricCard({ title, value, sub, color = 'text-gray-100' }: {
@@ -107,21 +125,25 @@ function MetricCard({ title, value, sub, color = 'text-gray-100' }: {
   )
 }
 
-function GreekGauge({ label, value, min, max, color }: {
-  label: string; value: number; min: number; max: number; color: string
+function GreekGauge({ label, value, color }: {
+  label: string; value: number; color: string
 }) {
-  const range = max - min
-  const pct = range > 0 ? Math.max(0, Math.min(100, ((value - min) / range) * 100)) : 50
+  // Auto-scale: use absolute value to determine bar width, cap at 100%
+  const absVal = Math.abs(value)
+  // Dynamic scaling based on Greek type
+  const maxRef = label === 'Delta' ? 200 : label === 'Gamma' ? 100 : label === 'Theta' ? 3000 : 2000
+  const pct = Math.min(100, (absVal / maxRef) * 100)
+
   return (
     <div className="flex items-center gap-3">
       <span className="text-xs text-gray-400 w-14 text-right">{label}</span>
       <div className="flex-1 h-2 bg-background rounded-full overflow-hidden relative">
         <div
           className={`h-full rounded-full ${color}`}
-          style={{ width: `${pct}%` }}
+          style={{ width: `${Math.max(pct, 2)}%` }}
         />
       </div>
-      <span className="text-xs font-mono text-gray-300 w-16 text-right">
+      <span className={`text-xs font-mono w-20 text-right ${absVal > 0 ? 'text-gray-200' : 'text-gray-600'}`}>
         {value > 0 ? '+' : ''}{value.toFixed(1)}
       </span>
     </div>
@@ -178,11 +200,32 @@ export default function TradingPage() {
   const [trades, setTrades] = useState<TradeRecord[]>([])
   const [equityCurve, setEquityCurve] = useState<EquityPoint[]>([])
   const [config, setConfig] = useState<TradingConfig | null>(null)
+  const [deployed, setDeployed] = useState<DeployedStrategy[]>([])
+  const [selectedStrategyId, setSelectedStrategyId] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
   const [selectedSource, setSelectedSource] = useState('alpaca')
   const [useExecution, setUseExecution] = useState(true)
 
+  // Fetch deployed strategies list
+  const fetchDeployed = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/api/strategies/`)
+      if (res.ok) {
+        const data: DeployedStrategy[] = await res.json()
+        setDeployed(data)
+        // Auto-select first running strategy, or first strategy
+        if (!selectedStrategyId && data.length > 0) {
+          const running = data.find(d => d.status === 'running')
+          setSelectedStrategyId(running?.strategy_id || data[0].strategy_id)
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch deployed strategies:', e)
+    }
+  }, [selectedStrategyId])
+
+  // Fetch data for the selected strategy
   const fetchData = useCallback(async () => {
     try {
       const [statusRes, dailyRes, tradesRes, equityRes, configRes] = await Promise.all([
@@ -205,10 +248,11 @@ export default function TradingPage() {
   }, [])
 
   useEffect(() => {
+    fetchDeployed()
     fetchData()
-    const interval = setInterval(fetchData, 10000) // Poll every 10s
+    const interval = setInterval(() => { fetchData(); fetchDeployed() }, 10000)
     return () => clearInterval(interval)
-  }, [fetchData])
+  }, [fetchData, fetchDeployed])
 
   const handleRunOnce = async () => {
     setRunning(true)
@@ -222,7 +266,6 @@ export default function TradingPage() {
           initial_capital: status?.initial_capital ?? 100000,
         }),
       })
-      // Wait a bit then refresh
       setTimeout(fetchData, 5000)
     } catch (e) {
       console.error('Failed to run:', e)
@@ -240,6 +283,9 @@ export default function TradingPage() {
       console.error('Failed to reset:', e)
     }
   }
+
+  // Derived
+  const selectedDep = useMemo(() => deployed.find(d => d.strategy_id === selectedStrategyId), [deployed, selectedStrategyId])
 
   if (loading) {
     return (
@@ -260,7 +306,7 @@ export default function TradingPage() {
         <div>
           <h1 className="text-2xl font-bold">Paper Trading</h1>
           <p className="text-sm text-gray-500 mt-1">
-            SPY Gamma Scalp Strategy - Live Monitoring & Control
+            Live Monitoring & Control
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -288,6 +334,43 @@ export default function TradingPage() {
           </div>
         </div>
       </div>
+
+      {/* Strategy Selector Bar */}
+      {deployed.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-gray-500 mr-1">Strategy:</span>
+          {deployed.map(dep => {
+            const isActive = dep.strategy_id === selectedStrategyId
+            const isRunning = dep.status === 'running'
+            return (
+              <button
+                key={dep.id}
+                onClick={() => setSelectedStrategyId(dep.strategy_id)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                  isActive
+                    ? 'bg-primary/20 border-primary/50 text-primary'
+                    : 'bg-surface border-border text-gray-400 hover:border-gray-500 hover:text-gray-200'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  isRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-500'
+                }`} />
+                <span>{dep.name}</span>
+                <span className={`text-[10px] px-1 py-0.5 rounded ${
+                  dep.mode === 'live' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'
+                }`}>
+                  {dep.mode}
+                </span>
+                {dep.realized_pnl !== 0 && (
+                  <span className={`font-mono ${dep.realized_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {dep.realized_pnl >= 0 ? '+' : ''}${dep.realized_pnl.toFixed(0)}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {tab === 'monitor' ? (
         <>
@@ -366,10 +449,10 @@ export default function TradingPage() {
             <div className="bg-surface rounded-xl border border-border p-5">
               <h3 className="text-sm font-semibold text-gray-300 mb-4">Portfolio Greeks</h3>
               <div className="space-y-3">
-                <GreekGauge label="Delta" value={s.portfolio_delta ?? 0} min={-500} max={500} color="bg-primary" />
-                <GreekGauge label="Gamma" value={s.portfolio_gamma ?? 0} min={0} max={1000} color="bg-success" />
-                <GreekGauge label="Theta" value={s.portfolio_theta ?? 0} min={-2000} max={0} color="bg-danger" />
-                <GreekGauge label="Vega" value={s.portfolio_vega ?? 0} min={-3000} max={3000} color="bg-accent" />
+                <GreekGauge label="Delta" value={s.portfolio_delta ?? 0} color="bg-primary" />
+                <GreekGauge label="Gamma" value={s.portfolio_gamma ?? 0} color="bg-success" />
+                <GreekGauge label="Theta" value={s.portfolio_theta ?? 0} color="bg-danger" />
+                <GreekGauge label="Vega" value={s.portfolio_vega ?? 0} color="bg-accent" />
               </div>
             </div>
 

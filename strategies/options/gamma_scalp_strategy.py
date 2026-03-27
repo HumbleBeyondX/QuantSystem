@@ -643,6 +643,18 @@ class GammaScalpStrategy(StrategyBase):
         # Opening costs
         self._cum_txn_costs += self._option_trade_cost(call_px, put_px)
 
+        # Compute initial Greeks at entry
+        sign = -1.0 if regime == VolRegime.SELL else 1.0
+        call_delta = bs_delta_call(spot, self._strike, T, self._risk_free, iv)
+        put_delta = bs_delta_put(spot, self._strike, T, self._risk_free, iv)
+        gamma = bs_gamma(spot, self._strike, T, self._risk_free, iv)
+        theta = bs_theta_straddle(spot, self._strike, T, self._risk_free, iv)
+        vega = bs_vega(spot, self._strike, T, self._risk_free, iv)
+        self._portfolio_delta = (call_delta + put_delta) * notional * sign
+        self._portfolio_gamma = gamma * 2 * notional * abs(sign)
+        self._portfolio_theta = theta * notional * sign
+        self._portfolio_vega = vega * 2 * notional * sign
+
         # Direction: SELL vol = SHORT straddle, BUY vol = LONG straddle
         direction = SignalDirection.SHORT if regime == VolRegime.SELL else SignalDirection.LONG
 
