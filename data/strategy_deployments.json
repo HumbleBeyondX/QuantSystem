@@ -1,0 +1,35 @@
+[
+  {
+    "id": "spy_gamma_scalp_paper_1711065600",
+    "strategy_id": "spy_gamma_scalp",
+    "name": "SPY Gamma Scalp",
+    "mode": "paper",
+    "status": "running",
+    "data_source": "alpaca",
+    "execution_broker": "alpaca",
+    "initial_capital": 100000.0,
+    "deployed_at": "2026-03-21T12:00:00",
+    "realized_pnl": 0.0,
+    "unrealized_pnl": 0.0,
+    "total_equity": 100000.0,
+    "total_trades": 0,
+    "spy_price": 0.0
+  },
+  {
+    "id": "equity_factor_paper_1774215148",
+    "strategy_id": "equity_factor",
+    "name": "Equity Factor Strategy",
+    "mode": "paper",
+    "status": "running",
+    "data_source": "alpaca",
+    "execution_broker": "alpaca",
+    "initial_capital": 100000.0,
+    "deployed_at": "2026-03-22T17:32:28.537494",
+    "realized_pnl": 0.0,
+    "unrealized_pnl": 0.0,
+    "total_equity": 100000.0,
+    "total_trades": 0,
+    "spy_price": 0.0,
+    "last_run": "2026-03-23T15:46:47.007044"
+  }
+]
