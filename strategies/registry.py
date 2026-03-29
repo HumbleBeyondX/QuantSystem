@@ -57,7 +57,6 @@ def discover_strategies() -> None:
         "strategies.crypto.event_strategy",
         "strategies.crypto.swing_strategy",
         "strategies.crypto.momentum_strategy",
-        "strategies.crypto.microstructure_strategy",
         "strategies.equity.factor_strategy",
         "strategies.equity.timing_strategy",
         "strategies.equity.long_short_strategy",
