@@ -97,6 +97,9 @@ async def _run_backtest_task(backtest_id: str, request: BacktestRequest):
             # Auto-detect: look for matching CSV in data/sample/
             safe_symbol = request.symbol.replace("/", "_")
             candidates = [
+                DATA_DIR / f"{safe_symbol}_4h.csv",
+                DATA_DIR / f"{safe_symbol}_1d.csv",
+                DATA_DIR / f"{safe_symbol}_1h.csv",
                 DATA_DIR / f"{safe_symbol}_1m.csv",
                 DATA_DIR / f"{safe_symbol}_trades.csv",
                 DATA_DIR / f"{safe_symbol}.csv",

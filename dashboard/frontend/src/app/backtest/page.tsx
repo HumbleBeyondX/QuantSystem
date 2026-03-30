@@ -31,6 +31,7 @@ interface BacktestResult {
 }
 
 const strategyOptions = [
+  { value: 'crypto_macro_cycle', label: 'BTC/ETH Macro Cycle Signals (4H, 10x)' },
   { value: 'spy_gamma_scalp', label: 'SPY Gamma Scalp (Options)' },
   { value: 'crypto_momentum', label: 'BTC Momentum (Daily)' },
   { value: 'crypto_scalping', label: 'Crypto Scalping (Tick-level)' },
@@ -44,7 +45,7 @@ const strategyOptions = [
 ]
 
 export default function BacktestPage() {
-  const [selectedStrategy, setSelectedStrategy] = useState('crypto_momentum')
+  const [selectedStrategy, setSelectedStrategy] = useState('crypto_macro_cycle')
   const [symbol, setSymbol] = useState('BTC/USDT')
   const [startDate, setStartDate] = useState('2023-01-01')
   const [endDate, setEndDate] = useState('2026-03-15')
