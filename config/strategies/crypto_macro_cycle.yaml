@@ -24,12 +24,12 @@ symbols:
 timeframe: 4h
 
 parameters:
-  # ── Signal Thresholds ──
+  # ── Signal Thresholds (Aggressive config) ──
   # Composite score in [-1, +1]; higher = more bullish
-  entry_threshold: 0.35        # Open long when composite >= 0.35
+  entry_threshold: 0.25        # Open long when composite >= 0.25
   exit_threshold: -0.10        # Close long when composite <= -0.10
-  strong_entry_threshold: 0.55 # Extra conviction → larger position
-  short_entry_threshold: -0.35 # Open short when composite <= -0.35
+  strong_entry_threshold: 0.45 # Extra conviction → larger position
+  short_entry_threshold: -0.25 # Open short when composite <= -0.25
   short_exit_threshold: 0.10   # Close short when composite >= 0.10
 
   # ── Signal Weights (must sum to ~1.0) ──
@@ -47,11 +47,11 @@ parameters:
   base_position_pct: 0.10     # 10% of equity per trade base
   max_position_pct: 0.25      # 25% max equity at risk
 
-  # ── Risk Management ──
+  # ── Risk Management (Aggressive: tighter stops, faster TP) ──
   atr_period: 14
-  atr_stop_mult: 2.0          # Stop loss = 2x ATR from entry
-  atr_tp_mult: 4.0            # Take profit = 4x ATR from entry
-  trailing_stop_atr: 1.8      # Trailing stop = 1.8x ATR from high
+  atr_stop_mult: 1.5          # Stop loss = 1.5x ATR from entry
+  atr_tp_mult: 3.0            # Take profit = 3x ATR from entry
+  trailing_stop_atr: 1.5      # Trailing stop = 1.5x ATR from high
   max_drawdown_pct: 0.15      # Circuit breaker at 15% equity DD
   cooldown_bars: 3             # Min 3 bars (12 hours) between trades
   max_trades_per_day: 3

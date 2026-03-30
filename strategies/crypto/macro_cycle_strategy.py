@@ -57,10 +57,10 @@ class MacroCycleStrategy(StrategyBase):
         super().__init__(config)
 
         # ── Signal Parameters ──
-        self.entry_threshold = self.get_param("entry_threshold", 0.35)
+        self.entry_threshold = self.get_param("entry_threshold", 0.25)
         self.exit_threshold = self.get_param("exit_threshold", -0.10)
-        self.strong_entry_threshold = self.get_param("strong_entry_threshold", 0.55)
-        self.short_entry_threshold = self.get_param("short_entry_threshold", -0.35)
+        self.strong_entry_threshold = self.get_param("strong_entry_threshold", 0.45)
+        self.short_entry_threshold = self.get_param("short_entry_threshold", -0.25)
         self.short_exit_threshold = self.get_param("short_exit_threshold", 0.10)
 
         # Signal weights (override defaults)
@@ -81,9 +81,9 @@ class MacroCycleStrategy(StrategyBase):
 
         # ── Risk Management ──
         self.atr_period = self.get_param("atr_period", 14)
-        self.atr_stop_mult = self.get_param("atr_stop_mult", 2.0)
-        self.atr_tp_mult = self.get_param("atr_tp_mult", 4.0)
-        self.trailing_stop_atr = self.get_param("trailing_stop_atr", 1.8)
+        self.atr_stop_mult = self.get_param("atr_stop_mult", 1.5)
+        self.atr_tp_mult = self.get_param("atr_tp_mult", 3.0)
+        self.trailing_stop_atr = self.get_param("trailing_stop_atr", 1.5)
         self.max_drawdown_pct = self.get_param("max_drawdown_pct", 0.15)  # 15% max equity DD
         self.cooldown_bars = self.get_param("cooldown_bars", 3)  # Min bars between trades
         self.max_trades_per_day = self.get_param("max_trades_per_day", 3)
