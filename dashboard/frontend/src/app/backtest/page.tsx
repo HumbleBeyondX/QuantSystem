@@ -31,7 +31,7 @@ interface BacktestResult {
 }
 
 const strategyOptions = [
-  { value: 'crypto_macro_cycle', label: 'BTC/ETH Macro Cycle Signals (4H, 10x)' },
+  { value: 'crypto_macro_cycle', label: 'BTC/ETH Macro Cycle Signals (4H, 5x Wide Stops)' },
   { value: 'spy_gamma_scalp', label: 'SPY Gamma Scalp (Options)' },
   { value: 'crypto_momentum', label: 'BTC Momentum (Daily)' },
   { value: 'crypto_scalping', label: 'Crypto Scalping (Tick-level)' },

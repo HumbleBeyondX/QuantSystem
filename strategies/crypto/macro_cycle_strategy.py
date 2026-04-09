@@ -163,10 +163,19 @@ class MacroCycleStrategy(StrategyBase):
         if self._current_equity > self._peak_equity:
             self._peak_equity = self._current_equity
 
-        # Circuit breaker check
+        # Circuit breaker check with auto-reset after cooldown
         if self._peak_equity > 0:
             dd = (self._peak_equity - self._current_equity) / self._peak_equity
-            self._circuit_breaker_active = dd > self.max_drawdown_pct
+            if self._circuit_breaker_active:
+                # Count cooldown bars
+                self._cb_bars = getattr(self, '_cb_bars', 0) + 1
+                if self._cb_bars >= 48 and self.is_flat(symbol):
+                    # Cooldown expired (48 bars ≈ 8 days on 4H) + flat → resume
+                    self._circuit_breaker_active = False
+                    self._peak_equity = self._current_equity
+            elif dd > self.max_drawdown_pct:
+                self._circuit_breaker_active = True
+                self._cb_bars = 0
 
     def on_fill(self, fill) -> None:
         """Track realized P&L on fills."""

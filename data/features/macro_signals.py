@@ -53,6 +53,9 @@ class MacroSignalState:
     # ATH tracking
     all_time_high: float = 0.0
 
+    # Volatility regime cache (avoid O(n²) BB width recomputation)
+    bb_widths: Deque[float] = field(default_factory=lambda: deque(maxlen=2000))
+
     # Bar count
     n_bars: int = 0
     initialized: bool = False
@@ -100,6 +103,14 @@ def update_state(state: MacroSignalState, close: float, high: float,
     # Update ATH
     if high > state.all_time_high:
         state.all_time_high = high
+
+    # Update BB width cache incrementally (avoids O(n²) in volatility score)
+    if state.n_bars >= 20:
+        closes_list = list(state.closes)
+        sma = np.mean(closes_list[-20:])
+        std = np.std(closes_list[-20:])
+        if sma > 0:
+            state.bb_widths.append(std / sma)
 
     # Mark initialized after enough bars (200W ≈ 1400 bars on 4H, but we relax to 250)
     if state.n_bars >= 250 and not state.initialized:
@@ -165,13 +176,12 @@ def compute_pi_cycle_score(state: MacroSignalState) -> float:
     When 111 SMA crosses above 350 SMA × 2 → cycle top (bearish)
     When far apart (111 << 350*2) → room to run (bullish)
     """
-    closes = list(state.closes)
-
-    if len(closes) < 350:
+    if len(state.closes) < 350:
         return 0.0
 
-    sma_111 = np.mean(closes[-111:])
-    sma_350 = np.mean(closes[-350:])
+    closes = state.closes
+    sma_111 = np.mean(list(closes)[-111:])
+    sma_350 = np.mean(list(closes)[-350:])
     sma_350x2 = sma_350 * 2
 
     if sma_350x2 == 0:
@@ -243,11 +253,10 @@ def compute_momentum_score(state: MacroSignalState) -> float:
 
     Combines 20-bar and 60-bar momentum with RSI overbought/oversold zones.
     """
-    closes = list(state.closes)
-
-    if len(closes) < 61:
+    if len(state.closes) < 61:
         return 0.0
 
+    closes = state.closes
     price = closes[-1]
 
     # ROC 20 and ROC 60
@@ -255,7 +264,7 @@ def compute_momentum_score(state: MacroSignalState) -> float:
     roc_60 = (price - closes[-61]) / closes[-61] if closes[-61] != 0 else 0
 
     # RSI 14
-    rsi = _compute_rsi(closes, 14)
+    rsi = _compute_rsi(list(closes), 14)
 
     # ROC score: normalize
     roc_score = np.clip(roc_20 * 10, -1, 1) * 0.4 + np.clip(roc_60 * 5, -1, 1) * 0.3
@@ -360,32 +369,21 @@ def compute_volatility_regime_score(state: MacroSignalState) -> float:
 
     Low vol (tight bands) after extended period → coiling → imminent breakout → bullish
     High vol spike → capitulation or blow-off top (check direction)
+
+    Uses pre-cached bb_widths from update_state() to avoid O(n²) recomputation.
     """
-    closes = list(state.closes)
-
-    if len(closes) < 50:
+    if len(state.bb_widths) < 30 or len(state.closes) < 50:
         return 0.0
 
-    # Bollinger Band width (20-period)
-    sma_20 = np.mean(closes[-20:])
-    std_20 = np.std(closes[-20:])
-    bb_width = (std_20 / sma_20) if sma_20 > 0 else 0
+    # Current BB width is the latest cached value
+    bb_width = state.bb_widths[-1]
+    bb_list = list(state.bb_widths)
 
-    # Historical BB width for percentile ranking
-    bb_widths = []
-    for i in range(50, len(closes)):
-        s = np.mean(closes[i-20:i])
-        d = np.std(closes[i-20:i])
-        if s > 0:
-            bb_widths.append(d / s)
-
-    if not bb_widths:
-        return 0.0
-
-    # Percentile of current BB width
-    percentile = np.mean([1 if w <= bb_width else 0 for w in bb_widths])
+    # Percentile of current BB width using cached history
+    percentile = np.mean([1 if w <= bb_width else 0 for w in bb_list])
 
     # Price trend during low vol
+    closes = state.closes
     price_trend = (closes[-1] - closes[-20]) / closes[-20] if closes[-20] != 0 else 0
 
     if percentile < 0.15:

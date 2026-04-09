@@ -96,12 +96,29 @@ class MacroCycleBacktest:
         self._trades: List[Dict[str, Any]] = []
         self._signals_log: List[Dict[str, Any]] = []
 
+    def _unrealized_pnl(self, price: float) -> float:
+        """Unrealized P&L for leveraged futures position."""
+        if abs(self._position) < 1e-12:
+            return 0.0
+        return (price - self._entry_price) * self._position
+
     def _equity(self, price: float) -> float:
-        return self._cash + self._position * price
+        """Account equity = cash + unrealized P&L (leveraged futures model).
+
+        In leveraged futures, you don't pay the full notional upfront.
+        You only pay margin (notional/leverage) and your P&L fluctuates.
+        We track equity as: cash balance + mark-to-market unrealized P&L.
+        """
+        return self._cash + self._unrealized_pnl(price)
 
     def _open_position(self, price: float, direction: int, strength: float,
                        atr: float, timestamp: str, composite: float, scores: dict):
-        """Open a leveraged position."""
+        """Open a leveraged position.
+
+        In futures model: only deduct trading fees from cash.
+        The position's P&L is tracked via unrealized_pnl, not by
+        deducting notional from cash.
+        """
         equity = self._equity(price)
         # Cap equity used for sizing to prevent runaway compounding
         # Use min(current_equity, initial_capital * 5) — max 5x growth in sizing
@@ -114,7 +131,7 @@ class MacroCycleBacktest:
 
         self._position = qty
         self._entry_price = price
-        self._cash -= cost
+        self._cash -= cost  # Only deduct fees, not notional (leveraged futures)
 
         if direction > 0:
             self._highest_since_entry = price
@@ -142,16 +159,20 @@ class MacroCycleBacktest:
 
     def _close_position(self, price: float, reason: str, timestamp: str,
                         composite: float):
-        """Close current position."""
+        """Close current position.
+
+        In futures model: realized P&L = (exit - entry) * qty.
+        Cash += realized P&L - fees.  (NOT += position * price)
+        """
         if abs(self._position) < 1e-12:
             return
 
+        # Realized P&L from the trade
         pnl = (price - self._entry_price) * self._position
         cost = abs(self._position * price * self.fee_rate)
 
-        self._cash += self._position * price - cost
-        # Reset to just cash (realized)
-        self._cash = self._cash  # cash already updated
+        # Add realized P&L to cash (not the full notional!)
+        self._cash += pnl - cost
 
         direction = "LONG" if self._position > 0 else "SHORT"
         pnl_pct = pnl / max(abs(self._position * self._entry_price), 1) * 100
@@ -219,7 +240,18 @@ class MacroCycleBacktest:
                 self._peak_equity = equity
             if self._peak_equity > 0:
                 dd = (self._peak_equity - equity) / self._peak_equity
-                self._circuit_breaker = dd > self.max_drawdown_pct
+                if self._circuit_breaker:
+                    # Circuit breaker active — count cooldown bars
+                    self._cb_bars = getattr(self, '_cb_bars', 0) + 1
+                    if self._cb_bars >= 48 and abs(self._position) < 1e-12:
+                        # Cooldown expired (48 bars ≈ 8 days on 4H) + flat → resume
+                        # Reset peak to current equity so DD measurement starts fresh
+                        self._circuit_breaker = False
+                        self._peak_equity = equity
+                elif dd > self.max_drawdown_pct:
+                    # Circuit breaker triggers — force exit open positions
+                    self._circuit_breaker = True
+                    self._cb_bars = 0
 
             # Daily trade count reset
             day = ts[:10]

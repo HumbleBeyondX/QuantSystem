@@ -74,6 +74,94 @@ class BacktestSummary(BaseModel):
 # Background task: run backtest
 # ---------------------------------------------------------------------------
 
+async def _run_leveraged_backtest(df, request: "BacktestRequest") -> Dict[str, Any]:
+    """Run leveraged futures backtest using standalone engine.
+
+    The EventDrivenBacktest PositionManager doesn't support margin/leverage.
+    This uses the MacroCycleBacktest which correctly tracks:
+      equity = cash + unrealized_pnl  (leveraged futures model)
+    """
+    import yaml
+
+    from scripts.backtest_macro_cycle import MacroCycleBacktest
+
+    # Load config from YAML
+    config_path = PROJECT_ROOT / "config" / "strategies" / "crypto_macro_cycle.yaml"
+    params = {}
+    if config_path.exists():
+        with open(config_path) as f:
+            raw = yaml.safe_load(f) or {}
+            params = raw.get("parameters", raw)
+
+    # Override with request parameters
+    if request.parameters:
+        params.update(request.parameters)
+
+    bt = MacroCycleBacktest(
+        initial_capital=request.initial_capital,
+        leverage=params.get("leverage", 10.0),
+        entry_threshold=params.get("entry_threshold", 0.25),
+        exit_threshold=params.get("exit_threshold", -0.10),
+        strong_entry_threshold=params.get("strong_entry_threshold", 0.45),
+        short_entry_threshold=params.get("short_entry_threshold", -0.25),
+        short_exit_threshold=params.get("short_exit_threshold", 0.10),
+        atr_stop_mult=params.get("atr_stop_mult", 1.5),
+        atr_tp_mult=params.get("atr_tp_mult", 3.0),
+        trailing_stop_atr=params.get("trailing_stop_atr", 1.5),
+        base_position_pct=params.get("base_position_pct", 0.10),
+        max_position_pct=params.get("max_position_pct", 0.25),
+        max_drawdown_pct=params.get("max_drawdown_pct", 0.15),
+        cooldown_bars=params.get("cooldown_bars", 3),
+        max_trades_per_day=params.get("max_trades_per_day", 3),
+        fee_rate=params.get("fee_rate", 0.0005),
+        signal_weights=params.get("signal_weights"),
+    )
+
+    # Run in thread pool to avoid blocking
+    import asyncio
+    loop = asyncio.get_event_loop()
+    raw_results = await loop.run_in_executor(None, bt.run, df)
+
+    # Map to standard format expected by the API
+    metrics = raw_results.get("metrics", {})
+    eq_curve = raw_results.get("equity_curve", [])
+    trades = raw_results.get("trades", [])
+
+    # Convert trades to standard format
+    std_trades = []
+    for t in trades:
+        if t["action"].startswith("CLOSE"):
+            std_trades.append({
+                "timestamp": t.get("timestamp", ""),
+                "symbol": request.symbol,
+                "side": "SELL" if "LONG" in t["action"] else "BUY",
+                "price": t.get("price", 0),
+                "quantity": t.get("quantity", 0),
+                "commission": t.get("fee", 0),
+                "pnl": t.get("pnl", 0),
+                "reason": t.get("reason", ""),
+            })
+        else:
+            std_trades.append({
+                "timestamp": t.get("timestamp", ""),
+                "symbol": request.symbol,
+                "side": "BUY" if t["action"] == "LONG" else "SELL",
+                "price": t.get("price", 0),
+                "quantity": t.get("quantity", 0),
+                "commission": t.get("fee", 0),
+            })
+
+    return {
+        "strategy_id": "crypto_macro_cycle",
+        "initial_cash": request.initial_capital,
+        "equity_curve": eq_curve,
+        "trades": std_trades,
+        "metrics": metrics,
+        "n_trades": metrics.get("total_trades", len(std_trades) // 2),
+        "final_value": metrics.get("end_value", request.initial_capital),
+    }
+
+
 async def _run_backtest_task(backtest_id: str, request: BacktestRequest):
     """Run a backtest in the background."""
     import pandas as pd
@@ -141,38 +229,45 @@ async def _run_backtest_task(backtest_id: str, request: BacktestRequest):
         if request.end_date and "timestamp" in df.columns:
             df = df[df["timestamp"] <= pd.Timestamp(request.end_date, tz="UTC")]
 
-        data = {request.symbol: df}
-
-        # Create strategy
-        params = request.parameters or {}
-        config = StrategyConfig(
-            strategy_id=f"bt_{backtest_id[:8]}",
-            name=request.strategy,
-            symbols=[request.symbol],
-            parameters=params,
-            mode="backtest",
-        )
-        strategy = create_strategy(request.strategy, config)
-
-        # Choose engine
-        if request.tick_mode and ("price" in df.columns or "bid" in df.columns):
-            engine = TickBacktestEngine(
-                strategy=strategy,
-                initial_cash=request.initial_capital,
-                slippage=FixedSlippage(bps=2),
-                fees=CryptoMakerTakerFee(maker=0.0002, taker=0.0005),
-            )
+        # ── Use standalone leveraged futures engine for crypto_macro_cycle ──
+        # The EventDrivenBacktest's PositionManager doesn't support leverage/margin.
+        # For leveraged strategies, use the standalone backtest that correctly tracks
+        # equity = cash + unrealized_pnl (not cash + position * price).
+        if request.strategy == "crypto_macro_cycle":
+            results = await _run_leveraged_backtest(df, request)
         else:
-            engine = EventDrivenBacktest(
-                strategy=strategy,
-                initial_cash=request.initial_capital,
-                slippage=FixedSlippage(bps=2),
-                fees=CryptoMakerTakerFee(maker=0.0002, taker=0.0005),
-                risk_check=False,
-            )
+            data = {request.symbol: df}
 
-        # Run
-        results = await engine.run(data)
+            # Create strategy
+            params = request.parameters or {}
+            config = StrategyConfig(
+                strategy_id=f"bt_{backtest_id[:8]}",
+                name=request.strategy,
+                symbols=[request.symbol],
+                parameters=params,
+                mode="backtest",
+            )
+            strategy = create_strategy(request.strategy, config)
+
+            # Choose engine
+            if request.tick_mode and ("price" in df.columns or "bid" in df.columns):
+                engine = TickBacktestEngine(
+                    strategy=strategy,
+                    initial_cash=request.initial_capital,
+                    slippage=FixedSlippage(bps=2),
+                    fees=CryptoMakerTakerFee(maker=0.0002, taker=0.0005),
+                )
+            else:
+                engine = EventDrivenBacktest(
+                    strategy=strategy,
+                    initial_cash=request.initial_capital,
+                    slippage=FixedSlippage(bps=2),
+                    fees=CryptoMakerTakerFee(maker=0.0002, taker=0.0005),
+                    risk_check=False,
+                )
+
+            # Run
+            results = await engine.run(data)
 
         # Store result (sanitize inf/nan for JSON safety)
         result_record = _sanitize({
@@ -182,7 +277,7 @@ async def _run_backtest_task(backtest_id: str, request: BacktestRequest):
             "status": "completed",
             "created_at": datetime.utcnow().isoformat(),
             "initial_capital": request.initial_capital,
-            "parameters": params,
+            "parameters": request.parameters or {},
             "metrics": results.get("metrics", {}),
             "n_trades": results.get("n_trades", 0),
             "final_value": results.get("final_value", request.initial_capital),
@@ -475,7 +570,7 @@ async def _run_gamma_scalp_task(backtest_id: str, request: GammaScalpRequest):
             "status": "completed",
             "created_at": datetime.utcnow().isoformat(),
             "initial_capital": request.initial_capital,
-            "parameters": params,
+            "parameters": request.parameters or {},
             "metrics": metrics,
             "risk_metrics": risk,
             "strategy_analytics": strategy_analytics,

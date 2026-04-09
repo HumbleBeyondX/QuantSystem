@@ -240,6 +240,11 @@ def compute_unrealized_pnl(state: Dict[str, Any]) -> float:
         rf = state.get("_risk_free", 0.045)
         expiry = state.get("_expiry_time")
         current = state.get("_current_time", datetime.now())
+        # Normalize tz-aware/naive to prevent subtraction TypeError
+        if expiry and hasattr(expiry, 'tzinfo') and expiry.tzinfo is not None:
+            expiry = expiry.replace(tzinfo=None)
+        if current and hasattr(current, 'tzinfo') and current.tzinfo is not None:
+            current = current.replace(tzinfo=None)
         if expiry and current:
             T = max((expiry - current).total_seconds(), 60) / (365.25 * 86400)
         else:
