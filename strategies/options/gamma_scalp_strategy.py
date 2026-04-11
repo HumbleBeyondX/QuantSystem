@@ -499,11 +499,21 @@ class GammaScalpStrategy(StrategyBase):
     # Precise time calculations
     # ===================================================================
 
+    @staticmethod
+    def _normalize_dt(a: datetime, b: datetime):
+        """Ensure both datetimes are tz-naive to avoid subtraction errors."""
+        if a is not None and hasattr(a, 'tzinfo') and a.tzinfo is not None:
+            a = a.replace(tzinfo=None)
+        if b is not None and hasattr(b, 'tzinfo') and b.tzinfo is not None:
+            b = b.replace(tzinfo=None)
+        return a, b
+
     def _time_to_expiry(self) -> float:
         """Years to expiry, floored at 1 minute."""
         if self._expiry_time is None:
             return 1.0 / (365.25 * 24 * 60)
-        remaining = max((self._expiry_time - self._current_time).total_seconds(), 60.0)
+        expiry, current = self._normalize_dt(self._expiry_time, self._current_time)
+        remaining = max((expiry - current).total_seconds(), 60.0)
         return remaining / (365.25 * 86400)
 
     # ===================================================================
@@ -722,7 +732,8 @@ class GammaScalpStrategy(StrategyBase):
         dS = spot - prev_spot
         dt_days = 0.0
         if self._prev_time is not None:
-            dt_days = (now - self._prev_time).total_seconds() / 86400.0
+            now_n, prev_n = self._normalize_dt(now, self._prev_time)
+            dt_days = (now_n - prev_n).total_seconds() / 86400.0
         d_iv = iv - self._prev_iv
 
         self._cum_gamma_pnl += 0.5 * self._portfolio_gamma * dS * dS * sign

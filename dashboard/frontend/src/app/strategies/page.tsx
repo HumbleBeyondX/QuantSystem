@@ -12,6 +12,17 @@ import { useState } from 'react'
 
 const strategies = [
   {
+    id: 'crypto-macro-cycle',
+    name: 'BTC/ETH Macro Cycle',
+    assetClass: 'Crypto',
+    state: 'running' as const,
+    pnl: 62_525,
+    winRate: 62.6,
+    sharpe: 0.41,
+    trades: 222,
+    description: '5x leveraged macro cycle entry signals (Wide Stops). Multi-factor composite (trend, momentum, volume, drawdown, volatility regime). 4H timeframe, max 3 trades/day. Return +62.5%, MaxDD 10.6%, PF 1.62.',
+  },
+  {
     id: 'momentum-btc',
     name: 'BTC Momentum',
     assetClass: 'Crypto',

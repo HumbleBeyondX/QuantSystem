@@ -23,6 +23,7 @@ class AlertChannel(Enum):
     TELEGRAM = "telegram"
     DISCORD = "discord"
     LOG = "log"
+    EMAIL = "email"
 
 
 @dataclass

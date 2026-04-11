@@ -1,0 +1,66 @@
+# ============================================================
+# BTC/ETH Macro Cycle Entry Signal Strategy
+# ============================================================
+# Leveraged speculative strategy based on multi-factor macro cycle analysis.
+# Uses price-derived proxy signals for cycle timing.
+#
+# Timeframe: 4H
+# Leverage: 5x (optimized via parameter sweep)
+# Frequency: ~1 trade/day avg
+# Config: "Wide Stops" - best risk-adjusted returns
+#   +62.2% total, Sharpe 0.405, MaxDD 10.6%, WR 62.6%, PF 1.62
+# ============================================================
+
+strategy_id: crypto_macro_cycle_v1
+name: "BTC/ETH Macro Cycle Signals"
+asset_class: crypto
+enabled: true
+mode: paper
+
+symbols:
+  - BTC/USDT
+  - ETH/USDT
+
+timeframe: 4h
+
+parameters:
+  # ── Signal Thresholds ──
+  # Composite score in [-1, +1]; higher = more bullish
+  entry_threshold: 0.30        # Open long when composite >= 0.30
+  exit_threshold: -0.10        # Close long when composite <= -0.10
+  strong_entry_threshold: 0.50 # Extra conviction -> larger position
+  short_entry_threshold: -0.25 # Open short when composite <= -0.25
+  short_exit_threshold: 0.10   # Close short when composite >= 0.10
+
+  # ── Signal Weights (must sum to ~1.0) ──
+  signal_weights:
+    ma200w: 0.15       # 200-week MA proximity (accumulation zone)
+    pi_cycle: 0.10     # Pi Cycle top indicator
+    trend: 0.25        # Triple EMA alignment (primary driver)
+    momentum: 0.20     # ROC + RSI regime
+    volume: 0.10       # OBV slope + volume surge
+    drawdown: 0.10     # Distance from ATH (contrarian)
+    volatility: 0.10   # Bollinger width (coiling detection)
+
+  # ── Leverage & Position Sizing (Wide Stops config) ──
+  leverage: 5.0
+  base_position_pct: 0.10     # 10% of equity per trade base
+  max_position_pct: 0.25      # 25% max equity at risk
+
+  # ── Risk Management (Wide Stops: more room, better R:R) ──
+  atr_period: 14
+  atr_stop_mult: 3.0          # Stop loss = 3x ATR from entry
+  atr_tp_mult: 6.0            # Take profit = 6x ATR from entry
+  trailing_stop_atr: 2.5      # Trailing stop = 2.5x ATR from high
+  max_drawdown_pct: 0.15      # Circuit breaker at 15% equity DD
+  cooldown_bars: 3             # Min 3 bars (12 hours) between trades
+  max_trades_per_day: 3
+
+  # ── Capital ──
+  initial_capital: 100000
+
+risk:
+  max_position_pct: 25.0
+  max_daily_loss_pct: 5.0
+  max_leverage: 6.0
+  circuit_breaker_dd_pct: 15.0

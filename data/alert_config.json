@@ -1,0 +1,12 @@
+{
+  "email_enabled": true,
+  "recipient": "humblebeyondx@gmail.com",
+  "drawdown_warning_pct": 5.0,
+  "drawdown_critical_pct": 10.0,
+  "daily_loss_warning_pct": 3.0,
+  "daily_loss_critical_pct": 5.0,
+  "vix_spike_threshold": 30.0,
+  "consecutive_loss_threshold": 4,
+  "leverage_warning": 3.0,
+  "leverage_critical": 5.0
+}

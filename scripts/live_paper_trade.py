@@ -67,6 +67,7 @@ if _env_file.exists():
 
 from core.enums import AssetClass, TimeFrame
 from core.models import Bar
+from data.quality import DataQualityChecker, DataQualityError
 from strategies.base import StrategyConfig
 from strategies.registry import discover_strategies, create_strategy
 
@@ -813,6 +814,7 @@ class PaperTradingRunner:
         self.use_alpaca_execution = use_alpaca_execution
         self.use_ib_execution = use_ib_execution
         self.logger = SignalLogger()
+        self.dqc = DataQualityChecker()
 
         # Initialize data fetcher
         if data_source == "ib":
@@ -879,6 +881,16 @@ class PaperTradingRunner:
 
         if not bars:
             print("  WARNING: No historical data for warm-up")
+            return
+
+        # ── Data Quality Check on historical bars ──
+        try:
+            bars_report = self.dqc.check_bars(bars)
+            bars = bars_report.bar_data  # Use cleaned bars
+            print(f"  [DQC] Historical data: {bars_report.summary}")
+        except DataQualityError as e:
+            print(f"  [DQC] CRITICAL: Historical data failed quality check: {e}")
+            print("  [DQC] Aborting warm-up. Strategy will not trade until data is fixed.")
             return
 
         self.strategy.initialize()
@@ -1050,7 +1062,49 @@ class PaperTradingRunner:
         bar_data = self.fetcher.get_today_bar(date)
         if bar_data is None:
             return {"status": "no_data", "reason": "market_closed_or_no_data"}
+
+        # ── Data Quality Check ──
+        try:
+            report = self.dqc.check_bar(bar_data)
+            bar_data = report.bar_data  # Use cleaned data
+            if report.has_warnings:
+                print(f"  [DQC] {report.summary}")
+        except DataQualityError as e:
+            error_msg = str(e)
+            print(f"  [DQC] CRITICAL: {error_msg}")
+            print("  [DQC] Skipping this bar. Strategy state preserved.")
+            # Send email alert for data quality failure
+            self._send_dq_alert(error_msg, date)
+            return {"status": "data_quality_error", "reason": error_msg, "date": date}
+
         return self.process_bar(bar_data)
+
+    def _send_dq_alert(self, error_msg: str, date: Optional[str] = None) -> None:
+        """Send email alert on data quality failure."""
+        try:
+            import asyncio
+            from dashboard.alerts.email_notifier import get_email_notifier
+            from dashboard.alerts.alert_manager import Alert, AlertSeverity
+
+            notifier = get_email_notifier()
+            if not notifier.is_configured:
+                return
+
+            alert = Alert(
+                title="Data Quality Check Failed",
+                message=f"Paper trading run skipped due to data quality issue.\n\n{error_msg}",
+                severity=AlertSeverity.CRITICAL,
+                source="paper_trading_dqc",
+                metadata={
+                    "date": date or "today",
+                    "data_source": self.data_source,
+                    "strategy": "spy_gamma_scalp",
+                },
+            )
+            asyncio.run(notifier.send_alert(alert))
+            print("  [DQC] Alert email sent.")
+        except Exception as e:
+            print(f"  [DQC] Failed to send alert email: {e}")
 
     def run_continuous(self, interval_minutes: int = 60) -> None:
         """Run in a loop, checking for new data periodically."""

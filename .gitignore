@@ -23,6 +23,8 @@ ENV/
 # Environment & Secrets
 .env
 *.env.local
+data/gmail_credentials.json
+data/gmail_token.json
 
 # Docker volumes (local data)
 docker-data/

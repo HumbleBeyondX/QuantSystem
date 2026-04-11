@@ -33,6 +33,72 @@ def _sanitize(obj):
             return 0.0
     return obj
 
+
+def _normalize_result(bid: str, raw: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize a backtest result loaded from disk to the standard API format.
+
+    Different backtest engines save results with different metric key names
+    and structures. This function maps them all to the standard format that
+    the frontend expects:
+      - metrics.sharpe_ratio, metrics.max_drawdown_pct, metrics.sortino_ratio, etc.
+      - top-level: backtest_id, strategy, status, n_trades, final_value
+    """
+    # --- Ensure top-level fields exist ---
+    result = dict(raw)
+    result.setdefault("backtest_id", bid)
+    result.setdefault("status", "completed" if result.get("metrics") else "unknown")
+    result.setdefault("symbol", "")
+    result.setdefault("created_at", "")
+
+    metrics = dict(result.get("metrics", {}))
+
+    # --- Metric key aliases: old_key -> standard_key ---
+    _METRIC_ALIASES = {
+        "sharpe":           "sharpe_ratio",
+        "sortino":          "sortino_ratio",
+        "calmar":           "calmar_ratio",
+        "max_dd_pct":       "max_drawdown_pct",
+        "volatility":       "annual_volatility",
+    }
+    for old_key, new_key in _METRIC_ALIASES.items():
+        if old_key in metrics and new_key not in metrics:
+            metrics[new_key] = metrics[old_key]
+
+    # --- win_loss_ratio from avg_win / avg_loss ---
+    if "win_loss_ratio" not in metrics and "avg_win" in metrics and "avg_loss" in metrics:
+        avg_loss = abs(metrics["avg_loss"]) if metrics["avg_loss"] != 0 else 0.01
+        metrics["win_loss_ratio"] = round(abs(metrics["avg_win"]) / avg_loss, 2)
+
+    # --- profit_factor ---
+    if "profit_factor" not in metrics:
+        metrics["profit_factor"] = 0
+
+    result["metrics"] = metrics
+
+    # --- Top-level n_trades: prefer top-level, fallback to metrics.trades or metrics.total_trades ---
+    if not result.get("n_trades"):
+        result["n_trades"] = metrics.get("total_trades", metrics.get("trades", 0))
+
+    # --- Top-level final_value: prefer top-level, fallback to metrics.end_eq or metrics.end_value ---
+    if not result.get("final_value"):
+        result["final_value"] = metrics.get("end_eq", metrics.get("end_value", 0))
+
+    # --- Infer strategy from filename if missing ---
+    if not result.get("strategy"):
+        result["strategy"] = bid.rsplit("_", 1)[0] if "_" in bid else bid
+
+    # --- Normalize equity_curve format: {ts, equity} -> {timestamp, total_value} ---
+    eq = result.get("equity_curve")
+    if eq and isinstance(eq, list) and len(eq) > 0:
+        sample = eq[0]
+        if "equity" in sample and "total_value" not in sample:
+            result["equity_curve"] = [
+                {"timestamp": pt.get("ts", pt.get("timestamp", "")), "total_value": pt["equity"], "cash": pt.get("cash", pt["equity"])}
+                for pt in eq
+            ]
+
+    return result
+
 router = APIRouter()
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -74,6 +140,211 @@ class BacktestSummary(BaseModel):
 # Background task: run backtest
 # ---------------------------------------------------------------------------
 
+async def _run_sniper_backtest(df, request: "BacktestRequest") -> Dict[str, Any]:
+    """Run BTC Sniper v5 backtest using standalone fixed-risk engine.
+
+    Uses BTCSniperBacktest which tracks:
+      equity = cash + margin + unrealized_pnl (leveraged perpetual futures model)
+      Position sizing: qty = risk_amount / stop_distance (fixed-risk)
+    """
+    import yaml
+
+    from scripts.backtest_btc_sniper import BTCSniperBacktest
+
+    # Load config from YAML
+    config_path = PROJECT_ROOT / "config" / "strategies" / "btc_sniper.yaml"
+    params = {}
+    if config_path.exists():
+        with open(config_path) as f:
+            raw = yaml.safe_load(f) or {}
+            params = raw.get("parameters", raw)
+
+    # Override with request parameters
+    if request.parameters:
+        params.update(request.parameters)
+
+    bt = BTCSniperBacktest(
+        initial_capital=request.initial_capital,
+        leverage=params.get("leverage", 50.0),
+        risk_per_trade=params.get("risk_per_trade", 0.05),
+        max_margin_pct=params.get("max_margin_pct", 0.30),
+        min_score=params.get("min_score", 2),
+        vol_min=params.get("vol_min", 1.2),
+        use_donchian10=params.get("use_donchian10", True),
+        atr_stop=params.get("atr_stop", 3.5),
+        atr_trail=params.get("atr_trail", 2.5),
+        atr_trail_activate=params.get("atr_trail_activate", 2.0),
+        cooldown=params.get("cooldown", 3),
+        max_hold=params.get("max_hold", 120),
+        fee_rate=params.get("fee_rate", 0.0005),
+        pause_after_losses=params.get("pause_after_losses", 5),
+        pause_bars=params.get("pause_bars", 18),
+    )
+
+    # Run in thread pool to avoid blocking
+    loop = asyncio.get_event_loop()
+    raw_results = await loop.run_in_executor(None, bt.run, df)
+
+    # Map to standard format expected by the API
+    raw_metrics = raw_results.get("metrics", {})
+    eq_curve = raw_results.get("equity_curve", [])
+    trades = raw_results.get("trades", [])
+
+    # Remap metric keys to standard names the frontend expects
+    metrics = {
+        "total_return_pct": raw_metrics.get("total_return_pct", 0),
+        "annual_return_pct": raw_metrics.get("annual_return_pct", 0),
+        "sharpe_ratio": raw_metrics.get("sharpe", 0),
+        "sortino_ratio": raw_metrics.get("sortino", 0),
+        "calmar_ratio": raw_metrics.get("calmar", 0),
+        "max_drawdown_pct": raw_metrics.get("max_dd_pct", 0),
+        "annual_volatility": raw_metrics.get("volatility", 0),
+        "win_rate": raw_metrics.get("win_rate", 0),
+        "profit_factor": raw_metrics.get("profit_factor", 0),
+        "win_loss_ratio": round(
+            abs(raw_metrics.get("avg_win", 0)) / max(abs(raw_metrics.get("avg_loss", 1)), 0.01), 2
+        ),
+        "total_trades": raw_metrics.get("trades", 0),
+        "avg_win": raw_metrics.get("avg_win", 0),
+        "avg_loss": raw_metrics.get("avg_loss", 0),
+        "avg_bars_held": raw_metrics.get("avg_bars", 0),
+        "monthly_hit_rate": raw_metrics.get("monthly_hit", 0),
+        "best_month_pct": raw_metrics.get("best_month_pct", 0),
+        "worst_month_pct": raw_metrics.get("worst_month_pct", 0),
+        "yearly_returns": raw_metrics.get("yearly", {}),
+        "exit_reasons": raw_metrics.get("exits", {}),
+        "entry_types": raw_metrics.get("entry_types", {}),
+        "leverage": params.get("leverage", 50.0),
+    }
+
+    # Convert equity curve to standard format {timestamp, total_value}
+    std_eq = [{"timestamp": e["ts"], "total_value": round(e["equity"], 2)} for e in eq_curve]
+
+    # Convert trades to standard format
+    std_trades = []
+    for t in trades:
+        if t["action"].startswith("CLOSE"):
+            std_trades.append({
+                "timestamp": t.get("ts", ""),
+                "symbol": request.symbol,
+                "side": "SELL" if "LONG" in t["action"] else "BUY",
+                "price": t.get("price", 0),
+                "quantity": t.get("qty", 0),
+                "commission": t.get("fee", 0),
+                "pnl": t.get("pnl", 0),
+                "reason": t.get("reason", ""),
+            })
+        else:
+            std_trades.append({
+                "timestamp": t.get("ts", ""),
+                "symbol": request.symbol,
+                "side": "BUY" if t["action"] == "LONG" else "SELL",
+                "price": t.get("price", 0),
+                "quantity": t.get("qty", 0),
+                "commission": t.get("fee", 0),
+            })
+
+    n_closed = sum(1 for t in trades if t["action"].startswith("CLOSE"))
+
+    return {
+        "strategy_id": "btc_sniper",
+        "initial_cash": request.initial_capital,
+        "equity_curve": std_eq,
+        "trades": std_trades,
+        "metrics": metrics,
+        "n_trades": n_closed,
+        "final_value": raw_metrics.get("end_eq", request.initial_capital),
+    }
+
+
+async def _run_leveraged_backtest(df, request: "BacktestRequest") -> Dict[str, Any]:
+    """Run leveraged futures backtest using standalone engine.
+
+    The EventDrivenBacktest PositionManager doesn't support margin/leverage.
+    This uses the MacroCycleBacktest which correctly tracks:
+      equity = cash + unrealized_pnl  (leveraged futures model)
+    """
+    import yaml
+
+    from scripts.backtest_macro_cycle import MacroCycleBacktest
+
+    # Load config from YAML
+    config_path = PROJECT_ROOT / "config" / "strategies" / "crypto_macro_cycle.yaml"
+    params = {}
+    if config_path.exists():
+        with open(config_path) as f:
+            raw = yaml.safe_load(f) or {}
+            params = raw.get("parameters", raw)
+
+    # Override with request parameters
+    if request.parameters:
+        params.update(request.parameters)
+
+    bt = MacroCycleBacktest(
+        initial_capital=request.initial_capital,
+        leverage=params.get("leverage", 10.0),
+        entry_threshold=params.get("entry_threshold", 0.25),
+        exit_threshold=params.get("exit_threshold", -0.10),
+        strong_entry_threshold=params.get("strong_entry_threshold", 0.45),
+        short_entry_threshold=params.get("short_entry_threshold", -0.25),
+        short_exit_threshold=params.get("short_exit_threshold", 0.10),
+        atr_stop_mult=params.get("atr_stop_mult", 1.5),
+        atr_tp_mult=params.get("atr_tp_mult", 3.0),
+        trailing_stop_atr=params.get("trailing_stop_atr", 1.5),
+        base_position_pct=params.get("base_position_pct", 0.10),
+        max_position_pct=params.get("max_position_pct", 0.25),
+        max_drawdown_pct=params.get("max_drawdown_pct", 0.15),
+        cooldown_bars=params.get("cooldown_bars", 3),
+        max_trades_per_day=params.get("max_trades_per_day", 3),
+        fee_rate=params.get("fee_rate", 0.0005),
+        signal_weights=params.get("signal_weights"),
+    )
+
+    # Run in thread pool to avoid blocking
+    import asyncio
+    loop = asyncio.get_event_loop()
+    raw_results = await loop.run_in_executor(None, bt.run, df)
+
+    # Map to standard format expected by the API
+    metrics = raw_results.get("metrics", {})
+    eq_curve = raw_results.get("equity_curve", [])
+    trades = raw_results.get("trades", [])
+
+    # Convert trades to standard format
+    std_trades = []
+    for t in trades:
+        if t["action"].startswith("CLOSE"):
+            std_trades.append({
+                "timestamp": t.get("timestamp", ""),
+                "symbol": request.symbol,
+                "side": "SELL" if "LONG" in t["action"] else "BUY",
+                "price": t.get("price", 0),
+                "quantity": t.get("quantity", 0),
+                "commission": t.get("fee", 0),
+                "pnl": t.get("pnl", 0),
+                "reason": t.get("reason", ""),
+            })
+        else:
+            std_trades.append({
+                "timestamp": t.get("timestamp", ""),
+                "symbol": request.symbol,
+                "side": "BUY" if t["action"] == "LONG" else "SELL",
+                "price": t.get("price", 0),
+                "quantity": t.get("quantity", 0),
+                "commission": t.get("fee", 0),
+            })
+
+    return {
+        "strategy_id": "crypto_macro_cycle",
+        "initial_cash": request.initial_capital,
+        "equity_curve": eq_curve,
+        "trades": std_trades,
+        "metrics": metrics,
+        "n_trades": metrics.get("total_trades", len(std_trades) // 2),
+        "final_value": metrics.get("end_value", request.initial_capital),
+    }
+
+
 async def _run_backtest_task(backtest_id: str, request: BacktestRequest):
     """Run a backtest in the background."""
     import pandas as pd
@@ -97,6 +368,9 @@ async def _run_backtest_task(backtest_id: str, request: BacktestRequest):
             # Auto-detect: look for matching CSV in data/sample/
             safe_symbol = request.symbol.replace("/", "_")
             candidates = [
+                DATA_DIR / f"{safe_symbol}_4h.csv",
+                DATA_DIR / f"{safe_symbol}_1d.csv",
+                DATA_DIR / f"{safe_symbol}_1h.csv",
                 DATA_DIR / f"{safe_symbol}_1m.csv",
                 DATA_DIR / f"{safe_symbol}_trades.csv",
                 DATA_DIR / f"{safe_symbol}.csv",
@@ -138,38 +412,47 @@ async def _run_backtest_task(backtest_id: str, request: BacktestRequest):
         if request.end_date and "timestamp" in df.columns:
             df = df[df["timestamp"] <= pd.Timestamp(request.end_date, tz="UTC")]
 
-        data = {request.symbol: df}
-
-        # Create strategy
-        params = request.parameters or {}
-        config = StrategyConfig(
-            strategy_id=f"bt_{backtest_id[:8]}",
-            name=request.strategy,
-            symbols=[request.symbol],
-            parameters=params,
-            mode="backtest",
-        )
-        strategy = create_strategy(request.strategy, config)
-
-        # Choose engine
-        if request.tick_mode and ("price" in df.columns or "bid" in df.columns):
-            engine = TickBacktestEngine(
-                strategy=strategy,
-                initial_cash=request.initial_capital,
-                slippage=FixedSlippage(bps=2),
-                fees=CryptoMakerTakerFee(maker=0.0002, taker=0.0005),
-            )
+        # ── Use standalone leveraged futures engine for crypto_macro_cycle ──
+        # The EventDrivenBacktest's PositionManager doesn't support leverage/margin.
+        # For leveraged strategies, use the standalone backtest that correctly tracks
+        # equity = cash + unrealized_pnl (not cash + position * price).
+        if request.strategy == "btc_sniper":
+            results = await _run_sniper_backtest(df, request)
+        elif request.strategy == "crypto_macro_cycle":
+            results = await _run_leveraged_backtest(df, request)
         else:
-            engine = EventDrivenBacktest(
-                strategy=strategy,
-                initial_cash=request.initial_capital,
-                slippage=FixedSlippage(bps=2),
-                fees=CryptoMakerTakerFee(maker=0.0002, taker=0.0005),
-                risk_check=False,
-            )
+            data = {request.symbol: df}
 
-        # Run
-        results = await engine.run(data)
+            # Create strategy
+            params = request.parameters or {}
+            config = StrategyConfig(
+                strategy_id=f"bt_{backtest_id[:8]}",
+                name=request.strategy,
+                symbols=[request.symbol],
+                parameters=params,
+                mode="backtest",
+            )
+            strategy = create_strategy(request.strategy, config)
+
+            # Choose engine
+            if request.tick_mode and ("price" in df.columns or "bid" in df.columns):
+                engine = TickBacktestEngine(
+                    strategy=strategy,
+                    initial_cash=request.initial_capital,
+                    slippage=FixedSlippage(bps=2),
+                    fees=CryptoMakerTakerFee(maker=0.0002, taker=0.0005),
+                )
+            else:
+                engine = EventDrivenBacktest(
+                    strategy=strategy,
+                    initial_cash=request.initial_capital,
+                    slippage=FixedSlippage(bps=2),
+                    fees=CryptoMakerTakerFee(maker=0.0002, taker=0.0005),
+                    risk_check=False,
+                )
+
+            # Run
+            results = await engine.run(data)
 
         # Store result (sanitize inf/nan for JSON safety)
         result_record = _sanitize({
@@ -179,7 +462,7 @@ async def _run_backtest_task(backtest_id: str, request: BacktestRequest):
             "status": "completed",
             "created_at": datetime.utcnow().isoformat(),
             "initial_capital": request.initial_capital,
-            "parameters": params,
+            "parameters": request.parameters or {},
             "metrics": results.get("metrics", {}),
             "n_trades": results.get("n_trades", 0),
             "final_value": results.get("final_value", request.initial_capital),
@@ -272,7 +555,8 @@ async def list_backtest_results():
             if bid not in _backtest_store:
                 try:
                     with open(f) as fh:
-                        _backtest_store[bid] = json.load(fh)
+                        raw = json.load(fh)
+                    _backtest_store[bid] = _normalize_result(bid, raw)
                 except Exception:
                     pass
 
@@ -303,7 +587,8 @@ async def get_backtest_result(backtest_id: str):
     result_file = RESULTS_DIR / f"{backtest_id}.json"
     if result_file.exists():
         with open(result_file) as f:
-            result = json.load(f)
+            raw = json.load(f)
+        result = _normalize_result(backtest_id, raw)
         _backtest_store[backtest_id] = result
         return _sanitize(result)
 
@@ -472,7 +757,7 @@ async def _run_gamma_scalp_task(backtest_id: str, request: GammaScalpRequest):
             "status": "completed",
             "created_at": datetime.utcnow().isoformat(),
             "initial_capital": request.initial_capital,
-            "parameters": params,
+            "parameters": request.parameters or {},
             "metrics": metrics,
             "risk_metrics": risk,
             "strategy_analytics": strategy_analytics,
