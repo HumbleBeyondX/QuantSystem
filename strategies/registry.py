@@ -63,6 +63,7 @@ def discover_strategies() -> None:
         "strategies.options.delta_neutral_strategy",
         "strategies.options.gamma_scalp_strategy",
         "strategies.crypto.macro_cycle_strategy",
+        "strategies.crypto.sniper_strategy",
     ]
 
     for module_path in modules:

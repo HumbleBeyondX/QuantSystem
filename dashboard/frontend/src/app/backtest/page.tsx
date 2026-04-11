@@ -25,12 +25,13 @@ interface BacktestResult {
   metrics: Record<string, any>
   n_trades: number
   final_value: number
-  equity_curve?: Array<{ timestamp: string; total_value: number; cash: number }>
-  trades?: Array<{ timestamp: string; symbol: string; side: string; price: number; quantity: number; commission: number }>
+  equity_curve?: Array<Record<string, any>>
+  trades?: Array<Record<string, any>>
   error?: string
 }
 
 const strategyOptions = [
+  { value: 'btc_sniper', label: 'BTC Sniper v5 (50x Perp Futures, Fixed-Risk)' },
   { value: 'crypto_macro_cycle', label: 'BTC/ETH Macro Cycle Signals (4H, 5x Wide Stops)' },
   { value: 'spy_gamma_scalp', label: 'SPY Gamma Scalp (Options)' },
   { value: 'crypto_momentum', label: 'BTC Momentum (Daily)' },
@@ -333,18 +334,26 @@ export default function BacktestPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedResult.trades.slice(0, 20).map((t, i) => (
+                    {selectedResult.trades.slice(-20).map((t: any, i) => {
+                      const time = (t.timestamp || t.ts || '').substring(0, 19)
+                      const sym = t.symbol || selectedResult.symbol || ''
+                      const side = t.side || t.action || ''
+                      const qty = t.quantity ?? t.qty ?? 0
+                      const fee = t.commission ?? t.fee ?? 0
+                      const isBuy = /buy|long/i.test(side)
+                      return (
                       <tr key={i} className="border-b border-border/30">
-                        <td className="py-1.5 pr-4 text-gray-400">{t.timestamp.substring(0, 19)}</td>
-                        <td className="py-1.5 pr-4 text-gray-100">{t.symbol}</td>
-                        <td className={`py-1.5 pr-4 font-medium ${t.side === 'BUY' ? 'text-success' : 'text-danger'}`}>
-                          {t.side}
+                        <td className="py-1.5 pr-4 text-gray-400">{time}</td>
+                        <td className="py-1.5 pr-4 text-gray-100">{sym}</td>
+                        <td className={`py-1.5 pr-4 font-medium ${isBuy ? 'text-success' : 'text-danger'}`}>
+                          {side}
                         </td>
-                        <td className="py-1.5 pr-4 text-right text-gray-100">${t.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                        <td className="py-1.5 pr-4 text-right text-gray-300">{t.quantity.toFixed(6)}</td>
-                        <td className="py-1.5 text-right text-gray-500">${t.commission.toFixed(4)}</td>
+                        <td className="py-1.5 pr-4 text-right text-gray-100">${(t.price ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                        <td className="py-1.5 pr-4 text-right text-gray-300">{qty.toFixed(6)}</td>
+                        <td className="py-1.5 text-right text-gray-500">${fee.toFixed(4)}</td>
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -440,10 +449,10 @@ export default function BacktestPage() {
 // SVG Equity Curve Component
 // ---------------------------------------------------------------------------
 
-function EquityCurveSVG({ data, initialCash }: { data: Array<{ total_value: number }>; initialCash: number }) {
+function EquityCurveSVG({ data, initialCash }: { data: Array<Record<string, any>>; initialCash: number }) {
   if (data.length < 2) return null
 
-  const values = data.map(d => d.total_value)
+  const values = data.map(d => d.total_value ?? d.equity ?? 0)
   const minVal = Math.min(...values) * 0.999
   const maxVal = Math.max(...values) * 1.001
   const range = maxVal - minVal || 1

@@ -182,6 +182,27 @@ STRATEGY_CATALOG: List[StrategyInfo] = [
         backtest_trades=65,
     ),
     StrategyInfo(
+        id="btc_sniper",
+        name="BTC Momentum Sniper v5",
+        description="High-leverage BTC perpetual futures trend-following with fixed-risk position sizing. "
+                    "50x leverage, 5% equity risk per trade, ATR-based trailing stops. "
+                    "Dual entry: Donchian breakout + EMA21 pullback. 4H timeframe.",
+        asset_class="crypto",
+        category="crypto",
+        symbols=["BTC/USDT"],
+        default_params={
+            "leverage": 50.0,
+            "risk_per_trade": 0.05,
+            "atr_stop": 3.5,
+            "atr_trail": 2.5,
+            "min_score": 2,
+            "initial_capital": 10000,
+        },
+        backtest_sharpe=1.68,
+        backtest_win_rate=0.546,
+        backtest_trades=260,
+    ),
+    StrategyInfo(
         id="crypto_momentum",
         name="Crypto Momentum",
         description="Cross-sectional momentum in crypto markets, rotating into top performers with trend confirmation.",

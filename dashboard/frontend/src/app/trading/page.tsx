@@ -225,23 +225,34 @@ export default function TradingPage() {
     }
   }, [selectedStrategyId])
 
-  // Fetch data for the selected strategy
+  // Fetch data for the selected strategy (resilient: individual failures don't break everything)
   const fetchData = useCallback(async () => {
     if (!selectedStrategyId) return
     const sid = encodeURIComponent(selectedStrategyId)
+
+    const safeFetch = async (url: string) => {
+      try {
+        const r = await fetch(url)
+        if (!r.ok) return null
+        return await r.json()
+      } catch {
+        return null
+      }
+    }
+
     try {
       const [statusRes, dailyRes, tradesRes, equityRes, configRes] = await Promise.all([
-        fetch(`${API}/api/paper-trading/status?strategy_id=${sid}`).then(r => r.json()),
-        fetch(`${API}/api/paper-trading/daily-log?limit=100&strategy_id=${sid}`).then(r => r.json()),
-        fetch(`${API}/api/paper-trading/trades?limit=50&strategy_id=${sid}`).then(r => r.json()),
-        fetch(`${API}/api/paper-trading/equity-curve?strategy_id=${sid}`).then(r => r.json()),
-        fetch(`${API}/api/paper-trading/config?strategy_id=${sid}`).then(r => r.json()),
+        safeFetch(`${API}/api/paper-trading/status?strategy_id=${sid}`),
+        safeFetch(`${API}/api/paper-trading/daily-log?limit=100&strategy_id=${sid}`),
+        safeFetch(`${API}/api/paper-trading/trades?limit=50&strategy_id=${sid}`),
+        safeFetch(`${API}/api/paper-trading/equity-curve?strategy_id=${sid}`),
+        safeFetch(`${API}/api/paper-trading/config?strategy_id=${sid}`),
       ])
-      setStatus(statusRes)
-      setDailyLog(dailyRes)
-      setTrades(tradesRes)
-      setEquityCurve(equityRes)
-      setConfig(configRes)
+      if (statusRes) setStatus(statusRes)
+      if (dailyRes) setDailyLog(dailyRes)
+      if (tradesRes) setTrades(tradesRes)
+      if (equityRes) setEquityCurve(equityRes)
+      if (configRes) setConfig(configRes)
     } catch (e) {
       console.error('Failed to fetch trading data:', e)
     } finally {

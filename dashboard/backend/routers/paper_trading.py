@@ -100,6 +100,8 @@ class TradingStatus(BaseModel):
 
 
 class DailySnapshot(BaseModel):
+    model_config = {"extra": "ignore"}  # Ignore extra fields from JSONL
+
     date: str
     spy_close: float = 0.0
     vix: float = 0.0
@@ -121,6 +123,8 @@ class DailySnapshot(BaseModel):
 
 
 class TradeRecord(BaseModel):
+    model_config = {"extra": "ignore"}  # Ignore extra fields from state/JSONL
+
     timestamp: str = ""
     direction: str = ""
     reason: str = ""
@@ -177,6 +181,18 @@ def _load_state(strategy_id: str = "spy_gamma_scalp") -> Optional[Dict[str, Any]
         return None
 
 
+def _sanitize_nans(obj: Any) -> Any:
+    """Recursively replace NaN/Inf floats with 0.0 (they are not valid JSON)."""
+    import math
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return 0.0
+    if isinstance(obj, dict):
+        return {k: _sanitize_nans(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_nans(v) for v in obj]
+    return obj
+
+
 def _load_jsonl(filepath: Path, limit: int = 500) -> List[Dict[str, Any]]:
     """Load last N lines from a JSONL file."""
     if not filepath.exists():
@@ -188,7 +204,7 @@ def _load_jsonl(filepath: Path, limit: int = 500) -> List[Dict[str, Any]]:
                 line = line.strip()
                 if line:
                     try:
-                        lines.append(json.loads(line))
+                        lines.append(_sanitize_nans(json.loads(line)))
                     except json.JSONDecodeError:
                         continue
         return lines[-limit:]

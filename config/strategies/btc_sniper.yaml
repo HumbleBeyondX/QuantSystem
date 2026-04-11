@@ -1,0 +1,49 @@
+# BTC Momentum Sniper Strategy Configuration
+# High-leverage trend-following with fixed-risk position sizing
+# Backtest: +2992% total (73% annual), Sharpe 1.68, DD 15.8%
+
+strategy_id: btc_sniper
+name: BTC Momentum Sniper v5
+asset_class: crypto
+enabled: true
+mode: paper  # paper | live | backtest
+
+symbols:
+  - BTC/USDT:USDT
+
+parameters:
+  # ── Leverage & Risk ──
+  leverage: 50.0              # 50x perpetual futures
+  risk_per_trade: 0.05        # Risk 5% of equity per trade
+  max_margin_pct: 0.30        # Max 30% equity as margin per position
+  initial_capital: 10000      # Starting capital (USD)
+
+  # ── Entry Conditions ──
+  min_score: 2                # Minimum entry score (out of ~8)
+  vol_min: 1.2                # Volume surge threshold (× 20-bar avg)
+  use_donchian10: true        # Use 10-period Donchian (faster) vs 20
+
+  # ── ATR-Based Stops ──
+  atr_stop: 3.5               # Initial stop = 3.5 × ATR
+  atr_trail: 2.5              # Trailing stop = 2.5 × ATR from peak
+  atr_trail_activate: 2.0     # Activate trailing after 2.0 ATR profit
+
+  # ── Time Controls ──
+  cooldown: 3                 # Min bars between trades
+  max_hold: 120               # Max holding period (120 bars = 20 days on 4H)
+
+  # ── Indicator Periods ──
+  ema8_period: 8
+  ema21_period: 21
+  ema55_period: 55
+  atr_period: 14
+  adx_period: 14
+  rsi_period: 14
+  dc_period: 10               # Donchian channel lookback
+
+  # ── Fees ──
+  fee_rate: 0.0005            # 0.05% taker fee per side (Binance perps)
+
+  # ── Loss Management ──
+  pause_after_losses: 5       # Pause after N consecutive losses
+  pause_bars: 18              # Pause duration in bars
