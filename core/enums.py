@@ -5,6 +5,8 @@ from enum import Enum, auto
 
 class AssetClass(str, Enum):
     CRYPTO = "crypto"
+    CRYPTO_PERP = "crypto_perp"
+    CRYPTO_SPOT = "crypto_spot"
     EQUITY = "equity"
     OPTIONS = "options"
 
@@ -53,8 +55,10 @@ class PositionSide(str, Enum):
 
 class StrategyState(str, Enum):
     IDLE = "IDLE"
+    STARTING = "STARTING"
     RUNNING = "RUNNING"
     PAUSED = "PAUSED"
+    STOPPING = "STOPPING"
     STOPPED = "STOPPED"
     ERROR = "ERROR"
 

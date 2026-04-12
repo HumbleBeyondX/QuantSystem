@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.logging import get_logger
-from dashboard.backend.routers import backtest, market_data, paper_trading, portfolio, risk, strategies, system
+from dashboard.backend.routers import backtest, live_trading, market_data, paper_trading, portfolio, risk, strategies, system
 
 logger = get_logger(__name__)
 
@@ -17,8 +17,45 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI):
     """Application startup/shutdown lifecycle."""
     logger.info("dashboard_backend_starting")
-    # TODO: Initialize DB connections, Kafka consumers, etc.
+
+    # Initialize database
+    try:
+        from core.database.engine import init_db
+        await init_db()
+        logger.info("database_initialized")
+    except Exception as e:
+        logger.warning("database_init_skipped", error=str(e))
+
+    # Initialize orchestrator (lazy — strategies registered elsewhere)
+    try:
+        from core.events import EventBus
+        from core.orchestrator import TradingOrchestrator
+        from execution.oms.order_router import OrderRouter
+
+        event_bus = EventBus()
+        order_router = OrderRouter()
+        orchestrator = TradingOrchestrator(event_bus, order_router)
+        await orchestrator.start()
+        live_trading.set_orchestrator(orchestrator)
+        app.state.orchestrator = orchestrator
+        app.state.event_bus = event_bus
+        app.state.order_router = order_router
+        logger.info("orchestrator_initialized")
+    except Exception as e:
+        logger.warning("orchestrator_init_skipped", error=str(e))
+
     yield
+
+    # Shutdown
+    if hasattr(app.state, "orchestrator"):
+        await app.state.orchestrator.shutdown()
+
+    try:
+        from core.database.engine import shutdown_db
+        await shutdown_db()
+    except Exception:
+        pass
+
     logger.info("dashboard_backend_stopping")
 
 
@@ -46,6 +83,7 @@ app.include_router(market_data.router, prefix="/api/market", tags=["Market Data"
 app.include_router(risk.router, prefix="/api/risk", tags=["Risk"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
 app.include_router(paper_trading.router, prefix="/api/paper-trading", tags=["Paper Trading"])
+app.include_router(live_trading.router, tags=["Live Trading"])
 
 
 @app.get("/")
