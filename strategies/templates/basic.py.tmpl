@@ -1,0 +1,102 @@
+"""${name} — ${description}
+
+Auto-generated from the 'basic' strategy template.
+Base class: StrategyBase (bar-level signals, any asset class).
+
+Customize:
+  - on_bar(): process incoming OHLCV data
+  - generate_signals(): produce LONG / SHORT / FLAT signals
+  - calculate_target_positions(): (optional) custom position sizing
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+from uuid import uuid4
+
+import numpy as np
+
+from core.enums import AssetClass, SignalDirection
+from core.models import Bar, Fill, Signal, TargetPosition
+from strategies.base import StrategyBase, StrategyConfig
+from strategies.registry import register_strategy
+
+
+@register_strategy("${strategy_id}")
+class ${class_name}(StrategyBase):
+    """${description}"""
+
+    def __init__(self, config: StrategyConfig) -> None:
+        super().__init__(config)
+
+        # ── Parameters (loaded from YAML config) ──
+        self.lookback = self.get_param("lookback", 20)
+        self.threshold = self.get_param("threshold", 0.5)
+        # TODO: add your strategy-specific parameters here
+
+        # ── Internal state ──
+        self._closes: Dict[str, List[float]] = {}
+
+    # ------------------------------------------------------------------
+    # Data handlers
+    # ------------------------------------------------------------------
+
+    def on_bar(self, symbol: str, bar: Bar) -> None:
+        """Process each new OHLCV bar."""
+        super().on_bar(symbol, bar)
+
+        if symbol not in self._closes:
+            self._closes[symbol] = []
+        self._closes[symbol].append(bar.close)
+
+        # Keep only needed history
+        if len(self._closes[symbol]) > self.lookback * 2:
+            self._closes[symbol] = self._closes[symbol][-self.lookback * 2:]
+
+    # ------------------------------------------------------------------
+    # Signal generation
+    # ------------------------------------------------------------------
+
+    def generate_signals(self) -> List[Signal]:
+        """Produce trading signals for all tracked symbols."""
+        signals: List[Signal] = []
+
+        for symbol in self.symbols:
+            closes = self._closes.get(symbol, [])
+            if len(closes) < self.lookback:
+                continue
+
+            signal = self._evaluate(symbol, closes)
+            if signal is not None:
+                signals.append(signal)
+
+        return signals
+
+    def _evaluate(self, symbol: str, closes: List[float]) -> Optional[Signal]:
+        """Core signal logic — replace with your alpha.
+
+        Returns a Signal or None.
+        """
+        arr = np.array(closes[-self.lookback:])
+        returns = np.diff(np.log(arr))
+        momentum = float(np.sum(returns))
+
+        if momentum > self.threshold:
+            direction = SignalDirection.LONG
+            strength = min(abs(momentum) / self.threshold, 1.0)
+        elif momentum < -self.threshold:
+            direction = SignalDirection.SHORT
+            strength = min(abs(momentum) / self.threshold, 1.0)
+        else:
+            return None
+
+        return Signal(
+            signal_id=uuid4(),
+            strategy_id=self.strategy_id,
+            symbol=symbol,
+            direction=direction,
+            strength=strength,
+            timestamp=datetime.utcnow(),
+            metadata={"momentum": momentum},
+        )

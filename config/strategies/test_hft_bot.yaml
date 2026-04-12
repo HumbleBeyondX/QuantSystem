@@ -1,0 +1,22 @@
+# Test HFT Bot Configuration
+# Auto-generated — edit parameters below to tune your strategy.
+
+strategy_id: test_hft_bot
+name: Test HFT Bot
+asset_class: crypto
+enabled: true
+mode: paper  # paper | live | backtest
+
+symbols:
+  - ETH/USDT:USDT
+
+parameters:
+  imbalance_threshold: 0.3
+  min_spread_for_entry: 3.0
+  signal_decay_seconds: 5.0
+  use_trade_flow: true
+  max_inventory: 1.0
+  inventory_skew_factor: 0.5
+  base_spread_bps: 5.0
+  quote_size: 0.01
+  max_orders_per_second: 10

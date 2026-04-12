@@ -9,13 +9,14 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "axios": "^1.7.0",
+    "clsx": "^2.1.0",
+    "lucide-react": "^0.400.0",
     "next": "^14.2.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "recharts": "^2.12.0",
-    "axios": "^1.7.0",
-    "lucide-react": "^0.400.0",
-    "clsx": "^2.1.0",
     "tailwind-merge": "^2.3.0"
   },
   "devDependencies": {

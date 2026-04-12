@@ -121,6 +121,29 @@ export default function StrategiesPage() {
         ))}
       </div>
 
+      {/* Workshop Entry */}
+      <Link
+        href="/workshop"
+        className="bg-gradient-to-r from-accent/10 to-purple-500/10 rounded-xl border border-accent/30 hover:border-accent/60 p-5 flex items-center justify-between transition-all group"
+      >
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-accent/20 flex items-center justify-center text-2xl">
+            🔧
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-100 group-hover:text-accent transition-colors">
+              Strategy Workshop
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Create, edit, and test strategies &mdash; Monaco editor + templates for Options, Futures, HFT
+            </p>
+          </div>
+        </div>
+        <span className="text-accent text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+          Open &rarr;
+        </span>
+      </Link>
+
       {/* Strategy Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {filtered.map((strategy) => (

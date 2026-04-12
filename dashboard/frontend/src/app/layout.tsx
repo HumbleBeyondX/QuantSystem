@@ -11,6 +11,7 @@ const navItems = [
   { href: '/', label: 'Overview', icon: '◎' },
   { href: '/portfolio', label: 'Portfolio', icon: '◈' },
   { href: '/strategies', label: 'Strategies', icon: '⚡' },
+  { href: '/workshop', label: 'Workshop', icon: '🔧' },
   { href: '/live', label: 'Live Trading', icon: '▶' },
   { href: '/trading', label: 'Paper Trading', icon: '⚙' },
   { href: '/backtest', label: 'Backtest', icon: '↻' },
