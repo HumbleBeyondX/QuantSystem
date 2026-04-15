@@ -20,11 +20,21 @@ ENV/
 *.swp
 *.swo
 
-# Environment & Secrets
+# Environment & Secrets — NEVER COMMIT
 .env
+.env.*
 *.env.local
+.env.live
 data/gmail_credentials.json
 data/gmail_token.json
+data/vault.enc
+
+# SSH / Cloud credentials — NEVER COMMIT
+*.pem
+*.key
+*.pub
+!*.pub.example
+qs-*.pem
 
 # Docker volumes (local data)
 docker-data/

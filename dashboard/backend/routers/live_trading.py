@@ -26,16 +26,23 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/live", tags=["live-trading"])
 
 # ------------------------------------------------------------------
-# Module-level orchestrator reference (set by main.py at startup)
+# Module-level references (set by main.py or runner at startup)
 # ------------------------------------------------------------------
 
 _orchestrator = None
+_live_runner = None
 
 
 def set_orchestrator(orchestrator) -> None:
     """Called by main.py to inject the orchestrator singleton."""
     global _orchestrator
     _orchestrator = orchestrator
+
+
+def set_live_runner(runner) -> None:
+    """Called to inject a LiveTradingRunner instance for direct monitoring."""
+    global _live_runner
+    _live_runner = runner
 
 
 def _get_orchestrator():
@@ -209,3 +216,44 @@ async def get_positions(strategy_id: str):
     except Exception as e:
         logger.error("get_positions_error", strategy_id=strategy_id, error=str(e))
         return {"strategy_id": strategy_id, "positions": {}, "error": str(e)}
+
+
+# ------------------------------------------------------------------
+# Standalone Runner Endpoints (for scripts/start_live_btc_sniper.py)
+# ------------------------------------------------------------------
+
+
+@router.get("/runner/status")
+async def get_runner_status():
+    """Get standalone LiveTradingRunner status (if running)."""
+    if _live_runner is None:
+        return {
+            "running": False,
+            "message": "No live runner active. Start with: python scripts/start_live_btc_sniper.py",
+        }
+    return _live_runner.get_status()
+
+
+@router.post("/runner/emergency-stop", response_model=ActionResponse)
+async def runner_emergency_stop():
+    """Emergency stop the standalone runner."""
+    if _live_runner is None:
+        raise HTTPException(503, "No live runner active")
+    await _live_runner._emergency_stop("API emergency stop")
+    return ActionResponse(
+        status="ok",
+        message="Runner emergency stop executed",
+    )
+
+
+@router.post("/runner/force-close", response_model=ActionResponse)
+async def runner_force_close():
+    """Force close all positions in the standalone runner."""
+    if _live_runner is None:
+        raise HTTPException(503, "No live runner active")
+    result = await _live_runner.force_close_all()
+    return ActionResponse(
+        status="ok",
+        message="Force close executed",
+        data=result,
+    )

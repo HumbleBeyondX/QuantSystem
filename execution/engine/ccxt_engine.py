@@ -90,6 +90,9 @@ def _okx_order_params(
         params["tdMode"] = "cross" if margin_type == "cross" else "isolated"
     else:
         params["tdMode"] = "cross"
+    # posSide: "net" for one-way position mode (default for our system).
+    # This must match the account's position mode — we set net mode on connect.
+    params["posSide"] = "net"
     if reduce_only:
         params["reduceOnly"] = True
     if stop_price is not None:
@@ -164,6 +167,7 @@ class CCXTExecutionEngine(ExecutionEngine):
             "apiKey": self._api_key,
             "secret": self._api_secret,
             "enableRateLimit": True,
+            "timeout": 30000,
             "options": {
                 "defaultType": "swap",  # perpetual futures by default
             },
@@ -176,8 +180,31 @@ class CCXTExecutionEngine(ExecutionEngine):
         if self._sandbox:
             self._exchange.set_sandbox_mode(True)
 
+        # Fix: Use ThreadedResolver to avoid Windows aiohttp async DNS bug
+        try:
+            import aiohttp
+            resolver = aiohttp.resolver.ThreadedResolver()
+            connector = aiohttp.TCPConnector(resolver=resolver)
+            self._exchange.session = aiohttp.ClientSession(
+                connector=connector,
+                timeout=aiohttp.ClientTimeout(total=30),
+            )
+        except Exception as e:
+            logger.warning("threaded_resolver_setup_skipped", error=str(e))
+
         # Verify connectivity by loading markets
         await self._exchange.load_markets()
+
+        # OKX: Set account to net position mode (one-way) for simpler order management.
+        # In net mode, no posSide param needed (buy to open long, sell to open short).
+        # Must be done before placing any orders and when no positions are open.
+        if self._exchange_id == "okx":
+            try:
+                await self._exchange.set_position_mode(hedged=False)
+                logger.info("okx_position_mode_set", mode="net_mode")
+            except Exception as e:
+                # May fail if already in net mode or positions are open
+                logger.warning("okx_position_mode_unchanged", reason=str(e))
 
         self._connected = True
 
@@ -340,6 +367,7 @@ class CCXTExecutionEngine(ExecutionEngine):
             "side": side,
             "amount": amount,
             "result": result,
+            "strategy_id": order.strategy_id,
         }
 
         logger.info(
@@ -573,6 +601,66 @@ class CCXTExecutionEngine(ExecutionEngine):
             return True
         except Exception:
             return False
+
+    # ------------------------------------------------------------------
+    # Market info & precision
+    # ------------------------------------------------------------------
+
+    def get_market_info(self, symbol: str) -> Dict[str, Any]:
+        """Get exchange market info for a symbol: minimums, precision, etc.
+
+        Returns:
+            Dict with keys:
+              - min_amount: Minimum order qty (e.g. 0.01 BTC)
+              - min_cost: Minimum notional value (e.g. $5)
+              - amount_precision: Decimal places for quantity
+              - price_precision: Decimal places for price
+              - contract_size: Contract multiplier (usually 1 for linear perps)
+        """
+        if not self._exchange or not self._exchange.markets:
+            return {}
+
+        market = self._exchange.market(symbol) if symbol in self._exchange.markets else None
+        if not market:
+            logger.warning("market_not_found", symbol=symbol)
+            return {}
+
+        limits = market.get("limits", {})
+        precision = market.get("precision", {})
+
+        return {
+            "min_amount": float(limits.get("amount", {}).get("min", 0) or 0),
+            "max_amount": float(limits.get("amount", {}).get("max", 0) or 0),
+            "min_cost": float(limits.get("cost", {}).get("min", 0) or 0),
+            "min_price": float(limits.get("price", {}).get("min", 0) or 0),
+            "amount_precision": precision.get("amount"),
+            "price_precision": precision.get("price"),
+            "contract_size": float(market.get("contractSize", 1) or 1),
+        }
+
+    def amount_to_precision(self, symbol: str, amount: float) -> float:
+        """Round an order amount to the exchange's required precision.
+
+        Uses CCXT's built-in precision handling which accounts for
+        step sizes, decimal places, and significant figures.
+        """
+        if not self._exchange:
+            return amount
+        try:
+            return float(self._exchange.amount_to_precision(symbol, amount))
+        except Exception as e:
+            logger.warning("amount_precision_fallback", symbol=symbol, error=str(e))
+            return amount
+
+    def price_to_precision(self, symbol: str, price: float) -> float:
+        """Round a price to the exchange's required precision."""
+        if not self._exchange:
+            return price
+        try:
+            return float(self._exchange.price_to_precision(symbol, price))
+        except Exception as e:
+            logger.warning("price_precision_fallback", symbol=symbol, error=str(e))
+            return price
 
     # ------------------------------------------------------------------
     # Utility

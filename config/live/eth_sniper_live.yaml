@@ -1,0 +1,121 @@
+# ============================================================
+# ETH Momentum Sniper v1 — Live Trading Configuration
+# ============================================================
+#
+# Optimized for small-capital ($90) live trading on OKX.
+#
+# ETH perpetual minimum on OKX:
+#   - Symbol: ETH-USDT-SWAP (linear, USDT-margined)
+#   - Min order: 0.1 ETH (~$200 notional at $2000/ETH)
+#   - At 50x leverage: margin = $200/50 = $4 per 0.1 ETH ✓
+#   - $90 capital → can afford up to 1.0 ETH ($40 margin at 50x)
+#
+# Position sizing with $90 capital:
+#   - Risk per trade: $90 × 5% = $4.50
+#   - ETH 4H ATR ≈ $50-80 → stop distance = 3.5 × $65 ≈ $228
+#   - Raw qty = $4.50 / $228 = 0.0197 ETH
+#   - OKX min = 0.1 ETH → force_min_lot rounds up
+#   - Actual risk = 0.1 × $228 = $22.80 (25% of $90)
+#   - Margin = 0.1 × $2000 / 50 = $4.00 (4.4% of $90) ✓
+#   - Session loss limit ($15) caps maximum session drawdown
+#
+# SAFETY: Start with sandbox: true for testnet validation.
+# ============================================================
+
+strategy_id: eth_sniper
+name: "ETH Momentum Sniper v1 (Live)"
+asset_class: crypto
+enabled: true
+mode: live
+
+# ── Exchange Connection ──
+exchange:
+  id: okx
+  sandbox: false
+  margin_type: cross
+  default_leverage: 50
+
+# ── Trading Symbol ──
+symbols:
+  - "ETH/USDT:USDT"
+
+# ── Market Data ──
+data:
+  timeframe: "4h"
+  warmup_bars: 200
+  poll_interval_seconds: 30
+
+# ── Strategy Parameters ──
+parameters:
+  # Leverage & Risk
+  leverage: 50.0
+  risk_per_trade: 0.05
+  max_margin_pct: 0.30
+  initial_capital: 90
+
+  # Small-account minimum lot handling
+  force_min_lot: true
+  max_risk_override_pct: 0.50   # Allow up to 50% risk when using min lot
+
+  # Entry Conditions
+  min_score: 2
+  vol_min: 1.2
+  use_donchian10: true
+
+  # ATR-Based Stops (ETH-optimized)
+  atr_stop: 3.5
+  atr_trail: 3.0               # Wider than BTC (3.0 vs 2.5)
+  atr_trail_activate: 2.0
+
+  # Time Controls (ETH-optimized)
+  cooldown: 3
+  max_hold: 180                 # 30 days (vs BTC's 20 days)
+
+  # Indicator Periods
+  ema8_period: 8
+  ema21_period: 21
+  ema55_period: 55
+  atr_period: 14
+  adx_period: 14
+  rsi_period: 14
+  dc_period: 10
+
+  # Fees
+  fee_rate: 0.0005
+
+# ── Risk Limits ──
+risk:
+  max_order_value: 5000
+  max_position_pct: 0.50
+  max_leverage: 55.0
+  max_daily_orders: 20
+  max_daily_loss_pct: 0.05      # 5% daily loss limit
+
+  # Circuit breaker
+  max_drawdown_pct: 0.15
+  strategy_loss_limit_pct: 0.10
+
+  # Session safety
+  max_session_loss_usd: 15
+
+# ── Notifications ──
+notifications:
+  email_on_trade: true
+  email_on_risk_alert: true
+  email_on_circuit_breaker: true
+  email_on_startup: true
+  email_on_shutdown: true
+
+# ── Reconciliation ──
+reconciliation:
+  interval_seconds: 60
+  tolerance: 0.001              # ETH position mismatch tolerance
+
+# ── Logging ──
+logging:
+  log_every_poll: false
+  log_new_bars: true
+  log_signals: true
+  log_orders: true
+  log_fills: true
+  log_risk_checks: true

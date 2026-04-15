@@ -64,6 +64,7 @@ def discover_strategies() -> None:
         "strategies.options.gamma_scalp_strategy",
         "strategies.crypto.macro_cycle_strategy",
         "strategies.crypto.sniper_strategy",
+        "strategies.crypto.eth_sniper_strategy",
         "strategies.options.spy_iron_condor_strategy",
         "strategies.crypto.test_hft_bot_strategy",
         "strategies.options.spy_wheel_strategy",

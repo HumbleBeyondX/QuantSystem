@@ -1,107 +1,87 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+
+const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002'
 
 /**
- * Strategies Page
+ * Strategies Page — API-Driven
  *
- * Grid of strategy cards with filtering by asset class.
- * Each card links to the strategy detail page.
+ * Fetches real strategy catalog from backend.
+ * Shows deployment status, live P&L for deployed strategies,
+ * backtest metrics for undeployed strategies.
  */
 
-const strategies = [
-  {
-    id: 'crypto-macro-cycle',
-    name: 'BTC/ETH Macro Cycle',
-    assetClass: 'Crypto',
-    state: 'running' as const,
-    pnl: 62_525,
-    winRate: 62.6,
-    sharpe: 0.41,
-    trades: 222,
-    description: '5x leveraged macro cycle entry signals (Wide Stops). Multi-factor composite (trend, momentum, volume, drawdown, volatility regime). 4H timeframe, max 3 trades/day. Return +62.5%, MaxDD 10.6%, PF 1.62.',
-  },
-  {
-    id: 'momentum-btc',
-    name: 'BTC Momentum',
-    assetClass: 'Crypto',
-    state: 'running' as const,
-    pnl: 12_450.30,
-    winRate: 62.5,
-    sharpe: 1.85,
-    trades: 148,
-    description: 'Trend-following momentum strategy on BTC/USD with adaptive lookback.',
-  },
-  {
-    id: 'mean-rev-eth',
-    name: 'ETH Mean Reversion',
-    assetClass: 'Crypto',
-    state: 'running' as const,
-    pnl: 5_230.00,
-    winRate: 58.3,
-    sharpe: 1.42,
-    trades: 210,
-    description: 'Statistical mean reversion on ETH using Bollinger Bands and RSI.',
-  },
-  {
-    id: 'pairs-tech',
-    name: 'Tech Pairs Trading',
-    assetClass: 'Equity',
-    state: 'paused' as const,
-    pnl: -1_820.50,
-    winRate: 45.0,
-    sharpe: 0.65,
-    trades: 92,
-    description: 'Cointegrated pairs trading on FAANG stocks.',
-  },
-  {
-    id: 'spy-gamma-scalp',
-    name: 'SPY Gamma Scalp',
-    assetClass: 'Options',
-    state: 'running' as const,
-    pnl: 8_920.75,
-    winRate: 71.2,
-    sharpe: 2.10,
-    trades: 325,
-    description: 'Gamma scalping strategy on SPY 0DTE options.',
-  },
-  {
-    id: 'vol-arb',
-    name: 'Volatility Arb',
-    assetClass: 'Options',
-    state: 'paused' as const,
-    pnl: 3_100.00,
-    winRate: 55.8,
-    sharpe: 1.20,
-    trades: 67,
-    description: 'Implied vs realized volatility arbitrage across index options.',
-  },
-  {
-    id: 'sector-rotation',
-    name: 'Sector Rotation',
-    assetClass: 'Equity',
-    state: 'running' as const,
-    pnl: 6_780.25,
-    winRate: 60.0,
-    sharpe: 1.55,
-    trades: 44,
-    description: 'Monthly sector rotation based on relative strength and macro signals.',
-  },
-]
+interface CatalogStrategy {
+  id: string
+  name: string
+  description: string
+  asset_class: string
+  category: string
+  symbols: string[]
+  backtest_sharpe: number | null
+  backtest_win_rate: number | null
+  backtest_trades: number | null
+}
 
-const assetClasses = ['All', 'Crypto', 'Equity', 'Options'] as const
+interface DeployedStrategy {
+  id: string
+  strategy_id: string
+  name: string
+  mode: string
+  status: string
+  realized_pnl: number
+  unrealized_pnl: number
+  total_equity: number
+  total_trades: number
+  win_rate: number | null
+}
+
+const assetClasses = ['All', 'crypto', 'equity', 'options'] as const
+const assetClassLabels: Record<string, string> = {
+  All: 'All',
+  crypto: 'Crypto',
+  equity: 'Equity',
+  options: 'Options',
+}
 
 export default function StrategiesPage() {
   const [filter, setFilter] = useState<string>('All')
+  const [catalog, setCatalog] = useState<CatalogStrategy[]>([])
+  const [deployed, setDeployed] = useState<DeployedStrategy[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const filtered = filter === 'All' ? strategies : strategies.filter(s => s.assetClass === filter)
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [catRes, depRes] = await Promise.all([
+          fetch(`${API}/api/strategies/catalog`),
+          fetch(`${API}/api/strategies/`),
+        ])
+        if (catRes.ok) setCatalog(await catRes.json())
+        else setError('Failed to load strategy catalog')
+        if (depRes.ok) setDeployed(await depRes.json())
+      } catch (e: any) {
+        setError(`Cannot connect to backend: ${e.message}`)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [])
+
+  const deployedMap = new Map(deployed.map((d) => [d.strategy_id, d]))
+  const filtered = filter === 'All' ? catalog : catalog.filter((s) => s.asset_class === filter)
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Strategies</h2>
-        <span className="text-sm text-gray-400">{filtered.length} strategies</span>
+        <span className="text-sm text-gray-400">
+          {loading ? '...' : `${filtered.length} strategies`}
+        </span>
       </div>
 
       {/* Filter Tabs */}
@@ -116,7 +96,7 @@ export default function StrategiesPage() {
                 : 'bg-surface border border-border text-gray-400 hover:text-gray-100'
             }`}
           >
-            {ac}
+            {assetClassLabels[ac]}
           </button>
         ))}
       </div>
@@ -144,60 +124,132 @@ export default function StrategiesPage() {
         </span>
       </Link>
 
+      {/* Error State */}
+      {error && (
+        <div className="bg-danger/10 border border-danger/30 rounded-xl p-4 text-sm text-danger">
+          {error}
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="bg-surface rounded-xl border border-border p-5 animate-pulse h-48" />
+          ))}
+        </div>
+      )}
+
       {/* Strategy Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {filtered.map((strategy) => (
-          <Link
-            key={strategy.id}
-            href={`/strategies/${strategy.id}`}
-            className="bg-surface rounded-xl border border-border p-5 hover:border-accent/50 transition-all group"
-          >
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <h3 className="font-semibold text-gray-100 group-hover:text-accent transition-colors">
-                  {strategy.name}
-                </h3>
-                <span className={`inline-block mt-1 px-2 py-0.5 rounded text-xs font-medium ${
-                  strategy.assetClass === 'Crypto' ? 'bg-purple-500/20 text-purple-400' :
-                  strategy.assetClass === 'Equity' ? 'bg-blue-500/20 text-blue-400' :
-                  'bg-amber-500/20 text-amber-400'
-                }`}>
-                  {strategy.assetClass}
-                </span>
-              </div>
-              <span className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full ${
-                strategy.state === 'running'
-                  ? 'bg-success/10 text-success'
-                  : 'bg-warning/10 text-warning'
-              }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${
-                  strategy.state === 'running' ? 'bg-success animate-pulse' : 'bg-warning'
-                }`} />
-                {strategy.state === 'running' ? 'Running' : 'Paused'}
-              </span>
-            </div>
+      {!loading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filtered.map((strategy) => {
+            const dep = deployedMap.get(strategy.id)
+            const isDeployed = !!dep
+            const isRunning = dep?.status === 'running'
+            const pnl = dep ? dep.realized_pnl + dep.unrealized_pnl : null
 
-            <p className="text-xs text-gray-500 mb-4 line-clamp-2">{strategy.description}</p>
+            return (
+              <Link
+                key={strategy.id}
+                href={`/strategies/${strategy.id}`}
+                className="bg-surface rounded-xl border border-border p-5 hover:border-accent/50 transition-all group"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h3 className="font-semibold text-gray-100 group-hover:text-accent transition-colors">
+                      {strategy.name}
+                    </h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
+                          strategy.category === 'crypto'
+                            ? 'bg-purple-500/20 text-purple-400'
+                            : strategy.category === 'equity'
+                              ? 'bg-blue-500/20 text-blue-400'
+                              : 'bg-amber-500/20 text-amber-400'
+                        }`}
+                      >
+                        {strategy.category.charAt(0).toUpperCase() + strategy.category.slice(1)}
+                      </span>
+                      {strategy.symbols.length > 0 && (
+                        <span className="text-[10px] text-gray-500">
+                          {strategy.symbols.slice(0, 3).join(', ')}
+                          {strategy.symbols.length > 3 && ` +${strategy.symbols.length - 3}`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {isDeployed ? (
+                    <span
+                      className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full ${
+                        isRunning ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'
+                      }`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-success animate-pulse' : 'bg-warning'}`}
+                      />
+                      {isRunning ? 'Running' : dep.status.charAt(0).toUpperCase() + dep.status.slice(1)}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-gray-500 px-2 py-1 rounded-full bg-background border border-border">
+                      Available
+                    </span>
+                  )}
+                </div>
 
-            <div className="grid grid-cols-3 gap-3 pt-3 border-t border-border">
-              <div>
-                <p className="text-xs text-gray-500">P&L</p>
-                <p className={`text-sm font-semibold ${strategy.pnl >= 0 ? 'text-success' : 'text-danger'}`}>
-                  {strategy.pnl >= 0 ? '+' : ''}${strategy.pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Win Rate</p>
-                <p className="text-sm font-semibold text-gray-100">{strategy.winRate}%</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Sharpe</p>
-                <p className="text-sm font-semibold text-gray-100">{strategy.sharpe.toFixed(2)}</p>
-              </div>
-            </div>
-          </Link>
-        ))}
-      </div>
+                <p className="text-xs text-gray-500 mb-4 line-clamp-2">{strategy.description}</p>
+
+                <div className="grid grid-cols-3 gap-3 pt-3 border-t border-border">
+                  {pnl !== null && dep ? (
+                    <>
+                      <div>
+                        <p className="text-xs text-gray-500">P&L</p>
+                        <p className={`text-sm font-semibold ${pnl >= 0 ? 'text-success' : 'text-danger'}`}>
+                          {pnl >= 0 ? '+' : ''}${pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Win Rate</p>
+                        <p className="text-sm font-semibold text-gray-100">
+                          {dep.win_rate != null ? `${dep.win_rate}%` : '\u2014'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Trades</p>
+                        <p className="text-sm font-semibold text-gray-100">{dep.total_trades}</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <p className="text-xs text-gray-500">Sharpe</p>
+                        <p className="text-sm font-semibold text-gray-100">
+                          {strategy.backtest_sharpe?.toFixed(2) ?? '\u2014'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Win Rate</p>
+                        <p className="text-sm font-semibold text-gray-100">
+                          {strategy.backtest_win_rate
+                            ? `${(strategy.backtest_win_rate * 100).toFixed(0)}%`
+                            : '\u2014'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Backtest</p>
+                        <p className="text-sm font-semibold text-gray-100">
+                          {strategy.backtest_trades ?? '\u2014'} trades
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </Link>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

@@ -214,6 +214,85 @@ STRATEGY_CATALOG: List[StrategyInfo] = [
         backtest_win_rate=0.52,
         backtest_trades=96,
     ),
+    StrategyInfo(
+        id="crypto_breakout",
+        name="Crypto Breakout",
+        description="Breakout detection strategy using price structure analysis, volume confirmation, and momentum filters. "
+                    "Identifies consolidation patterns and trades the breakout with ATR-based position sizing.",
+        asset_class="crypto",
+        category="crypto",
+        symbols=["BTC/USDT", "ETH/USDT"],
+        default_params={"lookback": 20, "volume_threshold": 1.5, "atr_multiplier": 2.0},
+        backtest_sharpe=1.25,
+        backtest_win_rate=0.52,
+        backtest_trades=180,
+    ),
+    StrategyInfo(
+        id="crypto_orderbook",
+        name="Crypto Orderbook",
+        description="Orderbook depth analysis strategy using bid-ask imbalance, liquidity walls, and microstructure "
+                    "signals for short-term directional trading on centralized exchanges.",
+        asset_class="crypto",
+        category="crypto",
+        symbols=["BTC/USDT"],
+        default_params={"depth_levels": 20, "imbalance_threshold": 0.6, "update_interval_ms": 1000},
+        backtest_sharpe=1.80,
+        backtest_win_rate=0.58,
+        backtest_trades=500,
+    ),
+    StrategyInfo(
+        id="crypto_event",
+        name="Crypto Event-Driven",
+        description="Event-driven strategy capturing price dislocations around major crypto events: halvings, "
+                    "protocol upgrades, regulatory announcements, and exchange listings.",
+        asset_class="crypto",
+        category="crypto",
+        symbols=["BTC/USDT", "ETH/USDT"],
+        default_params={"event_window_hours": 48, "position_size_pct": 0.10, "stop_loss_pct": 0.05},
+        backtest_sharpe=0.95,
+        backtest_win_rate=0.60,
+        backtest_trades=45,
+    ),
+    StrategyInfo(
+        id="crypto_macro_cycle",
+        name="BTC/ETH Macro Cycle",
+        description="5x leveraged macro cycle entry signals with wide stops. Multi-factor composite scoring "
+                    "(trend, momentum, volume, drawdown, volatility regime). 4H timeframe, max 3 trades/day. "
+                    "Designed for capturing major directional moves in BTC and ETH.",
+        asset_class="crypto",
+        category="crypto",
+        symbols=["BTC/USDT", "ETH/USDT"],
+        default_params={"leverage": 5.0, "max_trades_per_day": 3, "lookback": 60, "composite_threshold": 0.7},
+        backtest_sharpe=0.41,
+        backtest_win_rate=0.626,
+        backtest_trades=222,
+    ),
+    StrategyInfo(
+        id="spy_iron_condor",
+        name="SPY Iron Condor",
+        description="Systematic iron condor strategy on SPY options. Sells OTM put and call spreads, "
+                    "targeting monthly premium collection with defined risk and mechanical adjustment rules.",
+        asset_class="options",
+        category="options",
+        symbols=["SPY"],
+        default_params={"target_dte": 30, "wing_width": 5, "delta_target": 0.16, "max_positions": 3},
+        backtest_sharpe=1.45,
+        backtest_win_rate=0.72,
+        backtest_trades=120,
+    ),
+    StrategyInfo(
+        id="spy_wheel",
+        name="SPY Wheel Strategy",
+        description="The Wheel (cash-secured put → covered call) on SPY. Sells puts for entry, holds shares, "
+                    "sells calls for exit. Systematic premium harvesting with automatic roll management.",
+        asset_class="options",
+        category="options",
+        symbols=["SPY"],
+        default_params={"put_delta": -0.30, "call_delta": 0.30, "target_dte": 30},
+        backtest_sharpe=1.30,
+        backtest_win_rate=0.68,
+        backtest_trades=85,
+    ),
 ]
 
 CATALOG_MAP = {s.id: s for s in STRATEGY_CATALOG}
@@ -337,6 +416,14 @@ def _enrich_deployment(dep: Dict[str, Any]) -> DeployedStrategy:
 async def get_strategy_catalog():
     """Get all available strategies that can be deployed."""
     return STRATEGY_CATALOG
+
+
+@router.get("/catalog/{strategy_id}", response_model=StrategyInfo)
+async def get_catalog_strategy(strategy_id: str):
+    """Get a single strategy from the catalog by ID."""
+    if strategy_id not in CATALOG_MAP:
+        raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found in catalog")
+    return CATALOG_MAP[strategy_id]
 
 
 @router.get("/", response_model=List[DeployedStrategy])

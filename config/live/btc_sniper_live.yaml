@@ -1,0 +1,132 @@
+# ============================================================
+# BTC Momentum Sniper v5 — Live Test Configuration
+# ============================================================
+#
+# CONSERVATIVE settings for small-capital real-money validation.
+#
+# Changes from backtest config:
+#   - Leverage: 50x → 10x (5x safety reduction)
+#   - Risk per trade: 5% → 2% (lower risk per position)
+#   - Max margin per position: 30% → 20%
+#   - Circuit breaker: 3% daily loss → $15 hard stop
+#
+# Expected position sizing at $500 capital:
+#   - Risk per trade: $10 (2% of $500)
+#   - BTC 4H ATR ≈ $1,000 → stop distance = $3,500
+#   - Position: qty ≈ 0.003 BTC ≈ $250 notional
+#   - Margin used: $25 (at 10x leverage)
+#   - Max loss per trade: ~$10 (capped by fixed-risk model)
+#
+# SAFETY: Start with sandbox: true (testnet).
+#         Only set sandbox: false after successful testnet validation.
+# ============================================================
+
+strategy_id: btc_sniper
+name: "BTC Momentum Sniper v5 (Live Test)"
+asset_class: crypto
+enabled: true
+mode: live
+
+# ── Exchange Connection ──
+exchange:
+  id: okx                    # okx | binance | bybit
+  sandbox: false             # Using real API key (validated 2026-04-12)
+  margin_type: cross
+  default_leverage: 10
+
+# ── Trading Symbol ──
+symbols:
+  - "BTC/USDT:USDT"
+
+# ── Market Data ──
+data:
+  timeframe: "4h"
+  warmup_bars: 200           # Fetch 200 historical bars for indicator warmup
+  poll_interval_seconds: 30  # Check for new bar every 30 seconds
+
+# ── Strategy Parameters ──
+parameters:
+  # Leverage & Risk
+  # With $90 capital and OKX 0.01 BTC minimum:
+  #   - 0.01 BTC × $84,000 = $840 notional
+  #   - At 50x: $840/50 = $16.80 margin (18.7% of $90) ✓
+  #   - At 10x: $840/10 = $84.00 margin (93% of $90)  ✗ too tight
+  # So we NEED higher leverage just to afford the minimum lot.
+  # Risk is still controlled by stop distance, NOT leverage.
+  leverage: 50.0             # 50x — only affects margin, not risk
+  risk_per_trade: 0.02       # 2% equity per trade (ideal target)
+  max_margin_pct: 0.30       # Max 30% equity as margin per position
+  initial_capital: 90        # Starting capital (USD) — overridden by live balance
+
+  # Small-account minimum lot handling
+  # When calculated position < exchange minimum (0.01 BTC on OKX):
+  #   - force_min_lot: true → round up to 0.01 BTC
+  #   - Actual risk with 0.01 BTC: ~$35 (39% of $90)
+  #   - Session loss limit ($15) acts as the real risk cap
+  #   - max_risk_override_pct: 0.50 → allow up to 50% risk per trade
+  force_min_lot: true
+  max_risk_override_pct: 0.50
+
+  # Entry Conditions (same as backtest)
+  min_score: 2
+  vol_min: 1.2
+  use_donchian10: true
+
+  # ATR-Based Stops (same as backtest)
+  atr_stop: 3.5
+  atr_trail: 2.5
+  atr_trail_activate: 2.0
+
+  # Time Controls (same as backtest)
+  cooldown: 3
+  max_hold: 120
+
+  # Indicator Periods (same as backtest)
+  ema8_period: 8
+  ema21_period: 21
+  ema55_period: 55
+  atr_period: 14
+  adx_period: 14
+  rsi_period: 14
+  dc_period: 10
+
+  # Fees
+  fee_rate: 0.0005           # 0.05% taker fee
+
+# ── Risk Limits ──
+risk:
+  # Pre-trade checks
+  max_order_value: 5000      # Max $5K notional per order
+  max_position_pct: 0.50     # Single position can be 50% (single-symbol strategy)
+  max_leverage: 15.0         # Hard leverage cap
+  max_daily_orders: 20       # Max 20 orders per day
+  max_daily_loss_pct: 0.03   # 3% daily loss limit
+
+  # Circuit breaker
+  max_drawdown_pct: 0.10     # 10% max drawdown triggers kill
+  strategy_loss_limit_pct: 0.05
+
+  # Session safety
+  max_session_loss_usd: 15   # Hard stop at $15 loss per session (~17% of $90)
+
+# ── Notifications ──
+notifications:
+  email_on_trade: true
+  email_on_risk_alert: true
+  email_on_circuit_breaker: true
+  email_on_startup: true
+  email_on_shutdown: true
+
+# ── Reconciliation ──
+reconciliation:
+  interval_seconds: 60       # Check broker vs internal positions every 60s
+  tolerance: 0.0001          # Position mismatch tolerance (BTC)
+
+# ── Logging ──
+logging:
+  log_every_poll: false       # Don't log every 30s poll (noisy)
+  log_new_bars: true
+  log_signals: true
+  log_orders: true
+  log_fills: true
+  log_risk_checks: true

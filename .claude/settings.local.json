@@ -1,7 +1,18 @@
 {
   "permissions": {
     "allow": [
-      "Bash(E:/CodingDownload/Anaconda/envs/quantsystem/python.exe scripts/fetch_spy_options_data.py --start 2023-01-01 --end 2026-03-15)"
+      "Bash(E:/CodingDownload/Anaconda/envs/quantsystem/python.exe scripts/fetch_spy_options_data.py --start 2023-01-01 --end 2026-03-15)",
+      "Bash(curl -s \"http://localhost:8002/api/paper-trading/daily-log?limit=3&strategy_id=spy_gamma_scalp\")",
+      "Bash(python -m json.tool)",
+      "Bash(python -m uvicorn dashboard.backend.main:app --host 0.0.0.0 --port 8000)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(curl -s \"http://localhost:8000/api/paper-trading/daily-log?limit=2&strategy_id=spy_gamma_scalp\")",
+      "WebSearch",
+      "Bash(curl -s --connect-timeout 5 http://18.180.206.76:8002/health)",
+      "Bash(curl -s --connect-timeout 5 http://18.180.206.76:8002/api/live/runner/status)",
+      "Bash(ssh -i \"E:\\\\Duke\\\\QuantTrade\\\\QuantSystem\\\\qs-tokyo.pem\" -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@18.180.206.76 \"docker ps --format 'table {{.Names}}\\\\t{{.Status}}\\\\t{{.RunningFor}}' && echo '---UPTIME---' && uptime && echo '---RESTART COUNT---' && docker inspect quantsystem-live --format '{{.RestartCount}} restarts, started at {{.State.StartedAt}}'\")",
+      "Bash(ssh -i \"E:\\\\Duke\\\\QuantTrade\\\\QuantSystem\\\\qs-tokyo.pem\" -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@18.180.206.76 \"docker inspect qs-live-trader --format '{{.RestartCount}} restarts, started at {{.State.StartedAt}}' && echo '---RECENT RECONNECT LOGS---' && docker logs qs-live-trader --since 24h 2>&1 | grep -iE 'reconnect|disconnect|error|warning|websocket|reconnecting' | tail -30\")",
+      "Bash(git add:*)"
     ]
   }
 }

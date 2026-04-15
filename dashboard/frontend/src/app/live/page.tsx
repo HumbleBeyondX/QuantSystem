@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 
-const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8001'
+const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8002'
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -31,6 +31,21 @@ interface OrchestratorStatus {
 interface PositionData {
   strategy_id: string
   positions: Record<string, number>
+}
+
+interface RunnerStatus {
+  running: boolean
+  emergency_stopped: boolean
+  strategy_id: string
+  exchange: string
+  sandbox: boolean
+  symbol: string
+  session_pnl: number
+  session_trades: number
+  session_orders: number
+  session_start: string | null
+  position_manager_snapshot: any
+  message?: string
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -73,18 +88,31 @@ function formatTime(iso: string | null): string {
 
 export default function LiveTradingPage() {
   const [status, setStatus] = useState<OrchestratorStatus | null>(null)
+  const [runnerStatus, setRunnerStatus] = useState<RunnerStatus | null>(null)
   const [positions, setPositions] = useState<Record<string, Record<string, number>>>({})
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [confirmEmergency, setConfirmEmergency] = useState(false)
 
-  // Fetch status
+  // Fetch orchestrator status
   const fetchStatus = useCallback(async () => {
     try {
       const res = await fetch(`${API}/api/live/status`)
       if (!res.ok) return
       const data = await res.json()
       setStatus(data)
+    } catch {
+      // Backend not reachable
+    }
+  }, [])
+
+  // Fetch standalone runner status
+  const fetchRunnerStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/api/live/runner/status`)
+      if (!res.ok) return
+      const data = await res.json()
+      setRunnerStatus(data)
     } catch {
       // Backend not reachable
     }
@@ -105,9 +133,13 @@ export default function LiveTradingPage() {
   // Poll status every 3 seconds
   useEffect(() => {
     fetchStatus()
-    const interval = setInterval(fetchStatus, 3000)
+    fetchRunnerStatus()
+    const interval = setInterval(() => {
+      fetchStatus()
+      fetchRunnerStatus()
+    }, 3000)
     return () => clearInterval(interval)
-  }, [fetchStatus])
+  }, [fetchStatus, fetchRunnerStatus])
 
   // Fetch positions for running strategies
   useEffect(() => {
@@ -208,15 +240,78 @@ export default function LiveTradingPage() {
         </div>
       )}
 
+      {/* Standalone Runner Status */}
+      {runnerStatus && runnerStatus.running && (
+        <div className="bg-surface rounded-xl border border-green-800/50 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <span className={`w-3 h-3 rounded-full ${runnerStatus.emergency_stopped ? 'bg-red-500' : 'bg-green-500 animate-pulse'}`} />
+              <div>
+                <h2 className="text-lg font-semibold">
+                  {runnerStatus.strategy_id || 'Live Runner'}
+                </h2>
+                <p className="text-xs text-gray-500">
+                  {runnerStatus.exchange?.toUpperCase()} / {runnerStatus.symbol}
+                  {runnerStatus.sandbox ? ' (TESTNET)' : ' (MAINNET)'}
+                </p>
+              </div>
+            </div>
+            <span className={`text-sm font-semibold ${runnerStatus.emergency_stopped ? 'text-red-400' : 'text-green-400'}`}>
+              {runnerStatus.emergency_stopped ? 'EMERGENCY STOPPED' : 'RUNNING'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-4 gap-3 mb-4">
+            <div className="bg-background rounded-lg p-3">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Session P&L</p>
+              <p className={`text-lg font-mono font-bold ${runnerStatus.session_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {formatPnl(runnerStatus.session_pnl)}
+              </p>
+            </div>
+            <div className="bg-background rounded-lg p-3">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Trades</p>
+              <p className="text-lg font-mono font-bold">{runnerStatus.session_trades}</p>
+            </div>
+            <div className="bg-background rounded-lg p-3">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Orders</p>
+              <p className="text-lg font-mono font-bold">{runnerStatus.session_orders}</p>
+            </div>
+            <div className="bg-background rounded-lg p-3">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Started</p>
+              <p className="text-sm font-mono text-gray-300">
+                {runnerStatus.session_start ? formatTime(runnerStatus.session_start) : '--'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => doAction('runner/emergency-stop')}
+              disabled={loading !== null || runnerStatus.emergency_stopped}
+              className="px-4 py-2 bg-red-800 hover:bg-red-700 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
+            >
+              Emergency Stop
+            </button>
+            <button
+              onClick={() => doAction('runner/force-close')}
+              disabled={loading !== null}
+              className="px-4 py-2 bg-orange-800 hover:bg-orange-700 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
+            >
+              Force Close Positions
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Strategy Cards */}
-      {strategies.length === 0 ? (
+      {strategies.length === 0 && (!runnerStatus || !runnerStatus.running) ? (
         <div className="bg-surface rounded-xl border border-border p-12 text-center">
           <p className="text-gray-500 text-lg">No strategies registered</p>
           <p className="text-gray-600 text-sm mt-2">
-            Register strategies via the orchestrator to see them here.
+            Start with: QS_LIVE_CONFIG=config/live/eth_sniper_live.yaml uvicorn dashboard.backend.main:app --port 8002
           </p>
         </div>
-      ) : (
+      ) : strategies.length > 0 ? (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
           {strategies.map(s => (
             <StrategyCard
@@ -232,7 +327,7 @@ export default function LiveTradingPage() {
             />
           ))}
         </div>
-      )}
+      ) : null}
 
       {/* Active Positions Summary */}
       {Object.keys(positions).length > 0 && (
