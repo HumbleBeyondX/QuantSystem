@@ -101,6 +101,62 @@ class SniperStrategy(StrategyBase):
         # Live trading: dynamic equity (set externally by runner/orchestrator)
         self._live_equity: Optional[float] = None
 
+    # ============================================================
+    # State restoration — called by LiveTradingRunner.sync_exchange_positions()
+    # after warmup when the runner restarts with an open exchange position.
+    # Without this, exit logic falls back to defaults and the position never
+    # triggers its actual stop-loss / trailing-stop / time-exit.
+    # ============================================================
+    def restore_position_state(
+        self,
+        symbol: str,
+        quantity: float,
+        avg_entry_price: float,
+        current_price: Optional[float] = None,
+    ) -> None:
+        """Rebuild per-symbol position state after a runner restart.
+
+        Args:
+            symbol: Symbol of the open exchange position
+            quantity: Signed quantity (positive = long, negative = short)
+            avg_entry_price: Exchange-reported average entry price
+            current_price: Current mark/last price (defaults to entry_price).
+                           Used to seed best/worst trackers for trailing stop.
+
+        The ATR-based stop distance is derived from the ATR computed during
+        warmup (``self._atr[symbol]``). If warmup hasn't run yet for this
+        symbol, falls back to 2% of entry price as a safety stop.
+        """
+        if symbol not in self._atr:
+            # No warmup state yet; use a conservative fallback
+            atr_est = avg_entry_price * 0.02
+        else:
+            atr_est = max(self._atr[symbol], avg_entry_price * 0.001)
+
+        # Inject into strategy's basic position tracking
+        self._positions[symbol] = float(quantity)
+
+        # Stop-loss state (exact formula mirrors _check_entry)
+        stop_dist = max(atr_est * self.atr_stop, avg_entry_price * 0.005)
+
+        self._entry_price[symbol] = float(avg_entry_price)
+        self._entry_atr[symbol] = atr_est
+        self._stop_dist[symbol] = stop_dist
+
+        # Trailing-stop extremes: seed with current price (safest default
+        # — we don't know the actual extremes since position opened).
+        seed = float(current_price) if current_price else float(avg_entry_price)
+        self._best_price[symbol] = seed
+        self._worst_price[symbol] = seed
+
+        # Time-in-trade: unknown, start at 0. The next warmup bar will
+        # increment from here. Accepts the trade-off: may exit later
+        # than a cold-start session, but never earlier. Safer than guessing.
+        self._bars_held[symbol] = 0
+
+        # Cooldown: ensure no immediate re-entry if we somehow go flat
+        self._bars_since[symbol] = 0
+
     def on_bar(self, symbol: str, bar: Bar) -> None:
         """Process each new 4H bar: update indicators and state."""
         super().on_bar(symbol, bar)

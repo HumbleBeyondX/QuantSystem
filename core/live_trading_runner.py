@@ -32,11 +32,11 @@ from uuid import uuid4
 
 import yaml
 
-from core.enums import AssetClass, OrderSide, OrderType, SignalDirection
+from core.enums import AssetClass, OrderSide, OrderType, PositionSide, SignalDirection
 from core.events import EventBus, EventType, FillEvent, RiskAlertEvent
 from core.logging import get_logger
 from core.market_data_provider import CCXTBarProvider
-from core.models import Bar, Fill, Order, PortfolioSnapshot
+from core.models import Bar, Fill, Order, PortfolioSnapshot, Position
 from execution.engine.ccxt_engine import CCXTExecutionEngine
 from execution.oms.fill_tracker import FillTracker
 from execution.oms.order_router import OrderRouter
@@ -266,18 +266,29 @@ class LiveTradingRunner:
         Without this, every restart would treat the strategy as flat and
         open a duplicate position — the root cause of the 3x position bug.
 
+        Syncs three state stores:
+          1. ``strategy._positions``           — plain qty dict (drives
+             entry logic so duplicate orders aren't opened)
+          2. ``strategy`` extended state       — via ``restore_position_state``
+             when the strategy supports it: entry_price, ATR, stop distance.
+             Without this, exit signals use fallback values and the position
+             may not trigger its actual stop-loss.
+          3. ``position_manager._positions``   — Position object, so the
+             reconciliation loop stops reporting POSITION_MISMATCH and the
+             portfolio snapshot / risk checks see the open position.
+
         Uses retry logic because CCXT may need time to load position data
         after initial connection.
         """
-        exchange_positions: Dict[str, float] = {}
+        # Fetch detailed positions directly — they include entry_price,
+        # mark_price, upnl which we need for state reconstruction.
+        detailed: List[Dict[str, Any]] = []
 
-        # Retry up to 3 times with increasing delay (CCXT startup timing)
         for attempt in range(3):
             try:
-                exchange_positions = await self._engine.get_positions()
-                if exchange_positions:
+                detailed = await self._engine.get_positions_detailed()
+                if detailed:
                     break
-                # Empty result — wait and retry
                 if attempt < 2:
                     wait = (attempt + 1) * 2
                     logger.info(
@@ -292,45 +303,85 @@ class LiveTradingRunner:
                 if attempt < 2:
                     await asyncio.sleep(2)
 
-        synced = 0
-        for sym, qty in exchange_positions.items():
-            if abs(qty) < 1e-12:
-                continue
+        # Filter to non-zero positions
+        open_positions = [p for p in detailed if abs(p.get("contracts", 0) or 0) > 1e-12]
 
-            # ── Inject into strategy's internal position tracker ──
+        if not open_positions:
+            logger.info("exchange_position_sync_clean",
+                        message="No existing positions on exchange")
+            return
+
+        strategy_id = self._config.get("strategy_id", "default")
+
+        # Ensure the position manager has a bucket for this strategy
+        if strategy_id not in self._position_manager._positions:
+            self._position_manager._positions[strategy_id] = {}
+
+        synced_count = 0
+        total_upnl = 0.0
+
+        for pos in open_positions:
+            sym = pos.get("symbol", "")
+            contracts = float(pos.get("contracts", 0) or 0)
+            side_str = (pos.get("side") or "").lower()
+            signed_qty = contracts if side_str == "long" else -contracts
+            entry_price = float(pos.get("entry_price", 0) or 0)
+            mark_price = float(pos.get("mark_price", 0) or 0) or entry_price
+            upnl = float(pos.get("unrealized_pnl", 0) or 0)
+            total_upnl += upnl
+
+            # ── 1 & 2: Strategy state ──
             old_pos = self._strategy.get_position(sym)
-            if abs(old_pos) < 1e-12 or abs(old_pos - qty) > 1e-6:
-                self._strategy._positions[sym] = qty
-                synced += 1
-                logger.info(
-                    "POSITION_SYNCED_TO_STRATEGY",
+            restore_fn = getattr(self._strategy, "restore_position_state", None)
+            if callable(restore_fn):
+                restore_fn(
                     symbol=sym,
-                    exchange_qty=qty,
-                    direction="LONG" if qty > 0 else "SHORT",
-                    was=old_pos,
+                    quantity=signed_qty,
+                    avg_entry_price=entry_price,
+                    current_price=mark_price,
                 )
+            else:
+                # Fallback: minimal strategy sync (older strategies)
+                self._strategy._positions[sym] = signed_qty
 
-        # Also fetch detailed positions for accurate session tracking
-        if synced > 0:
-            try:
-                detailed = await self._engine.get_positions_detailed()
-                for pos in detailed:
-                    upnl = pos.get("unrealized_pnl", 0)
-                    self._session_pnl = upnl  # Initialize with current unrealized
-                    self._session_trades = 1   # We inherited an existing trade
-                    self._session_orders = 0   # No new orders yet this session
-            except Exception:
-                pass
-
-            logger.info(
-                "exchange_position_sync_complete",
-                synced_count=synced,
-                positions={
-                    s: q for s, q in exchange_positions.items() if abs(q) > 1e-12
-                },
+            # ── 3: Position manager ──
+            pos_side = PositionSide.LONG if signed_qty > 0 else PositionSide.SHORT
+            position_obj = Position(
+                symbol=sym,
+                strategy_id=strategy_id,
+                side=pos_side,
+                quantity=abs(signed_qty),
+                average_entry_price=entry_price,
+                current_price=mark_price,
+                unrealized_pnl=upnl,
+                realized_pnl=0.0,
+                asset_class=AssetClass.CRYPTO,
             )
-        else:
-            logger.info("exchange_position_sync_clean", message="No existing positions on exchange")
+            self._position_manager._positions[strategy_id][sym] = position_obj
+
+            synced_count += 1
+            logger.info(
+                "POSITION_SYNCED",
+                symbol=sym,
+                direction=pos_side.value,
+                quantity=abs(signed_qty),
+                entry_price=entry_price,
+                mark_price=mark_price,
+                unrealized_pnl=upnl,
+                was=old_pos,
+                has_state_restore=callable(restore_fn),
+            )
+
+        # Session tracking: we inherited existing trades, not new orders
+        self._session_pnl = total_upnl
+        self._session_trades = synced_count
+        self._session_orders = 0
+
+        logger.info(
+            "exchange_position_sync_complete",
+            synced_count=synced_count,
+            total_unrealized_pnl=total_upnl,
+        )
 
     # ------------------------------------------------------------------
     # Main Loop
