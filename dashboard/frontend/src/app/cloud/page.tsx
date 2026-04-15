@@ -98,6 +98,16 @@ function timeSince(iso: string | null): string {
 
 // ── Main Component ──────────────────────────────────────────
 
+interface ReportStatus {
+  running: boolean
+  enabled: boolean
+  send_time_utc: string
+  recipient: string
+  last_sent_date: string | null
+  last_run_at: string | null
+  last_error: string | null
+}
+
 export default function CloudPage() {
   const [deployments, setDeployments] = useState<DeploymentStatus[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
@@ -107,15 +117,20 @@ export default function CloudPage() {
   const [expandedLogs, setExpandedLogs] = useState<string | null>(null)
   const [logs, setLogs] = useState<string[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
+  const [reportStatus, setReportStatus] = useState<ReportStatus | null>(null)
+  const [reportSending, setReportSending] = useState(false)
+  const [reportToast, setReportToast] = useState<string | null>(null)
 
   const fetchAll = useCallback(async () => {
     try {
-      const [depRes, sumRes] = await Promise.all([
+      const [depRes, sumRes, repRes] = await Promise.all([
         fetch(`${API}/api/deployments`),
         fetch(`${API}/api/deployments/summary`),
+        fetch(`${API}/api/reports/daily/status`),
       ])
       if (depRes.ok) setDeployments(await depRes.json())
       if (sumRes.ok) setSummary(await sumRes.json())
+      if (repRes.ok) setReportStatus(await repRes.json())
       setError(null)
     } catch (e: any) {
       setError('Backend not reachable. Start local dashboard first.')
@@ -123,6 +138,30 @@ export default function CloudPage() {
       setLoading(false)
     }
   }, [])
+
+  const sendReportNow = async () => {
+    setReportSending(true)
+    setReportToast(null)
+    try {
+      const res = await fetch(`${API}/api/reports/daily/send-now`, { method: 'POST' })
+      if (res.ok) {
+        setReportToast('Report emailed successfully')
+      } else {
+        const body = await res.json().catch(() => ({ detail: 'unknown' }))
+        setReportToast(`Send failed: ${body.detail}`)
+      }
+      await fetchAll()
+    } catch (e: any) {
+      setReportToast(`Error: ${e.message}`)
+    } finally {
+      setReportSending(false)
+      setTimeout(() => setReportToast(null), 5000)
+    }
+  }
+
+  const openReportPreview = () => {
+    window.open(`${API}/api/reports/daily/preview.html`, '_blank')
+  }
 
   // Poll every 5 seconds
   useEffect(() => {
@@ -228,6 +267,56 @@ export default function CloudPage() {
               logsLoading={logsLoading && expandedLogs === d.deployment.id}
             />
           ))}
+        </div>
+      )}
+
+      {/* Daily Report */}
+      {reportStatus && (
+        <div className="bg-surface rounded-xl border border-border p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="text-sm font-semibold text-gray-200">Daily Report</h3>
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                    reportStatus.enabled && reportStatus.running
+                      ? 'bg-green-900/40 text-green-400'
+                      : 'bg-gray-800 text-gray-500'
+                  }`}
+                >
+                  {reportStatus.enabled && reportStatus.running ? 'SCHEDULED' : 'OFF'}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500">
+                Sent daily at <span className="text-gray-300 font-mono">{reportStatus.send_time_utc} UTC</span>
+                {' '}to <span className="text-gray-300">{reportStatus.recipient}</span>
+              </p>
+              <p className="text-[11px] text-gray-600 mt-1">
+                Last sent: {reportStatus.last_sent_date ?? 'never this session'}
+                {reportStatus.last_error && (
+                  <span className="text-red-400 ml-2">· error: {reportStatus.last_error}</span>
+                )}
+              </p>
+              {reportToast && (
+                <p className="text-[11px] text-cyan-400 mt-2">{reportToast}</p>
+              )}
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={openReportPreview}
+                className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-background text-gray-300"
+              >
+                Preview
+              </button>
+              <button
+                onClick={sendReportNow}
+                disabled={reportSending}
+                className="px-3 py-1.5 text-xs rounded-lg bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 text-white font-medium"
+              >
+                {reportSending ? 'Sending…' : 'Send Now'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

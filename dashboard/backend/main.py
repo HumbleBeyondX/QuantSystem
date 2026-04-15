@@ -19,7 +19,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.logging import get_logger
-from dashboard.backend.routers import backtest, data_layer, deployments, live_trading, market_data, paper_trading, portfolio, risk, strategies, system, workshop
+from dashboard.backend.routers import backtest, data_layer, deployments, live_trading, market_data, paper_trading, portfolio, reports, risk, strategies, system, workshop
 
 logger = get_logger(__name__)
 
@@ -77,12 +77,25 @@ async def lifespan(app: FastAPI):
     # Load cloud deployments registry
     deployments.load_deployments()
 
+    # Start daily report scheduler (fires at configured UTC time)
+    from core.services.report_scheduler import get_scheduler
+    scheduler = get_scheduler()
+    try:
+        await scheduler.start()
+        logger.info("daily_report_scheduler_started", status=scheduler.status())
+    except Exception as e:
+        logger.error("daily_report_scheduler_start_failed", error=str(e))
+
     logger.info("dashboard_backend_ready")
 
     yield
 
     # Shutdown
     logger.info("dashboard_backend_stopping")
+    try:
+        await scheduler.stop()
+    except Exception as e:
+        logger.warning("daily_report_scheduler_stop_failed", error=str(e))
     if runner:
         logger.info("live_runner_shutting_down")
         await runner.shutdown(close_positions=False)
@@ -122,6 +135,7 @@ app.include_router(live_trading.router, tags=["Live Trading"])
 app.include_router(workshop.router, prefix="/api/workshop", tags=["Workshop"])
 app.include_router(data_layer.router, prefix="/api/data", tags=["Data Layer"])
 app.include_router(deployments.router, tags=["Cloud Deployments"])
+app.include_router(reports.router, tags=["Reports"])
 
 
 @app.get("/")
