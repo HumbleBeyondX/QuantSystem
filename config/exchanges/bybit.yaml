@@ -1,0 +1,37 @@
+# Bybit Perpetual Futures Configuration
+exchange_id: bybit
+display_name: "Bybit Derivatives"
+
+# Connection
+sandbox: true  # Set false for live trading
+testnet_url: "https://api-testnet.bybit.com"
+
+# Rate limits
+rate_limit_ms: 100
+max_requests_per_minute: 600
+
+# Default trading parameters
+default_leverage: 3
+default_margin_type: cross
+default_type: swap
+category: linear  # Bybit-specific: linear (USDT), inverse
+
+# Supported asset classes
+asset_classes:
+  - crypto_perp
+  - crypto_spot
+
+# Fee schedule (USDT perps)
+fees:
+  maker: 0.0001  # 0.01%
+  taker: 0.0006  # 0.06%
+
+# Default symbols
+default_symbols:
+  - BTC/USDT:USDT
+  - ETH/USDT:USDT
+
+# Safety
+withdrawal_enabled: false
+max_position_notional_usd: 50000
+max_leverage: 20

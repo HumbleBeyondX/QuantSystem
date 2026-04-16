@@ -1,0 +1,11 @@
+# Prevent Claude Code from reading sensitive files
+.env
+.env.*
+.env.live
+data/vault.enc
+data/gmail_token.json
+data/gmail_credentials.json
+**/credentials*
+**/secrets*
+**/*_secret*
+**/*_key*.txt

@@ -1,0 +1,196 @@
+"""${name} — ${description}
+
+Auto-generated from the 'futures' strategy template.
+Base class: FuturesStrategyBase (leverage, margin, funding rate, basis).
+
+Pre-built infrastructure:
+  - Fixed-risk position sizing (qty = risk / stop_distance)
+  - Leverage and margin management (cross / isolated)
+  - Funding rate tracking and arbitrage signals
+  - Basis spread monitoring (spot vs futures)
+  - ATR computation for dynamic stops
+  - Liquidation price estimation
+  - Equity / drawdown tracking
+
+Customize:
+  - generate_signals(): your directional alpha
+  - _check_entry(): entry conditions (trend, breakout, mean-revert)
+  - _check_exit(): exit conditions (stop, target, trailing, time)
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+from uuid import uuid4
+
+import numpy as np
+
+from core.enums import AssetClass, SignalDirection
+from core.models import Bar, Fill, Signal, TargetPosition
+from strategies.base import StrategyConfig
+from strategies.base_futures import FuturesPosition, FuturesStrategyBase
+from strategies.registry import register_strategy
+
+
+@register_strategy("${strategy_id}")
+class ${class_name}(FuturesStrategyBase):
+    """${description}"""
+
+    def __init__(self, config: StrategyConfig) -> None:
+        super().__init__(config)
+
+        # ── Strategy parameters ──
+        self.ema_fast = self.get_param("ema_fast", 8)
+        self.ema_slow = self.get_param("ema_slow", 21)
+        self.atr_stop_mult = self.get_param("atr_stop_mult", 3.0)
+        self.atr_trail_mult = self.get_param("atr_trail_mult", 2.0)
+        self.cooldown_bars = self.get_param("cooldown_bars", 3)
+        # TODO: add your strategy-specific parameters
+
+        # ── Indicator state ──
+        self._ema_fast_val: Dict[str, float] = {}
+        self._ema_slow_val: Dict[str, float] = {}
+
+    # ------------------------------------------------------------------
+    # Data handlers
+    # ------------------------------------------------------------------
+
+    def on_bar(self, symbol: str, bar: Bar) -> None:
+        """Process bar: update ATR, EMAs, check positions."""
+        super().on_bar(symbol, bar)  # updates ATR, bar cache
+        self._update_emas(symbol, bar.close)
+
+        # Update existing position prices
+        pos = self.get_futures_position(symbol)
+        if pos:
+            pos.update_price(bar.close)
+
+    def _update_emas(self, symbol: str, price: float) -> None:
+        """Compute exponential moving averages."""
+        # Fast EMA
+        alpha_f = 2.0 / (self.ema_fast + 1)
+        prev = self._ema_fast_val.get(symbol, price)
+        self._ema_fast_val[symbol] = alpha_f * price + (1 - alpha_f) * prev
+
+        # Slow EMA
+        alpha_s = 2.0 / (self.ema_slow + 1)
+        prev = self._ema_slow_val.get(symbol, price)
+        self._ema_slow_val[symbol] = alpha_s * price + (1 - alpha_s) * prev
+
+    # ------------------------------------------------------------------
+    # Signal generation
+    # ------------------------------------------------------------------
+
+    def generate_signals(self) -> List[Signal]:
+        """Produce futures trading signals.
+
+        Framework provides:
+          self.atr(symbol)                 — current ATR value
+          self.funding_rate(symbol)        — latest funding rate
+          self.annualized_funding(symbol)  — annualized funding rate
+          self.basis_spread(symbol)        — futures premium/discount
+          self.equity                      — current equity
+          self.drawdown_pct               — current drawdown %
+          self.compute_position_size(...)  — fixed-risk sizing
+          self.estimate_liquidation_price(...)
+        """
+        signals: List[Signal] = []
+
+        for symbol in self.symbols:
+            # Skip if in cooldown
+            cd = self._cooldown_remaining.get(symbol, 0)
+            if cd > 0:
+                self._cooldown_remaining[symbol] = cd - 1
+                continue
+
+            pos = self.get_futures_position(symbol)
+
+            if pos:
+                # ── Manage existing position ──
+                exit_signal = self._check_exit(symbol, pos)
+                if exit_signal:
+                    signals.append(exit_signal)
+            else:
+                # ── Look for new entry ──
+                entry_signal = self._check_entry(symbol)
+                if entry_signal:
+                    signals.append(entry_signal)
+
+        return signals
+
+    # ------------------------------------------------------------------
+    # Entry logic — YOUR ALPHA HERE
+    # ------------------------------------------------------------------
+
+    def _check_entry(self, symbol: str) -> Optional[Signal]:
+        """Check for trade entry.
+
+        Example: EMA crossover with ATR-based stop.
+        """
+        fast = self._ema_fast_val.get(symbol, 0)
+        slow = self._ema_slow_val.get(symbol, 0)
+        current_atr = self.atr(symbol)
+
+        if fast == 0 or slow == 0 or current_atr == 0:
+            return None
+
+        last_bar = self._last_bars.get(symbol)
+        if not last_bar:
+            return None
+
+        price = last_bar.close
+
+        # ── Long entry: fast EMA above slow EMA ──
+        if fast > slow:
+            stop_price = price - self.atr_stop_mult * current_atr
+            qty = self.compute_position_size(symbol, price, stop_price)
+            if qty <= 0:
+                return None
+            return self.long_signal(
+                symbol, strength=0.7, qty=qty,
+                stop=stop_price,
+                entry=price,
+                atr=current_atr,
+            )
+
+        # ── Short entry: fast EMA below slow EMA ──
+        if fast < slow:
+            stop_price = price + self.atr_stop_mult * current_atr
+            qty = self.compute_position_size(symbol, price, stop_price)
+            if qty <= 0:
+                return None
+            return self.short_signal(
+                symbol, strength=0.7, qty=qty,
+                stop=stop_price,
+                entry=price,
+                atr=current_atr,
+            )
+
+        return None
+
+    # ------------------------------------------------------------------
+    # Exit logic
+    # ------------------------------------------------------------------
+
+    def _check_exit(self, symbol: str, pos: FuturesPosition) -> Optional[Signal]:
+        """Check if existing position should be closed.
+
+        Built-in: stop loss, take profit, trailing stop (in FuturesPosition).
+        Add custom exits here.
+        """
+        last_bar = self._last_bars.get(symbol)
+        if not last_bar:
+            return None
+
+        price = last_bar.close
+
+        # ── Stop / take profit triggered ──
+        if pos.should_stop(price):
+            self._cooldown_remaining[symbol] = self.cooldown_bars
+            return self.flat_signal(symbol, reason="stop_triggered", exit_price=price)
+
+        # TODO: add custom exit conditions
+        # e.g., EMA crossover reversal, max hold time, drawdown limit
+
+        return None

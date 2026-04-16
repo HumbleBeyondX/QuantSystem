@@ -1,0 +1,36 @@
+# Binance Perpetual Futures Configuration
+exchange_id: binance
+display_name: "Binance Futures"
+
+# Connection
+sandbox: true  # Set false for live trading
+testnet_url: "https://testnet.binancefuture.com"
+
+# Rate limits (CCXT handles this, but these are soft reference values)
+rate_limit_ms: 50
+max_requests_per_minute: 1200
+
+# Default trading parameters
+default_leverage: 3
+default_margin_type: cross  # cross / isolated
+default_type: swap  # swap = perpetual futures
+
+# Supported asset classes
+asset_classes:
+  - crypto_perp
+  - crypto_spot
+
+# Fee schedule (maker/taker for USDT-M futures, BNB discount not applied)
+fees:
+  maker: 0.0002  # 0.02%
+  taker: 0.0004  # 0.04%
+
+# Symbols commonly traded
+default_symbols:
+  - BTC/USDT:USDT
+  - ETH/USDT:USDT
+
+# Safety
+withdrawal_enabled: false  # NEVER enable — blocked at engine level
+max_position_notional_usd: 50000
+max_leverage: 20

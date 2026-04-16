@@ -98,6 +98,65 @@ class SniperStrategy(StrategyBase):
         self._bars_since: Dict[str, int] = {}
         self._current_time: datetime = datetime.utcnow()
 
+        # Live trading: dynamic equity (set externally by runner/orchestrator)
+        self._live_equity: Optional[float] = None
+
+    # ============================================================
+    # State restoration — called by LiveTradingRunner.sync_exchange_positions()
+    # after warmup when the runner restarts with an open exchange position.
+    # Without this, exit logic falls back to defaults and the position never
+    # triggers its actual stop-loss / trailing-stop / time-exit.
+    # ============================================================
+    def restore_position_state(
+        self,
+        symbol: str,
+        quantity: float,
+        avg_entry_price: float,
+        current_price: Optional[float] = None,
+    ) -> None:
+        """Rebuild per-symbol position state after a runner restart.
+
+        Args:
+            symbol: Symbol of the open exchange position
+            quantity: Signed quantity (positive = long, negative = short)
+            avg_entry_price: Exchange-reported average entry price
+            current_price: Current mark/last price (defaults to entry_price).
+                           Used to seed best/worst trackers for trailing stop.
+
+        The ATR-based stop distance is derived from the ATR computed during
+        warmup (``self._atr[symbol]``). If warmup hasn't run yet for this
+        symbol, falls back to 2% of entry price as a safety stop.
+        """
+        if symbol not in self._atr:
+            # No warmup state yet; use a conservative fallback
+            atr_est = avg_entry_price * 0.02
+        else:
+            atr_est = max(self._atr[symbol], avg_entry_price * 0.001)
+
+        # Inject into strategy's basic position tracking
+        self._positions[symbol] = float(quantity)
+
+        # Stop-loss state (exact formula mirrors _check_entry)
+        stop_dist = max(atr_est * self.atr_stop, avg_entry_price * 0.005)
+
+        self._entry_price[symbol] = float(avg_entry_price)
+        self._entry_atr[symbol] = atr_est
+        self._stop_dist[symbol] = stop_dist
+
+        # Trailing-stop extremes: seed with current price (safest default
+        # — we don't know the actual extremes since position opened).
+        seed = float(current_price) if current_price else float(avg_entry_price)
+        self._best_price[symbol] = seed
+        self._worst_price[symbol] = seed
+
+        # Time-in-trade: unknown, start at 0. The next warmup bar will
+        # increment from here. Accepts the trade-off: may exit later
+        # than a cold-start session, but never earlier. Safer than guessing.
+        self._bars_held[symbol] = 0
+
+        # Cooldown: ensure no immediate re-entry if we somehow go flat
+        self._bars_since[symbol] = 0
+
     def on_bar(self, symbol: str, bar: Bar) -> None:
         """Process each new 4H bar: update indicators and state."""
         super().on_bar(symbol, bar)
@@ -463,12 +522,38 @@ class SniperStrategy(StrategyBase):
 
         return score
 
+    # ------------------------------------------------------------------
+    # Live equity management
+    # ------------------------------------------------------------------
+
+    def set_live_equity(self, equity: float) -> None:
+        """Set live equity for dynamic position sizing.
+
+        Called by the orchestrator/runner before signal generation.
+        When set, overrides the static 'initial_capital' parameter.
+        """
+        self._live_equity = equity
+
+    def _get_equity(self) -> float:
+        """Get current equity for position sizing.
+
+        Priority: live_equity (from exchange) > initial_capital param.
+        """
+        if self._live_equity is not None and self._live_equity > 0:
+            return self._live_equity
+        return float(self.get_param("initial_capital", 10000))
+
     def calculate_target_positions(self) -> List[TargetPosition]:
-        """Fixed-risk position sizing: qty = risk_amount / stop_distance."""
+        """Fixed-risk position sizing: qty = risk_amount / stop_distance.
+
+        In live mode, equity is fetched from the exchange balance
+        via set_live_equity(). In backtest mode, uses initial_capital param.
+        """
         signals = self.generate_signals()
         self._signals.extend(signals)
         self._metrics["signals_generated"] += len(signals)
 
+        equity = self._get_equity()
         targets: List[TargetPosition] = []
         for signal in signals:
             if signal.direction == SignalDirection.FLAT:
@@ -483,14 +568,13 @@ class SniperStrategy(StrategyBase):
             else:
                 stop_dist = self._stop_dist.get(signal.symbol, 1.0)
                 price = self._entry_price.get(signal.symbol, 1.0)
-                # Risk-based sizing
-                # (In live mode, equity comes from portfolio manager)
-                risk_amount = self.get_param("initial_capital", 10000) * self.risk_per_trade
+                # Risk-based sizing with dynamic equity
+                risk_amount = equity * self.risk_per_trade
                 qty_abs = risk_amount / max(stop_dist, 1e-12)
                 # Cap margin
                 notional = qty_abs * price
                 margin = notional / self.leverage
-                max_margin = self.get_param("initial_capital", 10000) * self.max_margin_pct
+                max_margin = equity * self.max_margin_pct
                 if margin > max_margin:
                     qty_abs = max_margin * self.leverage / max(price, 1)
 

@@ -1,0 +1,75 @@
+{
+  "name": "quantsystem-desktop",
+  "version": "0.2.0",
+  "description": "QuantSystem Desktop — Production Quantitative Trading Platform",
+  "main": "main.js",
+  "author": "QuantSystem",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "cross-env NODE_ENV=development electron .",
+    "build": "electron-builder --win",
+    "build:dir": "electron-builder --win --dir"
+  },
+  "dependencies": {
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.1.0"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^31.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.quantsystem.desktop",
+    "productName": "QuantSystem",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "tray.js",
+      "updater.js",
+      "watchdog.js",
+      "env_check.js",
+      "icons/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../dashboard/frontend/out",
+        "to": "frontend",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../deploy/dist/qs-backend",
+        "to": "backend",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../deploy/.env.example",
+        "to": ".env.example"
+      }
+    ],
+    "win": {
+      "target": ["nsis"],
+      "icon": "icons/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "QuantSystem",
+      "uninstallDisplayName": "QuantSystem Trading Platform",
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

@@ -1,0 +1,78 @@
+# ============================================================
+# QuantSystem — Daily Report Configuration
+# ============================================================
+# Daily email reports sent to the configured recipient with:
+#   - Position changes across cloud deployments
+#   - Risk assessment and forward-looking warnings
+#   - Market snapshot (crypto + US equities)
+#   - Session P&L summary
+#
+# The scheduler checks once per minute; reports fire at send_time_utc.
+# Emails use the same Gmail OAuth2 pipeline as risk alerts
+# (see dashboard/alerts/email_notifier.py).
+# ============================================================
+
+daily_report:
+  enabled: true
+
+  # Recipient email (defaults to ALERT_EMAIL_RECIPIENT env var)
+  recipient: "humblebeyondx@gmail.com"
+
+  # When to send the daily report (UTC, 24-hour format)
+  # Default 22:00 UTC = 07:00 JST (Tokyo) / 18:00 ET (US market close)
+  # Good for a post-market / pre-Asia-open recap
+  send_time_utc: "22:00"
+
+  # Sections to include (order matters — this is the email layout)
+  sections:
+    - header           # Status banner, timestamp
+    - pnl_summary      # Aggregated P&L across all deployments
+    - positions        # Per-deployment open positions
+    - risk_assessment  # Forward-looking risk warnings
+    - market_snapshot  # Crypto + US market data
+    - footer
+
+  # Market symbols to include in the snapshot
+  markets:
+    crypto:
+      # OKX symbol format, ticker endpoint is public
+      - symbol: "BTC/USDT"
+        label: "Bitcoin"
+      - symbol: "ETH/USDT"
+        label: "Ethereum"
+      - symbol: "SOL/USDT"
+        label: "Solana"
+
+    us_equities:
+      # yfinance ticker format
+      - symbol: "SPY"
+        label: "S&P 500 ETF"
+      - symbol: "QQQ"
+        label: "Nasdaq 100 ETF"
+      - symbol: "IWM"
+        label: "Russell 2000 ETF"
+      - symbol: "^VIX"
+        label: "VIX (Fear Index)"
+      - symbol: "^TNX"
+        label: "10Y Treasury Yield"
+      - symbol: "DX-Y.NYB"
+        label: "US Dollar Index"
+
+  # Risk thresholds that trigger warnings in the report
+  risk_thresholds:
+    # Session loss (per deployment) exceeds this → WARNING
+    session_loss_warning_usd: 5.0
+    session_loss_critical_usd: 15.0
+    # Unrealized drawdown from peak (per deployment) → WARNING
+    unrealized_dd_warning_pct: 0.05
+    unrealized_dd_critical_pct: 0.10
+    # VIX level warnings (regime change flags)
+    vix_warning: 22
+    vix_critical: 30
+    # Position size vs. equity
+    position_pct_warning: 0.80
+    position_pct_critical: 0.95
+
+  # Enable also sending on manual trigger (always true)
+  # Optional: send an additional intraday report at this time (empty = disabled)
+  intraday_report_time_utc: ""

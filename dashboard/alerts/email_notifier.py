@@ -35,14 +35,26 @@ from pathlib import Path
 from typing import Optional
 
 from core.logging import get_logger
+from core.paths import get_data_dir, get_env_path, get_resource_root
 
 logger = get_logger(__name__)
 
 # ── Paths ─────────────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-_ENV_FILE = PROJECT_ROOT / ".env"
-CREDENTIALS_FILE = PROJECT_ROOT / "data" / "gmail_credentials.json"
-TOKEN_FILE = PROJECT_ROOT / "data" / "gmail_token.json"
+_ENV_FILE = get_env_path()
+
+# Gmail credentials / refresh token live in user data dir (writable,
+# survives upgrades). On first run, fall back to the bundled defaults
+# shipped with the dev source tree if present.
+CREDENTIALS_FILE = get_data_dir() / "gmail_credentials.json"
+TOKEN_FILE = get_data_dir() / "gmail_token.json"
+if not CREDENTIALS_FILE.exists():
+    _bundled_creds = get_resource_root() / "data" / "gmail_credentials.json"
+    if _bundled_creds.exists():
+        CREDENTIALS_FILE = _bundled_creds
+if not TOKEN_FILE.exists():
+    _bundled_token = get_resource_root() / "data" / "gmail_token.json"
+    if _bundled_token.exists():
+        TOKEN_FILE = _bundled_token
 
 # Gmail API scopes (send-only — cannot read your inbox)
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]

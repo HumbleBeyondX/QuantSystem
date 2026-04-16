@@ -1,0 +1,39 @@
+# QuantSystem Live Trading — Minimal Dependencies
+# Only what's needed for live runner + dashboard API
+
+# Core
+pydantic>=2.5
+pydantic-settings>=2.1
+pyyaml>=6.0
+structlog>=24.1
+python-dotenv>=1.0
+
+# Async
+aiohttp>=3.9
+aiofiles>=23.2
+
+# Data
+pandas>=2.1
+numpy>=1.26
+
+# Trading - Crypto
+ccxt>=4.2
+
+# Technical Analysis
+pandas_ta>=0.3.14b
+
+# Portfolio math
+scipy>=1.11
+
+# Web Backend (dashboard API)
+fastapi>=0.108
+uvicorn[standard]>=0.25
+websockets>=12.0
+
+# US market data (daily report snapshot)
+yfinance>=0.2.60
+
+# Email notifications — Gmail OAuth2
+google-auth>=2.0
+google-auth-oauthlib>=1.0
+google-api-python-client>=2.0

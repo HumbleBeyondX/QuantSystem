@@ -11,10 +11,14 @@ const navItems = [
   { href: '/', label: 'Overview', icon: '◎' },
   { href: '/portfolio', label: 'Portfolio', icon: '◈' },
   { href: '/strategies', label: 'Strategies', icon: '⚡' },
-  { href: '/trading', label: 'Trading', icon: '⚙' },
+  { href: '/workshop', label: 'Workshop', icon: '🔧' },
+  { href: '/cloud', label: 'Cloud', icon: '☁' },
+  { href: '/live', label: 'Live Trading', icon: '▶' },
+  { href: '/trading', label: 'Paper Trading', icon: '⚙' },
   { href: '/backtest', label: 'Backtest', icon: '↻' },
   { href: '/risk', label: 'Risk', icon: '⛊' },
-  { href: '/market', label: 'Market Data', icon: '▥' },
+  { href: '/data', label: 'Data Layer', icon: '▥' },
+  { href: '/logs', label: 'Logs', icon: '≡' },
 ]
 
 export default function RootLayout({

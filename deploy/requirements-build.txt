@@ -1,0 +1,12 @@
+# QuantSystem — Build-time Dependencies
+# ------------------------------------------------------------
+# Used only for packaging the production desktop installer.
+# Install before running deploy/build_installer.ps1.
+#
+# Runtime deps are in deploy/requirements-live.txt and are
+# the ones bundled INTO the PyInstaller image.
+# ------------------------------------------------------------
+
+# PyInstaller bundles the Python backend into a standalone exe
+pyinstaller>=6.11
+pyinstaller-hooks-contrib>=2024.9

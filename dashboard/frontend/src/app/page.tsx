@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 
-const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8001'
+const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002'
 
 /* ── types ─────────────────────────────────────────────── */
 interface Overview {
@@ -22,6 +22,14 @@ interface Overview {
   broker_connected: boolean
   broker_equity: number | null
   last_updated: string
+}
+
+interface CloudSummary {
+  total_deployments: number
+  online: number
+  running: number
+  total_session_pnl: number
+  total_session_trades: number
 }
 
 interface CatalogStrategy {
@@ -61,6 +69,7 @@ export default function DashboardPage() {
   const [overview, setOverview] = useState<Overview | null>(null)
   const [catalog, setCatalog] = useState<CatalogStrategy[]>([])
   const [deployed, setDeployed] = useState<DeployedStrategy[]>([])
+  const [cloudSummary, setCloudSummary] = useState<CloudSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [lastUpdate, setLastUpdate] = useState('')
 
@@ -83,14 +92,16 @@ export default function DashboardPage() {
   /* ── data fetching ──────────────────────────────────── */
   const fetchAll = useCallback(async () => {
     try {
-      const [ovRes, catRes, depRes] = await Promise.all([
+      const [ovRes, catRes, depRes, cloudRes] = await Promise.all([
         fetch(`${API}/api/system/overview`),
         fetch(`${API}/api/strategies/catalog`),
         fetch(`${API}/api/strategies/`),
+        fetch(`${API}/api/deployments/summary`).catch(() => null),
       ])
       if (ovRes.ok) setOverview(await ovRes.json())
       if (catRes.ok) setCatalog(await catRes.json())
       if (depRes.ok) setDeployed(await depRes.json())
+      if (cloudRes?.ok) setCloudSummary(await cloudRes.json())
       setLastUpdate(new Date().toLocaleTimeString())
     } catch (e) {
       console.error('Fetch error:', e)
@@ -240,6 +251,38 @@ export default function DashboardPage() {
           color="text-blue-400"
         />
       </div>
+
+      {/* Cloud Deployments Quick View */}
+      {cloudSummary && cloudSummary.total_deployments > 0 && (
+        <div className="bg-surface rounded-xl border border-border p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-base opacity-60">&#9729;</span>
+              <div>
+                <h3 className="text-sm font-semibold">Cloud Deployments</h3>
+                <p className="text-[10px] text-gray-500">
+                  {cloudSummary.running} running / {cloudSummary.online} online / {cloudSummary.total_deployments} total
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-6">
+              <div className="text-center">
+                <p className="text-[10px] text-gray-500">Session P&L</p>
+                <p className={`text-sm font-mono font-bold ${cloudSummary.total_session_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {cloudSummary.total_session_pnl >= 0 ? '+' : ''}${cloudSummary.total_session_pnl.toFixed(2)}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] text-gray-500">Trades</p>
+                <p className="text-sm font-mono font-bold">{cloudSummary.total_session_trades}</p>
+              </div>
+              <a href="/cloud" className="px-3 py-1.5 bg-accent/20 hover:bg-accent/30 text-accent text-xs rounded-lg transition-colors font-medium">
+                Manage &rarr;
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Strategy Deployment Section */}
       <div className="bg-surface rounded-xl border border-border p-6">

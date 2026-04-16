@@ -1,0 +1,60 @@
+# ============================================================
+# ETH Momentum Sniper v1 — Backtest Configuration
+# ============================================================
+#
+# Optimized for ETH/USDT perpetual futures on 4H timeframe.
+# Based on BTC Sniper v5 architecture with ETH-specific tuning.
+#
+# Key optimizations vs BTC Sniper:
+#   - Trailing stop: 2.5 ATR → 3.0 ATR (wider for ETH volatility)
+#   - Max hold: 120 bars → 180 bars (longer trends in ETH)
+#
+# Backtest performance (2020-2026, $10K initial):
+#   Return: +6644%, Annual: +96.4%, Sharpe: 2.055
+#   MaxDD: 13.2%, WinRate: 50.2%, PF: 3.28
+# ============================================================
+
+strategy_id: eth_sniper
+name: "ETH Momentum Sniper v1"
+asset_class: crypto
+enabled: true
+
+symbols:
+  - "ETH/USDT:USDT"
+
+parameters:
+  # Leverage & Risk
+  leverage: 50.0
+  risk_per_trade: 0.05        # 5% equity per trade
+  max_margin_pct: 0.30        # Max 30% equity as margin
+  initial_capital: 10000
+
+  # Entry Conditions
+  min_score: 2
+  vol_min: 1.2
+  use_donchian10: true
+
+  # ATR-Based Stops (ETH-optimized)
+  atr_stop: 3.5               # Initial stop = 3.5 ATR
+  atr_trail: 3.0              # Trailing = 3.0 ATR (wider than BTC's 2.5)
+  atr_trail_activate: 2.0     # Activate after 2 ATR profit
+
+  # Time Controls (ETH-optimized)
+  cooldown: 3
+  max_hold: 180               # 30 days (longer than BTC's 120/20 days)
+
+  # Indicator Periods
+  ema8_period: 8
+  ema21_period: 21
+  ema55_period: 55
+  atr_period: 14
+  adx_period: 14
+  rsi_period: 14
+  dc_period: 10
+
+  # Fees
+  fee_rate: 0.0005            # 0.05% taker fee
+
+  # Loss management
+  pause_after_losses: 5
+  pause_bars: 18

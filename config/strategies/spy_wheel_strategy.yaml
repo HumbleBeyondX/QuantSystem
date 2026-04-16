@@ -1,0 +1,20 @@
+# SPY Wheel Strategy Configuration
+# Auto-generated — edit parameters below to tune your strategy.
+
+strategy_id: spy_wheel_strategy
+name: SPY Wheel Strategy
+asset_class: options
+enabled: true
+mode: paper  # paper | live | backtest
+
+symbols:
+  - SPY
+
+parameters:
+  target_dte: 30
+  min_vrp: 0.03
+  max_positions: 5
+  contracts_per_trade: 1
+  max_portfolio_delta: 500
+  max_portfolio_vega: 5000
+  delta_hedge_threshold: 50

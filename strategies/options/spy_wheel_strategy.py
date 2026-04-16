@@ -1,0 +1,170 @@
+"""SPY Wheel Strategy — SPY Wheel Strategy strategy
+
+Auto-generated from the 'options' strategy template.
+Base class: OptionsStrategyBase (Greeks-aware, vol surface, multi-leg).
+
+Pre-built infrastructure:
+  - Portfolio Greeks tracking (delta, gamma, vega, theta)
+  - Implied vs realized vol comparison (VRP)
+  - Multi-leg position management (spreads, straddles, condors)
+  - Automatic delta-hedge computation
+  - Expiry tracking and auto-roll alerts
+
+Customize:
+  - generate_signals(): your vol / Greeks alpha logic
+  - _should_enter(): entry conditions
+  - _should_exit(): exit / roll conditions
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+from uuid import uuid4
+
+import numpy as np
+
+from core.enums import AssetClass, SignalDirection
+from core.models import Bar, Fill, OptionContract, Signal, TargetPosition
+from strategies.base import StrategyConfig
+from strategies.base_options import MultiLegPosition, OptionLeg, OptionsStrategyBase
+from strategies.registry import register_strategy
+
+
+@register_strategy("spy_wheel_strategy")
+class SpyWheelStrategy(OptionsStrategyBase):
+    """SPY Wheel Strategy strategy"""
+
+    def __init__(self, config: StrategyConfig) -> None:
+        super().__init__(config)
+
+        # ── Strategy parameters ──
+        self.target_dte = self.get_param("target_dte", 30)
+        self.min_vrp = self.get_param("min_vrp", 0.03)  # min IV-RV spread to trade
+        self.max_positions = self.get_param("max_positions", 5)
+        self.contracts_per_trade = self.get_param("contracts_per_trade", 1)
+        # TODO: add your strategy-specific parameters
+
+        # ── Internal state ──
+        self._bar_count = 0
+
+    # ------------------------------------------------------------------
+    # Data handlers
+    # ------------------------------------------------------------------
+
+    def on_bar(self, symbol: str, bar: Bar) -> None:
+        """Cache close prices for RV computation and update Greeks."""
+        super().on_bar(symbol, bar)
+        self._bar_count += 1
+
+    # ------------------------------------------------------------------
+    # Signal generation
+    # ------------------------------------------------------------------
+
+    def generate_signals(self) -> List[Signal]:
+        """Produce options trading signals.
+
+        Framework provides:
+          self.get_atm_iv(underlying)    — current ATM implied vol
+          self.realized_vol(underlying)  — realized vol from close prices
+          self.vrp(underlying)           — IV - RV spread
+          self.portfolio_greeks          — aggregate Greeks exposure
+          self.check_greeks_limits()     — list of violated risk limits
+          self.needs_delta_hedge()       — True if delta exceeds threshold
+          self.positions_needing_roll()  — positions near expiry
+        """
+        signals: List[Signal] = []
+
+        # ── Check risk limits first ──
+        violations = self.check_greeks_limits()
+        if violations:
+            # Risk limits breached — generate hedge/flatten signals
+            pass  # TODO: implement risk response
+
+        # ── Delta hedge check ──
+        if self.needs_delta_hedge():
+            hedge_qty = self.compute_hedge_qty(self.symbols[0] if self.symbols else "SPY")
+            # TODO: emit delta-hedge signal
+
+        # ── Roll expiring positions ──
+        for pos in self.positions_needing_roll():
+            signals.append(self._roll_signal(pos))
+
+        # ── New entry signals ──
+        for underlying in self.symbols:
+            if self.total_open_positions >= self.max_positions:
+                break
+
+            if self._should_enter(underlying):
+                sig = self._entry_signal(underlying)
+                if sig:
+                    signals.append(sig)
+
+        return signals
+
+    # ------------------------------------------------------------------
+    # Entry / exit logic — YOUR ALPHA HERE
+    # ------------------------------------------------------------------
+
+    def _should_enter(self, underlying: str) -> bool:
+        """Determine whether to open a new position.
+
+        Example: sell premium when VRP is high (IV > RV).
+        """
+        current_vrp = self.vrp(underlying)
+        iv = self.get_atm_iv(underlying)
+
+        if iv <= 0 or current_vrp < self.min_vrp:
+            return False
+
+        # TODO: add your entry conditions
+        return True
+
+    def _entry_signal(self, underlying: str) -> Optional[Signal]:
+        """Create entry signal — customize for your structure (straddle, condor, etc.)."""
+        iv = self.get_atm_iv(underlying)
+        rv = self.realized_vol(underlying)
+
+        return Signal(
+            signal_id=uuid4(),
+            strategy_id=self.strategy_id,
+            symbol=underlying,
+            direction=SignalDirection.SHORT,  # selling vol
+            strength=min((iv - rv) / 0.10, 1.0),
+            timestamp=datetime.utcnow(),
+            metadata={
+                "structure": "straddle",  # TODO: your preferred structure
+                "iv": iv,
+                "rv": rv,
+                "vrp": iv - rv,
+                "target_dte": self.target_dte,
+                "contracts": self.contracts_per_trade,
+            },
+        )
+
+    def _should_exit(self, position: MultiLegPosition) -> bool:
+        """Check if a position should be closed.
+
+        Consider: profit target, stop loss, DTE threshold, Greeks breach.
+        """
+        if position.min_dte <= self.min_dte:
+            return True  # Approaching expiry
+
+        # TODO: add your exit conditions (P&L target, Greeks limits, etc.)
+        return False
+
+    def _roll_signal(self, position: MultiLegPosition) -> Signal:
+        """Generate a signal to roll an expiring position."""
+        return Signal(
+            signal_id=uuid4(),
+            strategy_id=self.strategy_id,
+            symbol=position.underlying,
+            direction=SignalDirection.FLAT,
+            strength=1.0,
+            timestamp=datetime.utcnow(),
+            metadata={
+                "action": "roll",
+                "position_id": position.position_id,
+                "reason": f"DTE={position.min_dte:.0f} below threshold",
+            },
+        )

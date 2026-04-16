@@ -1,0 +1,58 @@
+# ============================================================
+# QuantSystem — Cloud Deployments Registry
+# ============================================================
+# Each entry defines a remote VPS running a live trading strategy.
+# The local dashboard backend proxies status/control requests to these.
+#
+# Adding a new deployment:
+#   1. Spin up a VPS & deploy with deploy/push-to-vps.sh
+#   2. Add an entry here
+#   3. Restart local dashboard — new deployment appears in UI
+# ============================================================
+
+deployments:
+  - id: tokyo-eth-sniper
+    name: "ETH Momentum Sniper"
+    strategy_id: eth_sniper
+    host: "18.180.206.76"
+    port: 8002
+    region: ap-northeast-1
+    region_label: "Tokyo"
+    exchange: okx
+    symbol: "ETH/USDT:USDT"
+    asset_class: crypto
+    ssh_user: ubuntu
+    ssh_key_path: "qs-tokyo.pem"
+    enabled: true
+    tags: ["crypto", "momentum", "eth"]
+
+  # ── Future deployments (examples) ──
+  # - id: tokyo-btc-sniper
+  #   name: "BTC Momentum Sniper"
+  #   strategy_id: btc_sniper
+  #   host: "18.180.206.76"   # same VPS or different
+  #   port: 8003
+  #   region: ap-northeast-1
+  #   region_label: "Tokyo"
+  #   exchange: okx
+  #   symbol: "BTC/USDT:USDT"
+  #   asset_class: crypto
+  #   ssh_user: ubuntu
+  #   ssh_key_path: "qs-tokyo.pem"
+  #   enabled: true
+  #   tags: ["crypto", "momentum", "btc"]
+  #
+  # - id: virginia-spy-wheel
+  #   name: "SPY Wheel Strategy"
+  #   strategy_id: spy_wheel_strategy
+  #   host: "54.xxx.xxx.xxx"
+  #   port: 8002
+  #   region: us-east-1
+  #   region_label: "Virginia"
+  #   exchange: ibkr
+  #   symbol: "SPY"
+  #   asset_class: equity_options
+  #   ssh_user: ubuntu
+  #   ssh_key_path: "qs-virginia.pem"
+  #   enabled: false
+  #   tags: ["equity", "options", "wheel"]

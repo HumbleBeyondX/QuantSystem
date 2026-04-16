@@ -1,0 +1,197 @@
+"""${name} — ${description}
+
+Auto-generated from the 'hft' (high/medium-frequency) strategy template.
+Base class: HFTStrategyBase (orderbook microstructure, inventory, market making).
+
+Pre-built infrastructure:
+  - Orderbook microstructure features (imbalance, spread, depth, microprice)
+  - Trade-flow imbalance (buy vs sell volume)
+  - Inventory management with mean-reversion targets
+  - Market-making quote computation with inventory skew
+  - Rate limiter for order submission
+  - Adverse selection tracking
+
+Customize:
+  - on_orderbook(): react to orderbook updates (or use parent)
+  - on_tick(): react to trade ticks (or use parent)
+  - generate_signals(): produce LONG / SHORT / FLAT signals
+  - _compute_fair_value(): your microstructure alpha
+"""
+
+from __future__ import annotations
+
+import time
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
+from uuid import uuid4
+
+import numpy as np
+
+from core.enums import AssetClass, OrderSide, SignalDirection
+from core.models import Bar, Fill, OrderBookSnapshot, Signal, TargetPosition, Tick
+from strategies.base import StrategyConfig
+from strategies.base_hft import HFTStrategyBase, InventoryState, MicrostructureSnapshot
+from strategies.registry import register_strategy
+
+
+@register_strategy("${strategy_id}")
+class ${class_name}(HFTStrategyBase):
+    """${description}"""
+
+    def __init__(self, config: StrategyConfig) -> None:
+        super().__init__(config)
+
+        # ── Strategy parameters ──
+        self.imbalance_threshold = self.get_param("imbalance_threshold", 0.3)
+        self.min_spread_for_entry = self.get_param("min_spread_for_entry", 3.0)  # bps
+        self.signal_decay_seconds = self.get_param("signal_decay_seconds", 5.0)
+        self.use_trade_flow = self.get_param("use_trade_flow", True)
+        # TODO: add your strategy-specific parameters
+
+        # ── Internal state ──
+        self._last_signal_time: Dict[str, float] = {}
+        self._fair_value: Dict[str, float] = {}
+
+    # ------------------------------------------------------------------
+    # Data handlers
+    # ------------------------------------------------------------------
+
+    def on_orderbook(self, symbol: str, orderbook: OrderBookSnapshot) -> None:
+        """Process orderbook update — compute microstructure features."""
+        super().on_orderbook(symbol, orderbook)  # stores snapshot, computes features
+
+        # Update fair value estimate
+        self._fair_value[symbol] = self._compute_fair_value(symbol)
+
+    def on_tick(self, symbol: str, tick: Tick) -> None:
+        """Cache tick data for trade-flow analysis."""
+        super().on_tick(symbol, tick)
+
+    def on_fill(self, fill: Fill) -> None:
+        """Track fills for inventory and adverse selection."""
+        super().on_fill(fill)
+        self.update_inventory(fill.symbol, fill)
+
+    # ------------------------------------------------------------------
+    # Signal generation
+    # ------------------------------------------------------------------
+
+    def generate_signals(self) -> List[Signal]:
+        """Produce HFT signals.
+
+        Framework provides:
+          self.orderbook_imbalance(symbol)   — current bid/ask depth imbalance
+          self.spread_bps(symbol)            — current spread in basis points
+          self.microprice(symbol)            — volume-weighted mid price
+          self.mid_price(symbol)             — simple mid price
+          self.imbalance_ema(symbol)         — smoothed imbalance
+          self.trade_flow_imbalance(symbol)  — net buy vs sell pressure
+          self.get_inventory(symbol)         — current inventory state
+          self.compute_quotes(symbol)        — MM bid/ask with inventory skew
+          self.can_send_order()              — rate limiter check
+        """
+        signals: List[Signal] = []
+
+        for symbol in self.symbols:
+            # Rate check
+            if not self.can_send_order():
+                continue
+
+            signal = self._evaluate_symbol(symbol)
+            if signal is not None:
+                signals.append(signal)
+                self.record_order_sent()
+
+        return signals
+
+    # ------------------------------------------------------------------
+    # Core alpha logic — YOUR MICROSTRUCTURE ALPHA HERE
+    # ------------------------------------------------------------------
+
+    def _evaluate_symbol(self, symbol: str) -> Optional[Signal]:
+        """Evaluate a single symbol for signals.
+
+        Example: orderbook imbalance + trade-flow confirmation.
+        """
+        imbalance = self.orderbook_imbalance(symbol)
+        spread = self.spread_bps(symbol)
+        fair = self._fair_value.get(symbol, 0)
+        mid = self.mid_price(symbol)
+
+        if mid <= 0 or fair <= 0:
+            return None
+
+        # ── Enforce minimum spread ──
+        if spread < self.min_spread_for_entry:
+            return None
+
+        # ── Signal decay: avoid firing too frequently ──
+        now = time.time()
+        last = self._last_signal_time.get(symbol, 0)
+        if now - last < self.signal_decay_seconds:
+            return None
+
+        # ── Compute alpha ──
+        # Orderbook imbalance signal
+        ob_signal = imbalance  # positive = buy pressure
+
+        # Trade-flow confirmation
+        flow_signal = 0.0
+        if self.use_trade_flow:
+            flow_signal = self.trade_flow_imbalance(symbol, seconds=10.0)
+
+        # Combined signal
+        combined = 0.6 * ob_signal + 0.4 * flow_signal
+
+        # ── Threshold check ──
+        if abs(combined) < self.imbalance_threshold:
+            return None
+
+        # ── Inventory adjustment ──
+        inv = self.get_inventory(symbol)
+        # Reduce signal if it would increase inventory beyond comfort
+        if (combined > 0 and inv.inventory_ratio > 0.5) or \
+           (combined < 0 and inv.inventory_ratio < -0.5):
+            combined *= 0.5  # dampen signal against inventory
+
+        direction = SignalDirection.LONG if combined > 0 else SignalDirection.SHORT
+        strength = min(abs(combined), 1.0)
+
+        self._last_signal_time[symbol] = now
+
+        return self._make_signal(
+            symbol, direction, strength,
+            qty=self.quote_size,
+            imbalance=imbalance,
+            trade_flow=flow_signal,
+            combined=combined,
+            spread_bps=spread,
+            inventory_ratio=inv.inventory_ratio,
+        )
+
+    def _compute_fair_value(self, symbol: str) -> float:
+        """Estimate fair value from microstructure data.
+
+        Default: microprice (volume-weighted mid). Override for better models.
+        """
+        # Microprice is a better fair-value estimator than mid
+        mp = self.microprice(symbol)
+        if mp > 0:
+            return mp
+
+        return self.mid_price(symbol)
+
+    # ------------------------------------------------------------------
+    # Market making (optional — uncomment to use)
+    # ------------------------------------------------------------------
+
+    # def generate_mm_quotes(self, symbol: str):
+    #     """Generate two-sided quotes for market making."""
+    #     quotes = self.compute_quotes(symbol)
+    #     if quotes is None:
+    #         return None
+    #     bid_px, bid_qty, ask_px, ask_qty = quotes
+    #     return {
+    #         "bid": {"price": bid_px, "qty": bid_qty},
+    #         "ask": {"price": ask_px, "qty": ask_qty},
+    #     }
