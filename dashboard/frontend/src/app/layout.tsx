@@ -18,6 +18,7 @@ const navItems = [
   { href: '/backtest', label: 'Backtest', icon: '↻' },
   { href: '/risk', label: 'Risk', icon: '⛊' },
   { href: '/data', label: 'Data Layer', icon: '▥' },
+  { href: '/logs', label: 'Logs', icon: '≡' },
 ]
 
 export default function RootLayout({

@@ -32,9 +32,12 @@ from core.logging import get_logger
 
 logger = get_logger(__name__)
 
+from core.paths import get_resource_root  # noqa: E402
+
 router = APIRouter()
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+# Workshop reads bundled templates / config / scripts.
+PROJECT_ROOT = get_resource_root()
 
 # In-memory backtest result store (replace with DB later)
 _backtest_results: Dict[str, Dict[str, Any]] = {}

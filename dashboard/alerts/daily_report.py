@@ -37,12 +37,12 @@ from typing import Any, Dict, List, Optional
 import yaml
 
 from core.logging import get_logger
+from core.paths import get_config_path
 
 logger = get_logger(__name__)
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-DEFAULT_CONFIG = PROJECT_ROOT / "config" / "reports.yaml"
-DEPLOYMENTS_CONFIG = PROJECT_ROOT / "config" / "deployments.yaml"
+DEFAULT_CONFIG = get_config_path("reports.yaml")
+DEPLOYMENTS_CONFIG = get_config_path("deployments.yaml")
 
 
 # ============================================================

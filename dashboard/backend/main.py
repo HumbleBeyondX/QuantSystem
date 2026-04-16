@@ -18,8 +18,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from core.logging import get_logger
-from dashboard.backend.routers import backtest, data_layer, deployments, live_trading, market_data, paper_trading, portfolio, reports, risk, strategies, system, workshop
+from core.logging import get_logger, setup_logging
+from core.paths import ensure_user_dir_scaffolded, get_env_path
+from dashboard.backend.routers import backtest, data_layer, deployments, live_trading, logs as logs_router, market_data, paper_trading, portfolio, reports, risk, strategies, system, workshop
 
 logger = get_logger(__name__)
 
@@ -35,7 +36,24 @@ async def lifespan(app: FastAPI):
     and registers it with the live_trading router for API access.
     """
     global _runner_task
+
+    # Ensure user data dir exists and seed defaults on first run.
+    ensure_user_dir_scaffolded()
+
+    # Configure rotating file logging now that the logs dir exists.
+    setup_logging(level="INFO", json_format=False)
+
     logger.info("dashboard_backend_starting")
+
+    # Always load user's .env if present (API keys, recipient addresses)
+    try:
+        from dotenv import load_dotenv
+        user_env = get_env_path()
+        if user_env.exists():
+            load_dotenv(user_env, override=False)
+            logger.info("env_loaded", path=str(user_env))
+    except ImportError:
+        pass
 
     runner = None
     live_config = os.environ.get("QS_LIVE_CONFIG", "")
@@ -46,14 +64,6 @@ async def lifespan(app: FastAPI):
         if config_path.exists():
             logger.info("live_runner_auto_start", config=str(config_path))
             try:
-                # Load .env for API keys
-                try:
-                    from dotenv import load_dotenv
-                    env_path = Path(".env")
-                    if env_path.exists():
-                        load_dotenv(env_path, override=False)
-                except ImportError:
-                    pass
 
                 from core.live_trading_runner import LiveTradingRunner
                 runner = LiveTradingRunner(str(config_path))
@@ -136,6 +146,7 @@ app.include_router(workshop.router, prefix="/api/workshop", tags=["Workshop"])
 app.include_router(data_layer.router, prefix="/api/data", tags=["Data Layer"])
 app.include_router(deployments.router, tags=["Cloud Deployments"])
 app.include_router(reports.router, tags=["Reports"])
+app.include_router(logs_router.router, tags=["Logs"])
 
 
 @app.get("/")

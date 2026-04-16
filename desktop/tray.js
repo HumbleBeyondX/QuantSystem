@@ -2,7 +2,7 @@
  * System tray — shows strategy status, provides quick actions.
  */
 
-const { Tray, Menu, nativeImage } = require("electron");
+const { Tray, Menu, nativeImage, shell, app } = require("electron");
 const path = require("path");
 const http = require("http");
 
@@ -76,9 +76,27 @@ function setupTray(mainWindow, backendUrl) {
       },
       { type: "separator" },
       {
+        label: "Open App Data Folder",
+        click: () => {
+          shell.openPath(app.getPath("userData"));
+        },
+      },
+      {
+        label: "Edit .env",
+        click: () => {
+          shell.openPath(path.join(app.getPath("userData"), ".env"));
+        },
+      },
+      {
+        label: "Open Logs Folder",
+        click: () => {
+          shell.openPath(path.join(app.getPath("userData"), "logs"));
+        },
+      },
+      { type: "separator" },
+      {
         label: "Quit",
         click: () => {
-          const { app } = require("electron");
           app.quit();
         },
       },

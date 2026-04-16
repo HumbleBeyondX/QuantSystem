@@ -45,7 +45,13 @@ _session_factory: Optional[async_sessionmaker[AsyncSession]] = None
 
 def _default_sqlite_url() -> str:
     """Return the default SQLite URL, ensuring the directory exists."""
-    db_dir = Path(os.environ.get("QS_DATA_DIR", Path(__file__).resolve().parents[2] / "data"))
+    override = os.environ.get("QS_DATA_DIR")
+    if override:
+        db_dir = Path(override)
+    else:
+        # Local import to avoid cycle at module-load time
+        from core.paths import get_data_dir
+        db_dir = get_data_dir()
     db_dir.mkdir(parents=True, exist_ok=True)
     db_path = db_dir / "quantsystem.db"
     return f"sqlite+aiosqlite:///{db_path}"

@@ -99,11 +99,16 @@ def _normalize_result(bid: str, raw: Dict[str, Any]) -> Dict[str, Any]:
 
     return result
 
+from core.paths import get_data_dir, get_resource_root  # noqa: E402
+
 router = APIRouter()
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-RESULTS_DIR = PROJECT_ROOT / "results"
+# Resource root = bundled scripts/config/data-samples (read-only).
+# Results go to user data dir so they survive app upgrades.
+PROJECT_ROOT = get_resource_root()
+RESULTS_DIR = get_data_dir() / "results"
 DATA_DIR = PROJECT_ROOT / "data" / "sample"
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # In-memory store for backtest results (maps backtest_id -> result dict)
 _backtest_store: Dict[str, Dict[str, Any]] = {}

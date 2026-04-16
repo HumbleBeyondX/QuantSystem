@@ -29,3 +29,11 @@ scipy>=1.11
 fastapi>=0.108
 uvicorn[standard]>=0.25
 websockets>=12.0
+
+# US market data (daily report snapshot)
+yfinance>=0.2.60
+
+# Email notifications — Gmail OAuth2
+google-auth>=2.0
+google-auth-oauthlib>=1.0
+google-api-python-client>=2.0

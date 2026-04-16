@@ -26,12 +26,12 @@ from typing import Optional
 import yaml
 
 from core.logging import get_logger
+from core.paths import get_config_path
 from dashboard.alerts.daily_report import DailyReportGenerator
 
 logger = get_logger(__name__)
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-CONFIG_PATH = PROJECT_ROOT / "config" / "reports.yaml"
+CONFIG_PATH = get_config_path("reports.yaml")
 
 
 class DailyReportScheduler:

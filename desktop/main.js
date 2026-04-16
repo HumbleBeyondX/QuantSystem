@@ -1,54 +1,89 @@
 /**
  * QuantSystem Desktop — Electron Main Process
  *
- * Responsibilities:
- * - Spawn Python backend as a child process
- * - Wait for backend health check before loading frontend
- * - Load static frontend in production, dev server in development
- * - System tray with strategy status indicators
- * - Graceful shutdown: signal Python → wait → force kill
+ * Production responsibilities:
+ *   - Single-instance lock (prevent duplicate port-8002 backends)
+ *   - File logging via electron-log (%APPDATA%/QuantSystem/logs/electron.log)
+ *   - Validate user .env before loading UI (warn, don't block)
+ *   - Spawn qs-backend.exe (bundled) with BackendWatchdog
+ *   - Load static Next.js frontend via app:// protocol
+ *   - System tray with emergency controls
+ *   - Graceful shutdown signaling Python → wait → force kill
  */
 
-const { app, BrowserWindow, ipcMain, dialog, protocol, net } = require("electron");
-const { spawn } = require("child_process");
+const { app, BrowserWindow, ipcMain, dialog, protocol, net, shell } = require("electron");
 const path = require("path");
 const http = require("http");
 const fs = require("fs");
 const { pathToFileURL } = require("url");
+const log = require("electron-log/main");
+
 const { setupTray } = require("./tray");
 const { setupUpdater } = require("./updater");
+const { BackendWatchdog } = require("./watchdog");
+const { validateEnv, showEnvSetupDialog } = require("./env_check");
 
+// ------------------------------------------------------------------
+// Single-instance lock — ALWAYS acquire first. If we lose, exit.
+// ------------------------------------------------------------------
+
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  // Another instance is already running — the other instance will be
+  // notified via second-instance event.
+  app.quit();
+  process.exit(0);
+}
+
+// ------------------------------------------------------------------
+// Electron-log setup — route console.* and main process logs to file.
+// ------------------------------------------------------------------
+
+const userLogsDir = path.join(app.getPath("userData"), "logs");
+try {
+  fs.mkdirSync(userLogsDir, { recursive: true });
+} catch (_) {}
+
+log.initialize();
+log.transports.file.resolvePathFn = () => path.join(userLogsDir, "electron.log");
+log.transports.file.maxSize = 10 * 1024 * 1024; // 10 MB per file
+log.transports.file.archiveLog = file => {
+  // rotate: electron.log → electron.1.log, electron.1.log → electron.2.log, ...
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  return path.join(userLogsDir, `electron-${ts}.log`);
+};
+log.transports.console.level = "info";
+log.transports.file.level = "info";
+Object.assign(console, log.functions);
+
+// ------------------------------------------------------------------
 // Configuration
+// ------------------------------------------------------------------
+
 const isDev = process.env.NODE_ENV === "development";
 const BACKEND_PORT = process.env.QS_BACKEND_PORT || 8002;
 const BACKEND_HOST = "127.0.0.1";
 const BACKEND_URL = `http://${BACKEND_HOST}:${BACKEND_PORT}`;
-const HEALTH_CHECK_INTERVAL = 500; // ms
-const HEALTH_CHECK_TIMEOUT = 30000; // ms
-const SHUTDOWN_GRACE_MS = 5000;
+const HEALTH_CHECK_INTERVAL = 500;
+const HEALTH_CHECK_TIMEOUT = 30000;
 
 let mainWindow = null;
-let pythonProcess = null;
+let watchdog = null;
 let tray = null;
+let envValidationResult = null;
 
 // ------------------------------------------------------------------
-// Path helpers — resolve project root correctly in dev vs packaged
+// Path helpers
 // ------------------------------------------------------------------
 
 function getProjectRoot() {
-  if (isDev) {
-    // Development: desktop/ is inside project root
-    return path.resolve(__dirname, "..");
-  }
-  // Packaged: app is in resources/app.asar, project root is alongside
-  // Expect project to be installed / available at a known path
-  // For portable builds, look for a sibling QuantSystem folder
-  const possibleRoots = [
-    path.resolve(__dirname, ".."),                          // dev
-    path.resolve(process.resourcesPath, "..", ".."),        // installed
-    path.resolve(app.getPath("exe"), "..", ".."),            // exe dir parent
+  if (isDev) return path.resolve(__dirname, "..");
+  const candidates = [
+    path.resolve(__dirname, ".."),
+    path.resolve(process.resourcesPath, "..", ".."),
+    path.resolve(app.getPath("exe"), "..", ".."),
   ];
-  for (const root of possibleRoots) {
+  for (const root of candidates) {
     if (fs.existsSync(path.join(root, "dashboard", "backend", "main.py"))) {
       return root;
     }
@@ -57,160 +92,157 @@ function getProjectRoot() {
 }
 
 function getFrontendPath() {
-  if (isDev) {
-    return null; // Use dev server URL
-  }
-  // Packaged: static frontend in resources/frontend/
-  const resourceFrontend = path.join(process.resourcesPath, "frontend");
-  if (fs.existsSync(resourceFrontend)) {
-    return resourceFrontend;
-  }
-  // Fallback: try next to desktop/
-  const localBuild = path.resolve(__dirname, "..", "dashboard", "frontend", "out");
-  if (fs.existsSync(localBuild)) {
-    return localBuild;
-  }
+  if (isDev) return null;
+  const packaged = path.join(process.resourcesPath, "frontend");
+  if (fs.existsSync(packaged)) return packaged;
+  const local = path.resolve(__dirname, "..", "dashboard", "frontend", "out");
+  if (fs.existsSync(local)) return local;
+  return null;
+}
+
+function getBundledBackendPath() {
+  // Packaged: resources/backend/qs-backend.exe
+  const packaged = path.join(
+    process.resourcesPath,
+    "backend",
+    "qs-backend.exe"
+  );
+  if (fs.existsSync(packaged)) return packaged;
+  // Dev fallback (if user built the bundle locally):
+  const local = path.join(
+    __dirname,
+    "..",
+    "deploy",
+    "dist",
+    "qs-backend",
+    "qs-backend.exe"
+  );
+  if (fs.existsSync(local)) return local;
   return null;
 }
 
 // ------------------------------------------------------------------
-// Python Backend Process Management
+// Backend startup — prefer bundled exe, fall back to system Python (dev)
 // ------------------------------------------------------------------
 
-function findPython() {
-  return process.platform === "win32" ? "python" : "python3";
+function buildBackendEnv() {
+  return {
+    ...process.env,
+    PYTHONUNBUFFERED: "1",
+    QS_BACKEND_PORT: String(BACKEND_PORT),
+    QS_BACKEND_HOST: BACKEND_HOST,
+    QS_APP_DATA_DIR: app.getPath("userData"),
+    QS_USE_APPDATA_IN_DEV: "1",
+    // Deliberately DO NOT set QS_LIVE_CONFIG — desktop is monitor + paper only.
+  };
 }
 
-function startBackend() {
+function startBackendWithWatchdog() {
+  const bundled = getBundledBackendPath();
+  const env = buildBackendEnv();
   const projectRoot = getProjectRoot();
-  const pythonExe = findPython();
 
-  const args = [
-    "-m",
-    "uvicorn",
-    "dashboard.backend.main:app",
-    "--host",
-    BACKEND_HOST,
-    "--port",
-    String(BACKEND_PORT),
-    "--log-level",
-    "info",
-  ];
+  let executable;
+  let args;
+  let cwd;
 
-  console.log(`[Desktop] Starting backend: ${pythonExe} ${args.join(" ")}`);
-  console.log(`[Desktop] Project root: ${projectRoot}`);
+  if (bundled && !isDev) {
+    executable = bundled;
+    args = [];
+    cwd = path.dirname(bundled);
+    log.info(`[main] Using bundled backend: ${bundled}`);
+  } else {
+    // Dev fallback: system Python
+    executable = process.platform === "win32" ? "python" : "python3";
+    args = [
+      "-m",
+      "uvicorn",
+      "dashboard.backend.main:app",
+      "--host",
+      BACKEND_HOST,
+      "--port",
+      String(BACKEND_PORT),
+      "--log-level",
+      "info",
+    ];
+    cwd = projectRoot;
+    log.info(`[main] Using dev backend: ${executable} ${args.join(" ")}`);
+  }
 
-  pythonProcess = spawn(pythonExe, args, {
-    cwd: projectRoot,
-    env: {
-      ...process.env,
-      PYTHONUNBUFFERED: "1",
-      QS_BACKEND_PORT: String(BACKEND_PORT),
-    },
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-
-  pythonProcess.stdout.on("data", (data) => {
-    process.stdout.write(`[Backend] ${data}`);
-  });
-
-  pythonProcess.stderr.on("data", (data) => {
-    process.stderr.write(`[Backend] ${data}`);
-  });
-
-  pythonProcess.on("error", (err) => {
-    console.error("[Desktop] Failed to start Python backend:", err.message);
-    dialog.showErrorBox(
-      "Backend Error",
-      `Failed to start Python backend: ${err.message}\n\nMake sure Python is installed and in your PATH.`
-    );
-  });
-
-  pythonProcess.on("exit", (code, signal) => {
-    console.log(
-      `[Desktop] Python backend exited (code=${code}, signal=${signal})`
-    );
-    pythonProcess = null;
-  });
-}
-
-function stopBackend() {
-  return new Promise((resolve) => {
-    if (!pythonProcess) {
-      resolve();
-      return;
-    }
-
-    console.log("[Desktop] Stopping backend...");
-
-    if (process.platform === "win32") {
-      spawn("taskkill", ["/pid", String(pythonProcess.pid), "/t"]);
-    } else {
-      pythonProcess.kill("SIGTERM");
-    }
-
-    const forceKillTimer = setTimeout(() => {
-      if (pythonProcess) {
-        console.log("[Desktop] Force-killing backend...");
-        if (process.platform === "win32") {
-          spawn("taskkill", ["/pid", String(pythonProcess.pid), "/f", "/t"]);
-        } else {
-          pythonProcess.kill("SIGKILL");
-        }
-      }
-      resolve();
-    }, SHUTDOWN_GRACE_MS);
-
-    if (pythonProcess) {
-      pythonProcess.on("exit", () => {
-        clearTimeout(forceKillTimer);
-        resolve();
+  watchdog = new BackendWatchdog({
+    executablePath: executable,
+    args,
+    cwd,
+    env,
+    logger: log,
+    onCrash: async info => {
+      const response = await dialog.showMessageBox(mainWindow ?? null, {
+        type: "error",
+        title: "QuantSystem — Backend Unavailable",
+        message: "The backend process has crashed repeatedly.",
+        detail:
+          `The backend exited ${info.attempts} times in rapid succession.\n\n` +
+          `A crash report has been written to:\n  ${userLogsDir}\n\n` +
+          `Click "Open logs folder" to inspect, or quit to exit the app.`,
+        buttons: ["Open logs folder", "Quit"],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
       });
-    } else {
-      clearTimeout(forceKillTimer);
-      resolve();
-    }
+      if (response.response === 0) {
+        shell.openPath(userLogsDir);
+      }
+      app.quit();
+    },
   });
+
+  watchdog.start();
 }
 
 // ------------------------------------------------------------------
-// Health Check
+// Backend health check
 // ------------------------------------------------------------------
 
 function waitForBackend() {
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
-
     const check = () => {
       if (Date.now() - startTime > HEALTH_CHECK_TIMEOUT) {
         reject(new Error("Backend health check timed out"));
         return;
       }
-
-      const req = http.get(`${BACKEND_URL}/health`, (res) => {
+      const req = http.get(`${BACKEND_URL}/health`, res => {
         if (res.statusCode === 200) {
           resolve();
         } else {
           setTimeout(check, HEALTH_CHECK_INTERVAL);
         }
       });
-
-      req.on("error", () => {
-        setTimeout(check, HEALTH_CHECK_INTERVAL);
-      });
-
+      req.on("error", () => setTimeout(check, HEALTH_CHECK_INTERVAL));
       req.setTimeout(2000, () => {
         req.destroy();
         setTimeout(check, HEALTH_CHECK_INTERVAL);
       });
     };
-
     check();
   });
 }
 
+function isBackendAlreadyRunning() {
+  return new Promise(resolve => {
+    const req = http.get(`${BACKEND_URL}/health`, res => {
+      resolve(res.statusCode === 200);
+    });
+    req.on("error", () => resolve(false));
+    req.setTimeout(1000, () => {
+      req.destroy();
+      resolve(false);
+    });
+  });
+}
+
 // ------------------------------------------------------------------
-// Window Management
+// Main window
 // ------------------------------------------------------------------
 
 function createMainWindow() {
@@ -230,29 +262,27 @@ function createMainWindow() {
   });
 
   if (isDev) {
-    // Development: load from Next.js dev server
-    const FRONTEND_DEV_URL =
-      process.env.QS_FRONTEND_URL || "http://localhost:3000";
-    mainWindow.loadURL(FRONTEND_DEV_URL);
+    const devUrl = process.env.QS_FRONTEND_URL || "http://localhost:3000";
+    mainWindow.loadURL(devUrl);
     mainWindow.webContents.openDevTools({ mode: "right" });
   } else {
-    // Production: load via custom app:// protocol for correct asset resolution
     const frontendPath = getFrontendPath();
     if (frontendPath) {
-      console.log(`[Desktop] Loading frontend via app:// protocol from: ${frontendPath}`);
       mainWindow.loadURL("app://./index.html");
     } else {
-      // Fallback: load from backend URL
-      console.log(`[Desktop] No static frontend found, loading from: ${BACKEND_URL}`);
       mainWindow.loadURL(BACKEND_URL);
     }
   }
 
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
+    if (envValidationResult && !envValidationResult.ok) {
+      // Send warning banner data to renderer via IPC
+      mainWindow.webContents.send("env-validation", envValidationResult);
+    }
   });
 
-  mainWindow.on("close", (event) => {
+  mainWindow.on("close", event => {
     if (tray) {
       event.preventDefault();
       mainWindow.hide();
@@ -265,10 +295,20 @@ function createMainWindow() {
 }
 
 // ------------------------------------------------------------------
-// IPC Handlers
+// IPC
 // ------------------------------------------------------------------
 
 ipcMain.handle("get-backend-url", () => BACKEND_URL);
+ipcMain.handle("get-env-validation", () => envValidationResult);
+ipcMain.handle("open-app-data-folder", () => {
+  shell.openPath(app.getPath("userData"));
+  return true;
+});
+ipcMain.handle("open-env-file", () => {
+  const envPath = path.join(app.getPath("userData"), ".env");
+  shell.openPath(envPath);
+  return true;
+});
 
 ipcMain.handle("emergency-stop", async () => {
   try {
@@ -282,11 +322,8 @@ ipcMain.handle("emergency-stop", async () => {
 });
 
 // ------------------------------------------------------------------
-// Custom Protocol — serves static frontend with correct path resolution
+// Custom app:// protocol for static frontend
 // ------------------------------------------------------------------
-// Must be called BEFORE app.whenReady().
-// This allows absolute paths like /_next/static/css/xxx.css to resolve
-// correctly from any page (root, /workshop/, /strategies/xxx/, etc.)
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -301,87 +338,91 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
+function registerAppProtocol() {
+  const frontendDir = getFrontendPath();
+  if (!frontendDir || isDev) return;
+  protocol.handle("app", request => {
+    const url = new URL(request.url);
+    let pathname = decodeURIComponent(url.pathname);
+    if (pathname.startsWith("/")) pathname = pathname.substring(1);
+    if (!pathname) pathname = "index.html";
+    let filePath = path.join(frontendDir, pathname);
+    try {
+      if (fs.statSync(filePath).isDirectory()) {
+        filePath = path.join(filePath, "index.html");
+      }
+    } catch {
+      if (!path.extname(filePath) && fs.existsSync(filePath + ".html")) {
+        filePath = filePath + ".html";
+      }
+    }
+    return net.fetch(pathToFileURL(filePath).toString());
+  });
+  log.info(`[main] Custom app:// protocol registered → ${frontendDir}`);
+}
+
 // ------------------------------------------------------------------
-// App Lifecycle
+// Second instance handler
+// ------------------------------------------------------------------
+
+app.on("second-instance", () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    if (!mainWindow.isVisible()) mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
+// ------------------------------------------------------------------
+// Lifecycle
 // ------------------------------------------------------------------
 
 app.whenReady().then(async () => {
-  console.log("[Desktop] QuantSystem starting...");
+  log.info("[main] QuantSystem starting…");
+  log.info(`[main] userData: ${app.getPath("userData")}`);
 
-  // Register custom protocol handler for serving static frontend
-  const frontendDir = getFrontendPath();
-  if (frontendDir && !isDev) {
-    protocol.handle("app", (request) => {
-      const url = new URL(request.url);
-      let pathname = decodeURIComponent(url.pathname);
+  registerAppProtocol();
 
-      // Remove leading slash for path.join
-      if (pathname.startsWith("/")) {
-        pathname = pathname.substring(1);
-      }
-
-      // Default to index.html for empty path
-      if (!pathname) {
-        pathname = "index.html";
-      }
-
-      let filePath = path.join(frontendDir, pathname);
-
-      // If path is a directory, serve its index.html
-      try {
-        if (fs.statSync(filePath).isDirectory()) {
-          filePath = path.join(filePath, "index.html");
-        }
-      } catch {
-        // File doesn't exist — try .html extension for extensionless paths
-        if (!path.extname(filePath) && fs.existsSync(filePath + ".html")) {
-          filePath = filePath + ".html";
-        }
-      }
-
-      // Convert to proper file:// URL (handles Windows backslashes)
-      return net.fetch(pathToFileURL(filePath).toString());
-    });
-    console.log(`[Desktop] Custom 'app://' protocol registered → ${frontendDir}`);
-  }
-
-  // Check if backend is already running
-  let backendAlreadyRunning = false;
-  try {
-    await new Promise((resolve, reject) => {
-      const req = http.get(`${BACKEND_URL}/health`, (res) => {
-        backendAlreadyRunning = res.statusCode === 200;
-        resolve();
-      });
-      req.on("error", () => resolve());
-      req.setTimeout(1000, () => { req.destroy(); resolve(); });
-    });
-  } catch { /* ignore */ }
-
-  if (backendAlreadyRunning) {
-    console.log("[Desktop] Backend already running on port " + BACKEND_PORT);
+  // Pre-check: if another backend is already running on the port, don't
+  // spawn another (might be a dev uvicorn the user started). We'll just
+  // connect to it.
+  const alreadyUp = await isBackendAlreadyRunning();
+  if (alreadyUp) {
+    log.info(`[main] Backend already running on :${BACKEND_PORT} — attaching`);
   } else {
-    startBackend();
+    startBackendWithWatchdog();
   }
 
-  // Wait for backend to be ready
   try {
     await waitForBackend();
-    console.log("[Desktop] Backend is ready");
+    log.info("[main] Backend is ready");
   } catch (err) {
-    console.error("[Desktop] Backend failed to start:", err.message);
+    log.error(`[main] Backend failed to start: ${err.message}`);
     dialog.showErrorBox(
-      "Startup Error",
-      "The Python backend failed to start. Check the console for details."
+      "QuantSystem — Startup Error",
+      `The backend did not become healthy within ${HEALTH_CHECK_TIMEOUT / 1000}s.\n\n` +
+        `Check logs at ${userLogsDir}`
     );
+  }
+
+  // Validate .env AFTER the backend ran its scaffolding (creates the template).
+  const envPath = path.join(app.getPath("userData"), ".env");
+  envValidationResult = validateEnv(envPath);
+  if (!envValidationResult.ok) {
+    const choice = await showEnvSetupDialog(null, envValidationResult);
+    if (choice === 2) {
+      log.info("[main] User chose to quit from env setup dialog");
+      app.quit();
+      return;
+    }
+    // Re-validate after user potentially edited the file
+    envValidationResult = validateEnv(envPath);
   }
 
   createMainWindow();
   tray = setupTray(mainWindow, BACKEND_URL);
 
-  if (!isDev) {
-    setupUpdater(mainWindow);
-  }
+  if (!isDev) setupUpdater(mainWindow);
 });
 
 app.on("activate", () => {
@@ -398,8 +439,11 @@ app.on("window-all-closed", () => {
   }
 });
 
-app.on("before-quit", async (event) => {
+app.on("before-quit", async event => {
   event.preventDefault();
-  await stopBackend();
+  log.info("[main] Graceful shutdown initiated");
+  if (watchdog) {
+    await watchdog.stop();
+  }
   app.exit(0);
 });

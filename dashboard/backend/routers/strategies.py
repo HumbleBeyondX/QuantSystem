@@ -21,13 +21,17 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
+from core.paths import get_data_dir, get_env_path, get_logs_dir, get_resource_root  # noqa: E402
+
 router = APIRouter()
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-STATE_DIR = PROJECT_ROOT / "data" / "live_state"
-LOG_DIR = PROJECT_ROOT / "logs" / "paper_trading"
-DEPLOY_FILE = PROJECT_ROOT / "data" / "strategy_deployments.json"
-ENV_FILE = PROJECT_ROOT / ".env"
+PROJECT_ROOT = get_resource_root()
+STATE_DIR = get_data_dir() / "live_state"
+LOG_DIR = get_logs_dir() / "paper_trading"
+DEPLOY_FILE = get_data_dir() / "strategy_deployments.json"
+ENV_FILE = get_env_path()
+STATE_DIR.mkdir(parents=True, exist_ok=True)
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ── Schemas ────────────────────────────────────────────────────

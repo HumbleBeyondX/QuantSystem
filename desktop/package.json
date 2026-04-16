@@ -1,6 +1,6 @@
 {
   "name": "quantsystem-desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "QuantSystem Desktop — Production Quantitative Trading Platform",
   "main": "main.js",
   "author": "QuantSystem",
@@ -13,6 +13,7 @@
     "build:dir": "electron-builder --win --dir"
   },
   "dependencies": {
+    "electron-log": "^5.4.3",
     "electron-updater": "^6.1.0"
   },
   "devDependencies": {
@@ -31,24 +32,44 @@
       "preload.js",
       "tray.js",
       "updater.js",
+      "watchdog.js",
+      "env_check.js",
       "icons/**/*"
     ],
     "extraResources": [
       {
         "from": "../dashboard/frontend/out",
         "to": "frontend",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../deploy/dist/qs-backend",
+        "to": "backend",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../deploy/.env.example",
+        "to": ".env.example"
       }
     ],
     "win": {
       "target": ["nsis"],
-      "icon": "icons/icon.ico"
+      "icon": "icons/icon.ico",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
+      "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "shortcutName": "QuantSystem",
+      "uninstallDisplayName": "QuantSystem Trading Platform",
+      "deleteAppDataOnUninstall": false
     }
   }
 }

@@ -34,12 +34,16 @@ from core.logging import get_logger
 
 logger = get_logger(__name__)
 
+from core.paths import get_data_dir, get_logs_dir, get_resource_root  # noqa: E402
+
 router = APIRouter()
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-STATE_DIR = PROJECT_ROOT / "data" / "live_state"
-LOG_DIR = PROJECT_ROOT / "logs" / "paper_trading"
-ALERT_CONFIG_FILE = PROJECT_ROOT / "data" / "alert_config.json"
+PROJECT_ROOT = get_resource_root()
+STATE_DIR = get_data_dir() / "live_state"
+LOG_DIR = get_logs_dir() / "paper_trading"
+ALERT_CONFIG_FILE = get_data_dir() / "alert_config.json"
+STATE_DIR.mkdir(parents=True, exist_ok=True)
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ── Schemas ──────────────────────────────────────────────────────

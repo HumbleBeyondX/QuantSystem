@@ -27,10 +27,12 @@ import secrets
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from core.paths import get_data_dir
+
 logger = logging.getLogger(__name__)
 
-# Default vault location
-_DEFAULT_VAULT_PATH = Path(__file__).resolve().parents[2] / "data" / "vault.enc"
+# Default vault location (user data dir — writable, survives app upgrades)
+_DEFAULT_VAULT_PATH = get_data_dir() / "vault.enc"
 
 
 class KeyVault:

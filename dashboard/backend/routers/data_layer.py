@@ -23,10 +23,13 @@ import yaml
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from core.paths import get_data_dir, get_resource_root  # noqa: E402
+
 router = APIRouter()
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-CONFIG_FILE = PROJECT_ROOT / "config" / "settings.yaml"
+# Settings file is user-editable (user dir), connectors/samples are bundled.
+PROJECT_ROOT = get_resource_root()
+CONFIG_FILE = get_data_dir().parent / "config" / "settings.yaml"
 DATA_DIR = PROJECT_ROOT / "data"
 CONNECTORS_DIR = DATA_DIR / "connectors"
 SAMPLE_DIR = DATA_DIR / "sample"
@@ -316,8 +319,9 @@ def _scan_inventory() -> List[DatasetInfo]:
                 freshness="archived",
             ))
 
-    # Check for backtest data / logs
-    log_dir = PROJECT_ROOT / "logs" / "paper_trading"
+    # Check for backtest data / logs (user dir, persistent)
+    from core.paths import get_logs_dir
+    log_dir = get_logs_dir() / "paper_trading"
     if log_dir.exists():
         for f in log_dir.glob("*.jsonl"):
             size_mb = f.stat().st_size / (1024 * 1024)

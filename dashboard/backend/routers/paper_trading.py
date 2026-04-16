@@ -22,14 +22,17 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel
 
+from core.paths import get_data_dir, get_env_path, get_logs_dir, get_resource_root
+
 router = APIRouter()
 
-# Project root
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-
-STATE_DIR = PROJECT_ROOT / "data" / "live_state"
-LOG_DIR = PROJECT_ROOT / "logs" / "paper_trading"
-ENV_FILE = PROJECT_ROOT / ".env"
+# Paths: resource root for bundled scripts, user data dir for runtime state
+PROJECT_ROOT = get_resource_root()
+STATE_DIR = get_data_dir() / "live_state"
+LOG_DIR = get_logs_dir() / "paper_trading"
+ENV_FILE = get_env_path()
+STATE_DIR.mkdir(parents=True, exist_ok=True)
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # Strategy → file mappings (add new strategies here)
 STATE_FILE_MAP = {

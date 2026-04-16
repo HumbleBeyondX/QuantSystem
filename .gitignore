@@ -84,3 +84,9 @@ logs/
 models/*.pkl
 models/*.joblib
 models/*.pt
+
+# PyInstaller / Electron build artifacts
+deploy/dist/
+deploy/build/
+desktop/dist/
+*.spec.bak
