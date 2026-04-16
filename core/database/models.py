@@ -264,6 +264,49 @@ class BacktestResultRecord(Base):
 
 
 # ------------------------------------------------------------------
+# Factor Research (alpha mining / attribution)
+# ------------------------------------------------------------------
+
+class FactorEvaluationRecord(Base):
+    """Per-factor evaluation result — one row per (factor, symbol, timeframe, horizon)."""
+
+    __tablename__ = "factor_evaluations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    eval_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, default=_new_uuid)
+
+    # Identity
+    factor_name: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    symbol: Mapped[str] = mapped_column(String(32), nullable=False)
+    timeframe: Mapped[str] = mapped_column(String(8), nullable=False, default="1h")
+    horizon_bars: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Metrics
+    ic_mean: Mapped[float] = mapped_column(Float, nullable=False)
+    ic_std: Mapped[float] = mapped_column(Float, nullable=False)
+    ir: Mapped[float] = mapped_column(Float, nullable=False)  # Information Ratio
+    rank_ic: Mapped[float] = mapped_column(Float, nullable=False)
+    quintile_spread_bps: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    t_stat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    n_obs: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Blobs
+    ic_series_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # rolling IC
+    decay_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)       # IC at multi horizons
+    eval_config_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    start_date: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    end_date: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_factor_eval_lookup", "factor_name", "symbol", "timeframe", "horizon_bars"),
+        Index("ix_factor_eval_recent", "evaluated_at"),
+    )
+
+
+# ------------------------------------------------------------------
 # Sync Tracking (for cloud bidirectional sync)
 # ------------------------------------------------------------------
 

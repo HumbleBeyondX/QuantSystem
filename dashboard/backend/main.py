@@ -96,6 +96,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("daily_report_scheduler_start_failed", error=str(e))
 
+    # Start cloud sync scheduler (no-op if Supabase not configured)
+    from core.services.cloud_sync_scheduler import get_cloud_sync_scheduler
+    cloud_scheduler = get_cloud_sync_scheduler()
+    try:
+        await cloud_scheduler.start()
+        logger.info("cloud_sync_scheduler_started", status=cloud_scheduler.status())
+    except Exception as e:
+        logger.error("cloud_sync_scheduler_start_failed", error=str(e))
+
     logger.info("dashboard_backend_ready")
 
     yield
@@ -106,6 +115,15 @@ async def lifespan(app: FastAPI):
         await scheduler.stop()
     except Exception as e:
         logger.warning("daily_report_scheduler_stop_failed", error=str(e))
+    try:
+        await cloud_scheduler.stop()
+    except Exception as e:
+        logger.warning("cloud_sync_scheduler_stop_failed", error=str(e))
+    try:
+        from core.cloud import close_supabase_client
+        await close_supabase_client()
+    except Exception:
+        pass
     if runner:
         logger.info("live_runner_shutting_down")
         await runner.shutdown(close_positions=False)

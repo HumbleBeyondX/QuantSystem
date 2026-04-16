@@ -26,6 +26,7 @@ from core.database.models import (
     AuditLogRecord,
     BacktestResultRecord,
     Base,
+    FactorEvaluationRecord,
     FillRecord,
     OrderRecord,
     PortfolioSnapshotRecord,
@@ -46,6 +47,8 @@ SYNCABLE_TABLES = {
     "strategy_state": {"model": StrategyStateRecord, "ts_col": "updated_at", "id_col": "strategy_id"},
     "risk_events": {"model": RiskEventRecord, "ts_col": "timestamp", "id_col": "event_id"},
     "backtest_results": {"model": BacktestResultRecord, "ts_col": "created_at", "id_col": "backtest_id"},
+    "factor_evaluations": {"model": FactorEvaluationRecord, "ts_col": "evaluated_at", "id_col": "eval_id"},
+    "audit_log": {"model": AuditLogRecord, "ts_col": "timestamp", "id_col": "id"},
 }
 
 
