@@ -109,9 +109,13 @@ async function showEnvSetupDialog(parentWindow, result) {
 
   if (response.response === 0) {
     try {
-      await shell.openPath(result.envPath);
+      // .env has no Windows file association — open with notepad explicitly
+      const { spawn } = require("child_process");
+      spawn("notepad.exe", [result.envPath], { detached: true, stdio: "ignore" }).unref();
     } catch (err) {
-      console.error("[env_check] shell.openPath failed:", err);
+      console.error("[env_check] Failed to open .env:", err);
+      // Fallback: open the containing folder
+      shell.showItemInFolder(result.envPath);
     }
   }
 

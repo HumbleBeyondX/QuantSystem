@@ -84,7 +84,9 @@ function setupTray(mainWindow, backendUrl) {
       {
         label: "Edit .env",
         click: () => {
-          shell.openPath(path.join(app.getPath("userData"), ".env"));
+          const { spawn } = require("child_process");
+          const envPath = path.join(app.getPath("userData"), ".env");
+          spawn("notepad.exe", [envPath], { detached: true, stdio: "ignore" }).unref();
         },
       },
       {

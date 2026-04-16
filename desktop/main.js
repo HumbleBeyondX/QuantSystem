@@ -305,8 +305,9 @@ ipcMain.handle("open-app-data-folder", () => {
   return true;
 });
 ipcMain.handle("open-env-file", () => {
+  const { spawn: spawnChild } = require("child_process");
   const envPath = path.join(app.getPath("userData"), ".env");
-  shell.openPath(envPath);
+  spawnChild("notepad.exe", [envPath], { detached: true, stdio: "ignore" }).unref();
   return true;
 });
 
