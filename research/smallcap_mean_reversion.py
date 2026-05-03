@@ -146,6 +146,8 @@ def run_smallcap_mr_backtest(
     vix_series: Optional[pd.Series] = None,   # VIX close indexed by timestamp
     vix_max: float = 30.0,              # skip entries when VIX > this
     zscore_sizing: bool = False,        # scale position by extremeness of oversold
+    leverage: float = 1.0,              # 1.0 = cash-only, 5.0 = 5× margin
+    annual_borrow_rate: float = 0.06,   # 6%/year borrow cost on margin used
 ) -> MRResult:
     """Single-ticker daily mean-reversion backtest.
 
@@ -191,8 +193,10 @@ def run_smallcap_mr_backtest(
     entry_price = 0.0
     entry_ts: Optional[pd.Timestamp] = None
     days_held = 0
+    margin_loan = 0.0           # outstanding borrowed amount
 
     slip_mult = slippage_bps / 10_000.0
+    daily_borrow = annual_borrow_rate / 365
 
     for i, row in df.iterrows():
         ts = row["timestamp"]
@@ -201,8 +205,14 @@ def run_smallcap_mr_backtest(
         ret3 = row["ret_3d"]
         rsi2 = row["rsi2"]
 
-        # Mark to market
-        equity = cash + shares * close
+        # Accrue daily borrow cost on outstanding margin loan
+        if margin_loan > 0:
+            interest = margin_loan * daily_borrow
+            cash -= interest
+            margin_loan += interest  # capitalized into loan balance
+
+        # Mark to market: cash + shares value − margin loan
+        equity = cash + shares * close - margin_loan
         result.equity_curve.append((ts, equity))
 
         if shares > 0:
@@ -228,6 +238,11 @@ def run_smallcap_mr_backtest(
                 proceeds = shares * fill_price
                 fee = shares * fee_per_share
                 cash += proceeds - fee
+                # Repay margin loan first
+                if margin_loan > 0:
+                    repay = min(cash, margin_loan)
+                    cash -= repay
+                    margin_loan -= repay
                 pnl = (fill_price - entry_price) * shares - fee
                 result.trades.append(MRTrade(
                     entry_ts=entry_ts,
@@ -262,11 +277,23 @@ def run_smallcap_mr_backtest(
                     effective_deploy = min(effective_deploy, deploy_pct)
 
                 fill_price = close * (1 + slip_mult)
-                deploy_cash = cash * effective_deploy
-                shares_to_buy = int(deploy_cash // fill_price)
+                # With leverage: notional = equity * deploy * leverage
+                # cash_used = notional - borrowed (rest is margin loan)
+                buying_power = (cash + margin_loan) * effective_deploy * leverage  # equity-based
+                # Cap by available cash + max margin (broker typical 2-4x;
+                # if leverage > 1, use synthetic)
+                shares_to_buy = int(buying_power // fill_price)
                 if shares_to_buy >= 1:
                     fee = shares_to_buy * fee_per_share
-                    cash -= shares_to_buy * fill_price + fee
+                    notional = shares_to_buy * fill_price
+                    # How much cash do we have? Borrow the rest.
+                    cost = notional + fee
+                    if leverage > 1.0 and cost > cash:
+                        new_loan = cost - cash
+                        margin_loan += new_loan
+                        cash = 0.0  # all cash used
+                    else:
+                        cash -= cost
                     shares = shares_to_buy
                     entry_price = fill_price
                     entry_ts = ts

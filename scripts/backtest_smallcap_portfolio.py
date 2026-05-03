@@ -64,6 +64,10 @@ def parse_args():
     p.add_argument("--weight", choices=["equal", "inverse-vol", "sharpe"],
                    default="equal",
                    help="Sleeve weighting: equal / inverse-vol / sharpe-weighted")
+    p.add_argument("--leverage", type=float, default=1.0,
+                   help="Margin leverage (1.0=cash only, 5.0=5× margin)")
+    p.add_argument("--borrow-rate", type=float, default=0.06,
+                   help="Annual borrow cost on margin loan")
     return p.parse_args()
 
 
@@ -140,6 +144,8 @@ def main() -> int:
             vix_series=vix_series,
             vix_max=args.vix_max,
             zscore_sizing=args.zscore_sizing,
+            leverage=args.leverage,
+            annual_borrow_rate=args.borrow_rate,
         )
         m = result.metrics()
         sleeves[t] = m
