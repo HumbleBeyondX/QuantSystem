@@ -103,24 +103,37 @@ def bs_call_delta(S: float, K: float, T: float, r: float, sigma: float) -> float
 def find_strike_for_delta(
     S: float, T: float, r: float, sigma: float,
     target_delta: float, is_put: bool,
-    max_iter: int = 30,
+    max_iter: int = 50,
 ) -> float:
-    """Find strike where option delta ≈ target_delta. Newton's method
-    on |delta(K) - target|. target_delta is positive magnitude (e.g. 0.25).
-    Returns a strike floored at 5% of spot to avoid degenerate near-0 strikes."""
+    """Find strike where option |delta| ≈ target_delta.
+
+    Direction conventions:
+      * Put delta = N(d1) − 1, ranges (−1, 0). |put delta| INCREASES as K rises
+        toward ATM (deeper ITM has |delta|→1, OTM has |delta|→0). So when
+        |put_delta| > target, we LOWER K to reduce it.
+      * Call delta = N(d1), ranges (0, 1). DECREASES as K rises (deeper OTM).
+        So when call_delta > target, we RAISE K to reduce it.
+
+    target_delta is positive magnitude (e.g. 0.16). Returns a strike floored
+    at 5% of spot to avoid degenerate near-0 strikes.
+    """
     floor = max(S * 0.05, 0.01)
     ceil = S * 5.0
     K = S * (0.97 if is_put else 1.03)
     for _ in range(max_iter):
         if is_put:
-            d = bs_put_delta(S, K, T, r, sigma)
+            d = bs_put_delta(S, K, T, r, sigma)   # negative number
             error = abs(d) - target_delta
+            # |put_delta| is increasing in K → reduce K when error > 0
+            step_sign = -1
         else:
-            d = bs_call_delta(S, K, T, r, sigma)
+            d = bs_call_delta(S, K, T, r, sigma)  # positive number
             error = d - target_delta
+            # call_delta is decreasing in K → increase K when error > 0
+            step_sign = +1
         if abs(error) < 0.005:
             break
-        K -= error * S * 0.10
+        K += step_sign * error * S * 0.10
         K = max(min(K, ceil), floor)
     return max(K, floor)
 
