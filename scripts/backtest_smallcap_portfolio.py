@@ -57,21 +57,74 @@ def parse_args():
     p.add_argument("--max-hold", type=int, default=4)
     p.add_argument("--start", default="2024-01-01")
     p.add_argument("--end", default=datetime.now().strftime("%Y-%m-%d"))
+    p.add_argument("--vix-max", type=float, default=999.0,
+                   help="Skip entries when VIX > this (default 999=disabled)")
+    p.add_argument("--zscore-sizing", action="store_true",
+                   help="Scale position by extremeness of oversold")
+    p.add_argument("--weight", choices=["equal", "inverse-vol", "sharpe"],
+                   default="equal",
+                   help="Sleeve weighting: equal / inverse-vol / sharpe-weighted")
     return p.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     n = len(args.tickers)
-    per_sleeve = args.total_capital / n
-    print(f"Portfolio backtest: {n} sleeves × ${per_sleeve:,.0f} each "
-          f"(total ${args.total_capital:,.0f})")
+    print(f"Portfolio backtest: {n} sleeves, weighting={args.weight}, "
+          f"total ${args.total_capital:,.0f}")
     print(f"Period: {args.start} → {args.end}\n")
+
+    # Fetch VIX once for all sleeves
+    vix_series = None
+    if args.vix_max < 999:
+        print(f"  Fetching VIX...", end="", flush=True)
+        vix_df = fetch_daily("^VIX", args.start, args.end)
+        if not vix_df.empty:
+            vix_series = vix_df.set_index("timestamp")["close"]
+            print(f" {len(vix_series)} bars, range {vix_series.min():.1f}-{vix_series.max():.1f}")
+        else:
+            print(" FAILED, disabling VIX filter")
+            args.vix_max = 999
+
+    # ── Pre-pass: estimate per-ticker vol/Sharpe with equal weight ──
+    # to compute weights for sharpe / inverse-vol modes
+    weights = {}
+    if args.weight == "equal":
+        weights = {t: 1.0 / n for t in args.tickers}
+    else:
+        print("Pre-pass for weighting...")
+        equal_per_sleeve = args.total_capital / n
+        prelim = {}
+        for t in args.tickers:
+            df = fetch_daily(t, args.start, args.end)
+            if df.empty or len(df) < 220:
+                continue
+            r = run_smallcap_mr_backtest(
+                t, df, initial_capital=equal_per_sleeve,
+                drop_threshold_pct=args.drop, rsi2_oversold=args.rsi_os,
+                profit_target_pct=args.pt, stop_loss_pct=args.sl,
+                max_hold_days=args.max_hold,
+            )
+            m = r.metrics()
+            prelim[t] = m
+        # Compute raw weights
+        if args.weight == "inverse-vol":
+            raw = {t: 1.0 / max(m.get("annual_volatility", 0.01), 0.001)
+                   for t, m in prelim.items() if m.get("annual_volatility", 0) > 0}
+        else:  # sharpe
+            raw = {t: max(m.get("sharpe_ratio", 0), 0.01) for t, m in prelim.items()}
+        total_raw = sum(raw.values()) or 1.0
+        weights = {t: v / total_raw for t, v in raw.items()}
+
+    print(f"\nWeights: { {t: round(w, 3) for t, w in weights.items()} }\n")
 
     sleeves: dict = {}
     all_equity_dfs = []
     for t in args.tickers:
-        print(f"  {t}...", end="", flush=True)
+        if t not in weights:
+            continue
+        per_sleeve = args.total_capital * weights[t]
+        print(f"  {t} (alloc ${per_sleeve:,.0f})...", end="", flush=True)
         df = fetch_daily(t, args.start, args.end)
         if df.empty or len(df) < 220:
             print(f" SKIP")
@@ -84,6 +137,9 @@ def main() -> int:
             profit_target_pct=args.pt,
             stop_loss_pct=args.sl,
             max_hold_days=args.max_hold,
+            vix_series=vix_series,
+            vix_max=args.vix_max,
+            zscore_sizing=args.zscore_sizing,
         )
         m = result.metrics()
         sleeves[t] = m

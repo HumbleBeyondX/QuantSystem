@@ -143,8 +143,17 @@ def run_smallcap_mr_backtest(
     deploy_pct: float = 0.95,
     fee_per_share: float = 0.005,       # broker comm proxy
     slippage_bps: float = 5.0,
+    vix_series: Optional[pd.Series] = None,   # VIX close indexed by timestamp
+    vix_max: float = 30.0,              # skip entries when VIX > this
+    zscore_sizing: bool = False,        # scale position by extremeness of oversold
 ) -> MRResult:
-    """Single-ticker daily mean-reversion backtest."""
+    """Single-ticker daily mean-reversion backtest.
+
+    Optional regime filters:
+      * vix_series — when VIX > vix_max on entry day, skip the trade
+      * zscore_sizing — scale deploy_pct by how extreme the 3-day drop is
+        (deeper drop = larger size, capped at deploy_pct)
+    """
     df = df.copy()
     use_sma = sma_filter is not None and sma_filter > 1
     if use_sma:
@@ -153,6 +162,27 @@ def run_smallcap_mr_backtest(
         df["sma200"] = -np.inf  # always pass the filter
     df["ret_3d"] = df["close"] / df["close"].shift(3) - 1.0
     df["rsi2"] = _rsi(df["close"], period=2)
+
+    # Attach VIX if provided — align by timestamp date
+    if vix_series is not None and len(vix_series) > 0:
+        vix_aligned = pd.Series(index=df.index, dtype="float64")
+        # Build a lookup: timestamp -> vix close
+        vix_lookup = vix_series.copy()
+        if hasattr(vix_lookup.index, "tz") and vix_lookup.index.tz is not None:
+            vix_lookup.index = vix_lookup.index.tz_localize(None)
+        for i, ts in enumerate(df["timestamp"]):
+            ts_naive = pd.Timestamp(ts).tz_localize(None) if hasattr(ts, "tz") and ts.tz is not None else pd.Timestamp(ts)
+            # Find nearest VIX close (same date)
+            if ts_naive in vix_lookup.index:
+                vix_aligned.iloc[i] = vix_lookup.loc[ts_naive]
+            else:
+                # Use the most recent prior VIX value
+                prior = vix_lookup.loc[:ts_naive]
+                if len(prior) > 0:
+                    vix_aligned.iloc[i] = prior.iloc[-1]
+        df["vix"] = vix_aligned.ffill().fillna(20.0)
+    else:
+        df["vix"] = 0.0  # always pass
 
     result = MRResult(ticker=ticker, initial_capital=initial_capital)
 
@@ -216,14 +246,23 @@ def run_smallcap_mr_backtest(
                 days_held = 0
         else:
             # Look for entry
+            vix_ok = vix_series is None or row.get("vix", 0) < vix_max
             if (
                 not pd.isna(ret3) and ret3 < -drop_threshold_pct / 100
                 and not pd.isna(sma200) and close > sma200
                 and not pd.isna(rsi2) and rsi2 < rsi2_oversold
+                and vix_ok
             ):
-                # Enter long
+                # Z-score sizing: scale deploy by how extreme the drop is.
+                # ret3 = -drop_threshold → 1.0× ; ret3 = -2×drop_threshold → up to deploy_pct
+                effective_deploy = deploy_pct
+                if zscore_sizing:
+                    extremeness = min(abs(ret3) / (drop_threshold_pct / 100), 2.0)
+                    effective_deploy = deploy_pct * (extremeness / 2.0 + 0.5)
+                    effective_deploy = min(effective_deploy, deploy_pct)
+
                 fill_price = close * (1 + slip_mult)
-                deploy_cash = cash * deploy_pct
+                deploy_cash = cash * effective_deploy
                 shares_to_buy = int(deploy_cash // fill_price)
                 if shares_to_buy >= 1:
                     fee = shares_to_buy * fee_per_share
