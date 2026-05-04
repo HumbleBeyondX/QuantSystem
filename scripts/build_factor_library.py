@@ -88,10 +88,20 @@ def main() -> int:
 
     print(f"Loading panel: {panel_path.name}")
     panel = DataPanel.from_parquet(panel_path)
-    panel = panel.restrict(universe=SECTOR_AND_FACTOR_ETFS,
+
+    # Restrict universe: if SECTOR_AND_FACTOR_ETFS appear in the panel, use them
+    # (sector rotation use case); otherwise use everything that's not a macro
+    # ticker (^VIX/^TNX/^IRX), so SP500 panels run on the full equity universe.
+    available = set(panel.universe)
+    macro_tickers = {"^VIX", "^TNX", "^IRX", "HYG", "IEF"}
+    if set(SECTOR_AND_FACTOR_ETFS).issubset(available):
+        target_universe = SECTOR_AND_FACTOR_ETFS
+    else:
+        target_universe = sorted(available - macro_tickers)
+    panel = panel.restrict(universe=target_universe,
                            start=args.start, end=args.end)
     print(f"  Panel: {panel}")
-    print(f"  Universe: {panel.universe}")
+    print(f"  Universe size: {len(panel.universe)} tickers")
 
     factors = get_all_factors(category=args.category)
     print(f"\nEvaluating {len(factors)} factors...\n")

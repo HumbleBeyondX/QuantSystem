@@ -437,23 +437,45 @@ def cluster_factors(
 ) -> Dict[int, List[str]]:
     """Hierarchical clustering: factors with corr > threshold grouped.
 
-    Returns {cluster_id: [factor_name, ...]}.
+    Returns {cluster_id: [factor_name, ...]}. If the input has any NaN
+    rows/cols (factors with no overlap), they're dropped before clustering
+    and added back as singleton clusters.
     """
     from scipy.cluster.hierarchy import fcluster, linkage
     from scipy.spatial.distance import squareform
 
+    # Drop factors that are entirely NaN in the corr matrix
+    valid = corr_matrix.dropna(how="all").dropna(axis=1, how="all")
+    valid = valid.loc[valid.index, valid.index]
+    if valid.empty or valid.shape[0] < 2:
+        return {i + 1: [name] for i, name in enumerate(corr_matrix.index)}
+
+    # Fill any remaining NaN (factors that have data but degenerate against one
+    # another) with 0 — they'll be treated as orthogonal.
+    valid = valid.fillna(0.0)
+
     # Distance = 1 - |corr|
-    dist = 1 - corr_matrix.abs()
-    # Symmetrize and zero diagonal
+    dist = 1 - valid.abs()
     dist = (dist + dist.T) / 2
     np.fill_diagonal(dist.values, 0.0)
+
     condensed = squareform(dist.values, checks=False)
+    if not np.all(np.isfinite(condensed)):
+        return {i + 1: [name] for i, name in enumerate(corr_matrix.index)}
+
     Z = linkage(condensed, method="average")
     clusters = fcluster(Z, t=1 - threshold, criterion="distance")
 
     out: Dict[int, List[str]] = {}
-    for name, cid in zip(corr_matrix.index, clusters):
+    for name, cid in zip(valid.index, clusters):
         out.setdefault(int(cid), []).append(name)
+
+    # Add factors that were dropped as singletons
+    next_cid = max(out.keys(), default=0) + 1
+    for name in corr_matrix.index:
+        if name not in valid.index:
+            out[next_cid] = [name]
+            next_cid += 1
     return out
 
 
