@@ -93,6 +93,12 @@ def get_all_factors(
         momentum,
         volatility,
         reversal,
+        quality,
+        volume,
+        microstructure,
+        academic,
+        crash_risk,
+        composite,
     )
 
     factors = [cls() for cls in _REGISTRY.values()]

@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import sys
 import time
@@ -33,6 +34,18 @@ from research.factor_mining import (  # noqa: E402
     FactorMetrics,
     evaluate_factor,
     get_all_factors,
+)
+from research.factor_mining.evaluator import (  # noqa: E402
+    cluster_factors,
+    factor_correlation_matrix,
+    select_top_per_cluster,
+)
+from research.factor_mining.persistence import (  # noqa: E402
+    cache_factor_values,
+    metrics_to_summary_df,
+    save_metrics_batch,
+    write_catalog_markdown,
+    write_correlation_report,
 )
 
 
@@ -55,6 +68,14 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--category", default=None,
                    help="Filter to one category (momentum/volatility/reversal/etc)")
     p.add_argument("--out", default=None)
+    p.add_argument("--no-cache", action="store_true",
+                   help="Skip writing factor-value Parquet cache")
+    p.add_argument("--no-db", action="store_true",
+                   help="Skip writing FactorEvaluationRecord rows")
+    p.add_argument("--cluster-threshold", type=float, default=0.7,
+                   help="Cluster factors with |corr| > this together")
+    p.add_argument("--universe-tag", default="sector_etfs_15",
+                   help="Label written to FactorEvaluationRecord.universe")
     return p.parse_args()
 
 
@@ -76,6 +97,7 @@ def main() -> int:
     print(f"\nEvaluating {len(factors)} factors...\n")
 
     results: List[FactorMetrics] = []
+    factor_panels: Dict[str, "pd.DataFrame"] = {}  # name → panel, for decorrelation
     for f in factors:
         t0 = time.time()
         try:
@@ -83,18 +105,21 @@ def main() -> int:
             metrics = evaluate_factor(
                 factor_panel, panel,
                 factor_name=f.name,
-                universe="sector_etfs_15",
+                universe=args.universe_tag,
             )
             elapsed = time.time() - t0
-            print(f"  {f.name:24s} {f.category:12s} "
+            print(f"  {f.name:26s} {f.category:14s} "
                   f"IC IR={metrics.ic_ir:+6.3f}  RankIC IR={metrics.rank_ic_ir:+6.3f}  "
                   f"L-S Sharpe={metrics.ls_sharpe:+5.2f}  "
                   f"cov={metrics.coverage_pct:5.1f}%  ({elapsed:4.1f}s)")
             results.append(metrics)
+            factor_panels[f.name] = factor_panel
+
+            # Cache factor values to Parquet
+            if not args.no_cache:
+                cache_factor_values(f.name, args.universe_tag, factor_panel)
         except Exception as e:
-            print(f"  {f.name:24s} FAILED: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"  {f.name:26s} FAILED: {type(e).__name__}: {e}")
 
     if not results:
         print("\nNo factors evaluated.")
@@ -130,14 +155,48 @@ def main() -> int:
     print(f"\nStrong (|RankIC IR| > 0.20): {len(strong)}/{len(df)}")
     print(f"Profitable (L-S Sharpe > 1.0): {len(profitable)}/{len(df)}")
 
-    # Save
+    # ── Decorrelation matrix + clustering ──
+    if len(factor_panels) >= 2:
+        print(f"\nComputing factor correlation matrix ({len(factor_panels)} factors)...")
+        corr = factor_correlation_matrix(factor_panels, use_ranks=True)
+        clusters = cluster_factors(corr, threshold=args.cluster_threshold)
+        print(f"  → {len(clusters)} clusters at corr threshold {args.cluster_threshold}")
+
+        metrics_by_name = {m.factor_name: m for m in results}
+        decorrelated = select_top_per_cluster(metrics_by_name, clusters, "rank_ic_ir")
+        print(f"  → Decorrelated set: {len(decorrelated)} factors\n")
+        for name in decorrelated:
+            m = metrics_by_name[name]
+            print(f"     • {name:30s} RankIC IR {m.rank_ic_ir:+.3f}  L-S Sharpe {m.ls_sharpe:+.2f}")
+
+        # Write decorrelation report
+        decorr_md = PROJECT_ROOT / "results" / f"factor_decorrelation_{datetime.now().strftime('%Y%m%d-%H%M%S')}.md"
+        write_correlation_report(corr, clusters, decorr_md)
+        print(f"\nDecorrelation report → {decorr_md}")
+
+    # ── DB persistence ──
+    if not args.no_db and results:
+        try:
+            print("\nSaving to FactorEvaluationRecord...")
+            inserted = asyncio.run(save_metrics_batch(results))
+            print(f"  Inserted {inserted} rows.")
+        except Exception as e:
+            print(f"  WARN: DB save failed: {e}")
+
+    # ── Markdown catalog ──
+    summary_df = metrics_to_summary_df(results)
+    cat_md = PROJECT_ROOT / "results" / f"factor_catalog_{datetime.now().strftime('%Y%m%d-%H%M%S')}.md"
+    write_catalog_markdown(summary_df, cat_md)
+    print(f"\nCatalog markdown → {cat_md}")
+
+    # ── JSON catalog (raw metrics) ──
     out = args.out
     if out is None:
         out = PROJECT_ROOT / "results" / f"factor_catalog_{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
     Path(out).parent.mkdir(exist_ok=True)
     with open(out, "w") as f:
         json.dump([m.to_dict() for m in results], f, indent=2, default=str)
-    print(f"\n→ {out}")
+    print(f"JSON dump → {out}")
 
     return 0
 
