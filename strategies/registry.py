@@ -60,6 +60,7 @@ def discover_strategies() -> None:
         "strategies.equity.factor_strategy",
         "strategies.equity.timing_strategy",
         "strategies.equity.long_short_strategy",
+        "strategies.equity.sector_rotation_strategy",
         "strategies.options.delta_neutral_strategy",
         "strategies.options.gamma_scalp_strategy",
         "strategies.crypto.macro_cycle_strategy",
