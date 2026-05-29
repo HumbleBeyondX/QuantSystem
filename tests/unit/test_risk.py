@@ -118,6 +118,140 @@ class TestPreTradeRisk:
         assert "Daily loss" in reason
 
 
+def _make_position(
+    symbol: str = "ETH/USDT:USDT",
+    side: PositionSide = PositionSide.LONG,
+    quantity: float = 0.1,
+    avg_price: float = 2252.97,
+    current_price: float = 2018.0,
+) -> Position:
+    return Position(
+        symbol=symbol,
+        strategy_id="test",
+        side=side,
+        quantity=quantity,
+        average_entry_price=avg_price,
+        current_price=current_price,
+        asset_class=AssetClass.CRYPTO,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Risk-reducing orders — regression guard for the 2026-05-29 "risk backfire"
+# bug, where a stop-loss SELL was rejected by the concentration check and the
+# losing position was trapped past its stop. Closing / trimming a position
+# must ALWAYS be allowed regardless of concentration / leverage / daily-loss.
+# ---------------------------------------------------------------------------
+
+
+class TestRiskReducingOrders:
+    def test_sell_closing_long_always_approved(self):
+        """The exact regression: an over-concentrated LONG, market SELL to exit.
+        Must be approved even though concentration > max."""
+        checker = PreTradeRiskCheck({"max_position_pct": 0.50, "max_leverage": 55})
+        pos = _make_position(side=PositionSide.LONG, quantity=0.1)
+        portfolio = _make_portfolio(total_value=85.92, cash=60.0, positions=[pos])
+
+        # Market SELL (no limit price) to close — this was being rejected
+        order = _make_order(
+            symbol="ETH/USDT:USDT", side=OrderSide.SELL,
+            quantity=0.1, limit_price=None,
+        )
+        approved, reason = checker.check(order, portfolio)
+        assert approved is True
+        assert "risk-reducing" in reason
+
+    def test_buy_closing_short_always_approved(self):
+        """A BUY that covers a SHORT lowers exposure → always approved."""
+        checker = PreTradeRiskCheck({"max_position_pct": 0.50})
+        pos = _make_position(side=PositionSide.SHORT, quantity=0.1)
+        portfolio = _make_portfolio(total_value=85.92, cash=60.0, positions=[pos])
+
+        order = _make_order(
+            symbol="ETH/USDT:USDT", side=OrderSide.BUY,
+            quantity=0.1, limit_price=None,
+        )
+        approved, reason = checker.check(order, portfolio)
+        assert approved is True
+        assert "risk-reducing" in reason
+
+    def test_sell_closing_long_bypasses_daily_loss(self):
+        """Even with the daily-loss limit breached, a closing SELL must pass —
+        otherwise the position is trapped exactly when you most need to exit."""
+        checker = PreTradeRiskCheck({"max_daily_loss_pct": 0.02})
+        pos = _make_position(side=PositionSide.LONG, quantity=0.1)
+        portfolio = _make_portfolio(
+            total_value=100_000.0, daily_pnl=-5_000.0, positions=[pos]  # -5% day
+        )
+        order = _make_order(
+            symbol="ETH/USDT:USDT", side=OrderSide.SELL, quantity=0.1, limit_price=None
+        )
+        approved, reason = checker.check(order, portfolio)
+        assert approved is True
+        assert "risk-reducing" in reason
+
+    def test_sell_closing_long_bypasses_leverage(self):
+        """A closing SELL must pass even when portfolio leverage exceeds max."""
+        # Build an over-levered book, then try to trim the ETH position.
+        eth = _make_position(symbol="ETH/USDT:USDT", side=PositionSide.LONG,
+                             quantity=1.0, avg_price=2000.0, current_price=2000.0)
+        others = [
+            Position(symbol=f"S{i}", strategy_id="test", side=PositionSide.LONG,
+                     quantity=200.0, average_entry_price=200.0, current_price=200.0)
+            for i in range(5)
+        ]
+        portfolio = _make_portfolio(total_value=100_000.0, positions=[eth, *others])
+        checker = PreTradeRiskCheck({"max_leverage": 1.5, "max_position_pct": 0.99})
+
+        order = _make_order(symbol="ETH/USDT:USDT", side=OrderSide.SELL,
+                            quantity=0.5, limit_price=None)
+        approved, reason = checker.check(order, portfolio)
+        assert approved is True
+        assert "risk-reducing" in reason
+
+    def test_buy_adding_to_long_still_blocked(self):
+        """A BUY that ADDS to a LONG increases risk → must remain subject to
+        the concentration limit (the fix must not over-reach)."""
+        checker = PreTradeRiskCheck({"max_position_pct": 0.50})
+        pos = _make_position(side=PositionSide.LONG, quantity=0.1)
+        portfolio = _make_portfolio(total_value=85.92, cash=60.0, positions=[pos])
+
+        order = _make_order(
+            symbol="ETH/USDT:USDT", side=OrderSide.BUY,
+            quantity=0.1, limit_price=2018.0,  # adds ~$200 to a $86 book
+        )
+        approved, reason = checker.check(order, portfolio)
+        assert approved is False
+        assert "concentration" in reason.lower()
+
+    def test_sell_adding_to_short_still_blocked(self):
+        """A SELL that ADDS to a SHORT increases exposure → still limited."""
+        checker = PreTradeRiskCheck({"max_position_pct": 0.50})
+        pos = _make_position(side=PositionSide.SHORT, quantity=0.1)
+        portfolio = _make_portfolio(total_value=85.92, cash=60.0, positions=[pos])
+
+        order = _make_order(
+            symbol="ETH/USDT:USDT", side=OrderSide.SELL,
+            quantity=0.1, limit_price=2018.0,
+        )
+        approved, reason = checker.check(order, portfolio)
+        assert approved is False
+        assert "concentration" in reason.lower()
+
+    def test_open_new_position_not_treated_as_reducing(self):
+        """An order on a symbol with no existing position is NOT risk-reducing;
+        it must pass through the normal checks."""
+        checker = PreTradeRiskCheck({"max_order_value": 10_000})
+        portfolio = _make_portfolio(positions=[])  # flat
+
+        # Oversized opening order → should be rejected by order-value check
+        order = _make_order(symbol="NEWSYM", side=OrderSide.SELL,
+                            quantity=200, limit_price=100.0)  # $20k
+        approved, reason = checker.check(order, portfolio)
+        assert approved is False
+        assert "exceeds max" in reason
+
+
 # ---------------------------------------------------------------------------
 # Circuit Breaker
 # ---------------------------------------------------------------------------
