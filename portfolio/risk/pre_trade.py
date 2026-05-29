@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Tuple
 
+from core.enums import OrderSide, PositionSide
 from core.logging import get_logger
 from core.models import Order, PortfolioSnapshot
 
@@ -24,11 +25,38 @@ class PreTradeRiskCheck:
         self._daily_order_count = 0
         self._daily_pnl = 0.0
 
+    @staticmethod
+    def _is_risk_reducing(order: Order, portfolio: PortfolioSnapshot) -> bool:
+        """True if the order reduces (or closes) an existing position.
+
+        A SELL against a LONG, or a BUY against a SHORT, lowers exposure and
+        must NEVER be blocked by concentration / leverage / daily-loss limits —
+        those limits exist to stop INCREASING risk, not to trap a position.
+        """
+        existing = next(
+            (p for p in portfolio.positions if p.symbol == order.symbol), None
+        )
+        if existing is None or abs(existing.quantity) < 1e-12:
+            return False  # opening a new position — not risk-reducing
+        if existing.side == PositionSide.LONG and order.side == OrderSide.SELL:
+            return True
+        if existing.side == PositionSide.SHORT and order.side == OrderSide.BUY:
+            return True
+        return False
+
     def check(self, order: Order, portfolio: PortfolioSnapshot) -> Tuple[bool, str]:
         """Run all pre-trade checks.
 
         Returns: (approved, reason)
         """
+        # ── Risk-reducing orders always pass ──
+        # Closing / trimming a position lowers exposure; blocking it would
+        # trap a losing position past its stop-loss. Only opening / adding
+        # orders are subject to the limits below.
+        if self._is_risk_reducing(order, portfolio):
+            self._daily_order_count += 1
+            return True, "approved (risk-reducing)"
+
         # Check 1: Order size limit
         estimated_value = order.quantity * (order.limit_price or 0)
         if estimated_value > self.max_order_value and order.limit_price:
