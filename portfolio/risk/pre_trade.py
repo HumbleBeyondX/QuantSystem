@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from core.enums import OrderSide, PositionSide
 from core.logging import get_logger
@@ -44,8 +44,19 @@ class PreTradeRiskCheck:
             return True
         return False
 
-    def check(self, order: Order, portfolio: PortfolioSnapshot) -> Tuple[bool, str]:
+    def check(
+        self,
+        order: Order,
+        portfolio: PortfolioSnapshot,
+        ref_price: Optional[float] = None,
+    ) -> Tuple[bool, str]:
         """Run all pre-trade checks.
+
+        Args:
+            ref_price: current market price for valuing MARKET orders.
+                Live orders are all MARKET (limit_price=None) — without a
+                reference price the value/concentration checks silently
+                evaluated to $0 and passed everything (2026-06 audit).
 
         Returns: (approved, reason)
         """
@@ -57,9 +68,16 @@ class PreTradeRiskCheck:
             self._daily_order_count += 1
             return True, "approved (risk-reducing)"
 
+        # Resolve a price for notional-based checks: limit price if present,
+        # else caller-provided market price. A risk-increasing order with NO
+        # resolvable price cannot be valued — reject rather than wave through.
+        price = order.limit_price or ref_price
+        if not price or price <= 0:
+            return False, "Cannot value order: no limit_price and no ref_price"
+
         # Check 1: Order size limit
-        estimated_value = order.quantity * (order.limit_price or 0)
-        if estimated_value > self.max_order_value and order.limit_price:
+        estimated_value = order.quantity * price
+        if estimated_value > self.max_order_value:
             return False, f"Order value ${estimated_value:.0f} exceeds max ${self.max_order_value}"
 
         # Check 2: Position concentration

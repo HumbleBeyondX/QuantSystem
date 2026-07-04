@@ -78,10 +78,18 @@ class LiveTradingRunner:
         self._session_pnl: float = 0.0
         self._session_trades: int = 0
         self._session_orders: int = 0
+        # Realized-PnL baseline (PositionManager total at session start).
+        # Session loss = (realized since baseline) + (current unrealized).
+        # The old code overwrote _session_pnl with unrealized-only every 15s,
+        # erasing realized losses — the $15 session cap NEVER actually worked
+        # across multiple trades (2026-06 audit P0-3).
+        self._session_realized_baseline: float = 0.0
         self._last_reconcile_time: float = 0.0
         self._last_health_check: float = 0.0
         self._last_snapshot_time: float = 0.0
         self._exchange_snapshot: Optional[Dict[str, Any]] = None
+        self._exchange_snapshot_time: float = 0.0
+        self._mismatch_streak: Dict[str, int] = {}
 
     # ------------------------------------------------------------------
     # Setup
@@ -131,9 +139,19 @@ class LiveTradingRunner:
                 "max_daily_orders": risk_cfg.get("max_daily_orders", 20),
                 "max_daily_loss_pct": risk_cfg.get("max_daily_loss_pct", 0.03),
             },
+            # NOTE: CircuitBreaker reads portfolio_loss_limit_pct /
+            # max_drawdown_kill_pct — the previous keys (daily_loss_limit_pct /
+            # max_drawdown_pct) were silently ignored and the breaker ran on
+            # defaults (5% / 20%) regardless of the YAML risk settings.
             "circuit_breaker": {
-                "daily_loss_limit_pct": risk_cfg.get("max_daily_loss_pct", 0.03),
-                "max_drawdown_pct": risk_cfg.get("max_drawdown_pct", 0.10),
+                "portfolio_loss_limit_pct": risk_cfg.get("max_daily_loss_pct", 0.03),
+                "max_drawdown_kill_pct": risk_cfg.get("max_drawdown_pct", 0.10),
+            },
+            # Realtime monitor warns BEFORE the breaker kills — its warning
+            # threshold must sit below the kill threshold. Previously no
+            # "realtime" config was passed at all (ran on defaults).
+            "realtime": {
+                "max_drawdown_pct": risk_cfg.get("max_drawdown_pct", 0.10) * 0.8,
             },
         })
 
@@ -283,10 +301,12 @@ class LiveTradingRunner:
         # Fetch detailed positions directly — they include entry_price,
         # mark_price, upnl which we need for state reconstruction.
         detailed: List[Dict[str, Any]] = []
+        fetch_succeeded = False
 
         for attempt in range(3):
             try:
                 detailed = await self._engine.get_positions_detailed()
+                fetch_succeeded = True
                 if detailed:
                     break
                 if attempt < 2:
@@ -302,6 +322,21 @@ class LiveTradingRunner:
                 logger.warning("sync_positions_attempt_failed", attempt=attempt + 1, error=str(e))
                 if attempt < 2:
                     await asyncio.sleep(2)
+
+        # "Confirmed empty" and "could not fetch" are NOT the same thing.
+        # If every attempt raised, a real position may exist that we cannot
+        # see — trading blind would open a duplicate on the next signal.
+        if not fetch_succeeded:
+            logger.critical(
+                "SYNC_POSITIONS_UNAVAILABLE_REFUSING_TO_TRADE",
+                message="Exchange position API unreachable after 3 attempts; "
+                        "cannot verify existing positions. Fix connectivity "
+                        "and restart.",
+            )
+            raise RuntimeError(
+                "Position sync failed: exchange API unreachable — refusing to "
+                "start trading with unverified position state"
+            )
 
         # Filter to non-zero positions
         open_positions = [p for p in detailed if abs(p.get("contracts", 0) or 0) > 1e-12]
@@ -384,6 +419,84 @@ class LiveTradingRunner:
         )
 
     # ------------------------------------------------------------------
+    # Session PnL — realized accumulator + live unrealized
+    # ------------------------------------------------------------------
+
+    def _pm_realized_total(self) -> float:
+        """Total realized PnL known to the PositionManager, including
+        partially-closed open positions."""
+        pm = self._position_manager
+        if pm is None:
+            return 0.0
+        open_realized = sum(p.realized_pnl for p in pm.get_all_positions())
+        return pm._total_realized_pnl + open_realized
+
+    def _session_total_pnl(self) -> float:
+        """Session PnL = realized-since-session-start + current unrealized.
+
+        Realized losses ACCUMULATE — closing a losing trade must not reset
+        the session loss meter (that reset is how the $15 cap silently
+        never fired across multiple losing trades).
+        """
+        realized = self._pm_realized_total() - self._session_realized_baseline
+        if self._exchange_snapshot:
+            upnl = float(self._exchange_snapshot.get("unrealized_pnl") or 0.0)
+        else:
+            upnl = sum(
+                p.unrealized_pnl
+                for p in self._position_manager.get_all_positions()
+            ) if self._position_manager else 0.0
+        return realized + upnl
+
+    # ------------------------------------------------------------------
+    # Risk snapshot — exchange-truth equity
+    # ------------------------------------------------------------------
+
+    def _build_risk_snapshot(self) -> "PortfolioSnapshot":
+        """Portfolio snapshot for risk checks, using EXCHANGE equity as truth.
+
+        The internal PositionManager uses spot-style cash accounting: a SELL
+        credits the full notional as cash, and get_snapshot() then ALSO adds
+        the position's market value. For a leveraged perp short this inflates
+        total_value ~5x (e.g. $86.98 equity → $468.15 fake peak). When the
+        short closes, the fake equity collapses and the circuit breaker reads
+        it as a huge drawdown — the root cause of the 2026-06-07 false
+        "75.5% drawdown" emergency stop on a PROFITABLE trade.
+
+        Fix: overlay exchange-reported equity (fetched every 15s in the main
+        loop, always BEFORE the risk check) onto the snapshot. Falls back to
+        the internal snapshot only if no exchange data has arrived yet.
+        """
+        internal = self._position_manager.get_snapshot()
+        ex = self._exchange_snapshot
+        if not ex or not ex.get("total_value"):
+            return internal
+
+        # Staleness guard: if the exchange snapshot hasn't refreshed for over
+        # 120s (normal cadence: 15s), the equity may be hours old — risk
+        # checks on stale equity are blind. Fall back to internal (now on
+        # correct perp accounting) and warn loudly.
+        age = time.time() - self._exchange_snapshot_time
+        if age > 120:
+            logger.warning(
+                "risk_snapshot_stale_falling_back_internal",
+                snapshot_age_sec=round(age, 1),
+                internal_equity=round(internal.total_value, 2),
+                stale_exchange_equity=round(float(ex["total_value"]), 2),
+            )
+            return internal
+
+        return PortfolioSnapshot(
+            timestamp=internal.timestamp,
+            total_value=float(ex["total_value"]),
+            cash=float(ex.get("cash") or ex["total_value"]),
+            positions=internal.positions,
+            unrealized_pnl=float(ex.get("unrealized_pnl") or 0.0),
+            realized_pnl=internal.realized_pnl,
+            daily_pnl=float(ex.get("daily_pnl") or 0.0),
+        )
+
+    # ------------------------------------------------------------------
     # Main Loop
     # ------------------------------------------------------------------
 
@@ -392,6 +505,9 @@ class LiveTradingRunner:
         self._running = True
         self._session_start = datetime.now(timezone.utc)
         self._emergency_stopped = False
+        # Session realized-PnL baseline: everything before this moment belongs
+        # to previous sessions (sync_exchange_positions has already run).
+        self._session_realized_baseline = self._pm_realized_total()
 
         data_cfg = self._config.get("data", {})
         poll_interval = data_cfg.get("poll_interval_seconds", 30)
@@ -436,17 +552,25 @@ class LiveTradingRunner:
                     self._last_health_check = now
 
                 # ── Phase 5: Session loss limit check ──
-                if abs(self._session_pnl) > max_session_loss and self._session_pnl < 0:
+                # Realized + unrealized combined; realized losses accumulate
+                # across trades instead of being erased on position close.
+                session_total = self._session_total_pnl()
+                self._session_pnl = session_total
+                if session_total < -max_session_loss:
                     logger.critical(
                         "SESSION_LOSS_LIMIT_HIT",
-                        session_pnl=self._session_pnl,
+                        session_pnl=session_total,
+                        session_realized=self._pm_realized_total()
+                                         - self._session_realized_baseline,
                         limit=max_session_loss,
                     )
                     await self._emergency_stop("Session loss limit reached")
                     break
 
                 # ── Phase 6: Risk monitoring ──
-                snapshot = self._position_manager.get_snapshot()
+                # Uses exchange-truth equity, NOT internal spot accounting
+                # (see _build_risk_snapshot — prevents false drawdown kills).
+                snapshot = self._build_risk_snapshot()
                 alerts = self._risk_manager.update(snapshot)
                 for alert in alerts:
                     logger.warning("risk_alert", **alert)
@@ -514,8 +638,12 @@ class LiveTradingRunner:
         meta = {}
         qty = abs(raw_qty)
 
-        # Get exchange market info
+        # Get exchange market info — missing info means we cannot validate
+        # size at all; submitting blind gets rejected by the exchange anyway.
         market_info = self._engine.get_market_info(symbol)
+        if not market_info:
+            logger.error("MARKET_INFO_MISSING", symbol=symbol)
+            return 0.0, {"skipped": True, "reason": "market_info_unavailable"}
         min_amount = market_info.get("min_amount", 0)
         min_cost = market_info.get("min_cost", 0)
         contract_size = market_info.get("contract_size", 0)
@@ -535,10 +663,20 @@ class LiveTradingRunner:
 
         if not is_entry:
             # For exits, round to precision but don't enforce minimum
-            # (exchange typically allows closing any position)
+            # (exchange typically allows closing any position).
+            # NEVER force-round an exit UP to min lot: if internal qty is
+            # stale/dust and the exchange holds less, an oversized reduce_only
+            # is rejected and the position stays stuck open. Skipping lets
+            # reconciliation self-heal handle the drift instead.
             qty = self._engine.amount_to_precision(symbol, qty)
             if qty <= 0:
-                qty = min_amount  # Edge case: round-down to 0
+                logger.warning(
+                    "EXIT_BELOW_PRECISION_SKIPPED",
+                    symbol=symbol,
+                    raw_qty=abs(raw_qty),
+                    hint="dust exit deferred to reconciliation",
+                )
+                return 0.0, {"skipped": True, "reason": "exit_below_precision"}
             return qty, meta
 
         # ── Entry order: check against minimum ──
@@ -670,6 +808,10 @@ class LiveTradingRunner:
         # Feed bar to strategy
         strategy.on_bar(symbol, bar)
 
+        # Keep internal mark-to-market current — without this, unrealized PnL
+        # stays frozen at the entry price (audit P1-7).
+        self._position_manager.update_prices({symbol: bar.close})
+
         # Generate target positions (internally calls generate_signals + sizing)
         targets = strategy.calculate_target_positions()
         if not targets:
@@ -700,6 +842,12 @@ class LiveTradingRunner:
                 exit_qty, exit_meta = self._adjust_order_size(
                     target.symbol, exit_qty, is_entry=False,
                 )
+                if exit_qty <= 0:
+                    logger.warning(
+                        "EXIT_SKIPPED", symbol=target.symbol,
+                        reason=exit_meta.get("reason", "adjusted_to_zero"),
+                    )
+                    continue
 
                 order = Order(
                     order_id=uuid4(),
@@ -752,9 +900,13 @@ class LiveTradingRunner:
                     },
                 )
 
-            # Pre-trade risk check
-            snapshot = self._position_manager.get_snapshot()
-            approved, reason = self._risk_manager.check_order(order, snapshot)
+            # Pre-trade risk check (exchange-truth equity, same as Phase 6).
+            # ref_price: MARKET orders carry no limit_price — without a market
+            # price the notional checks would value every order at $0.
+            snapshot = self._build_risk_snapshot()
+            approved, reason = self._risk_manager.check_order(
+                order, snapshot, ref_price=bar.close,
+            )
             if not approved:
                 logger.warning(
                     "order_rejected_risk",
@@ -800,6 +952,32 @@ class LiveTradingRunner:
             if hasattr(self._strategy, "on_fill"):
                 self._strategy.on_fill(fill)
 
+            # Persist to DB — audit trail + crash recovery. Failure-tolerant:
+            # a DB hiccup must never stop live trading (fills were previously
+            # memory-only; a crash erased all trade history — audit P1-9).
+            try:
+                from core.database import get_session
+                from core.database.repository import FillRepo
+                async with get_session() as session:
+                    await FillRepo.insert(
+                        session,
+                        fill_id=str(fill.fill_id),
+                        order_id=str(fill.order_id),
+                        symbol=fill.symbol,
+                        side=fill.side.value,
+                        price=fill.price,
+                        quantity=fill.quantity,
+                        commission=fill.commission,
+                        strategy_id=fill.strategy_id,
+                        asset_class=getattr(fill.asset_class, "value", "crypto"),
+                        exchange=self._config.get("exchange", {}).get("id"),
+                        timestamp=fill.timestamp,
+                    )
+                    await session.commit()
+            except Exception as db_err:
+                logger.warning("fill_db_persist_failed", error=str(db_err),
+                               fill_id=str(fill.fill_id))
+
             # Track session stats
             self._session_trades += 1
 
@@ -844,16 +1022,82 @@ class LiveTradingRunner:
                 internal_qty = internal_positions.get(sym, 0.0)
                 diff = abs(exchange_qty - internal_qty)
                 if diff > tolerance:
+                    streak = self._mismatch_streak.get(sym, 0) + 1
+                    self._mismatch_streak[sym] = streak
                     logger.warning(
                         "POSITION_MISMATCH",
                         symbol=sym,
                         exchange_qty=exchange_qty,
                         internal_qty=internal_qty,
                         diff=diff,
+                        consecutive=streak,
                     )
+                    # Self-heal: after 3 consecutive mismatches (~3 min) the
+                    # drift is persistent, not a fill-in-flight. Exchange is
+                    # the source of truth — force internal state to match it.
+                    # (The 6-02 ghost position sat un-healed for hours because
+                    # this loop only ever warned.)
+                    if streak >= 3:
+                        await self._force_sync_position(sym, exchange_qty)
+                        self._mismatch_streak[sym] = 0
+                else:
+                    self._mismatch_streak.pop(sym, None)
 
         except Exception as e:
             logger.warning("reconciliation_error", error=str(e))
+
+    async def _force_sync_position(self, symbol: str, exchange_qty: float) -> None:
+        """Overwrite internal position state with the exchange's truth."""
+        strategy_id = self._config.get("strategy_id", "default")
+        pm_positions = self._position_manager._positions.setdefault(strategy_id, {})
+
+        if abs(exchange_qty) < 1e-12:
+            # Exchange is flat → drop the internal phantom.
+            pm_positions.pop(symbol, None)
+            self._strategy._positions[symbol] = 0.0
+            logger.critical(
+                "POSITION_AUTO_CORRECTED", symbol=symbol,
+                action="cleared_internal_phantom", exchange_qty=0.0,
+            )
+            return
+
+        # Exchange has a position we're not tracking (or wrong size) —
+        # rebuild from detailed exchange data (entry price, mark, upnl).
+        try:
+            detailed = await self._engine.get_positions_detailed()
+        except Exception as e:
+            logger.error("force_sync_fetch_failed", symbol=symbol, error=str(e))
+            return
+        pos_data = next((p for p in detailed if p.get("symbol") == symbol), None)
+        if pos_data is None:
+            logger.error("force_sync_position_missing", symbol=symbol)
+            return
+
+        entry_price = float(pos_data.get("entry_price", 0) or 0)
+        mark_price = float(pos_data.get("mark_price", 0) or 0) or entry_price
+        pos_side = PositionSide.LONG if exchange_qty > 0 else PositionSide.SHORT
+        pm_positions[symbol] = Position(
+            symbol=symbol,
+            strategy_id=strategy_id,
+            side=pos_side,
+            quantity=abs(exchange_qty),
+            average_entry_price=entry_price,
+            current_price=mark_price,
+            unrealized_pnl=float(pos_data.get("unrealized_pnl", 0) or 0),
+            realized_pnl=0.0,
+            asset_class=AssetClass.CRYPTO_PERP,
+        )
+        restore_fn = getattr(self._strategy, "restore_position_state", None)
+        if callable(restore_fn):
+            restore_fn(symbol=symbol, quantity=exchange_qty,
+                       avg_entry_price=entry_price, current_price=mark_price)
+        else:
+            self._strategy._positions[symbol] = exchange_qty
+        logger.critical(
+            "POSITION_AUTO_CORRECTED", symbol=symbol,
+            action="rebuilt_from_exchange", exchange_qty=exchange_qty,
+            entry_price=entry_price,
+        )
 
     async def _health_check(self) -> None:
         """Check exchange connectivity."""
@@ -901,6 +1145,26 @@ class LiveTradingRunner:
                     logger.info("emergency_close_sent", symbol=symbol, qty=qty, broker_id=broker_id)
                 except Exception as e:
                     logger.error("emergency_close_failed", symbol=symbol, error=str(e))
+
+            # VERIFY the closes actually landed — submitting is not closing.
+            # Poll the exchange up to 30s; if anything is still open, scream.
+            for _ in range(6):
+                await asyncio.sleep(5)
+                try:
+                    remaining = await self._engine.get_positions()
+                    still_open = {s: q for s, q in remaining.items() if abs(q) > 1e-10}
+                    if not still_open:
+                        logger.info("emergency_close_verified_flat")
+                        break
+                except Exception as e:
+                    logger.warning("emergency_close_verify_failed", error=str(e))
+            else:
+                logger.critical(
+                    "EMERGENCY_CLOSE_INCOMPLETE",
+                    still_open=still_open,
+                    message="Positions remain open on exchange after emergency "
+                            "stop — MANUAL INTERVENTION REQUIRED",
+                )
         except Exception as e:
             logger.error("emergency_position_fetch_failed", error=str(e))
 
@@ -1025,19 +1289,30 @@ class LiveTradingRunner:
                     "liquidation_price": pos.get("liquidation_price", 0),
                 })
 
+            session_realized = (
+                self._pm_realized_total() - self._session_realized_baseline
+            )
             self._exchange_snapshot = {
                 "total_value": equity,
                 "cash": cash,
                 "unrealized_pnl": total_upnl,
-                "realized_pnl": self._session_pnl - total_upnl,
+                "realized_pnl": session_realized,
                 "daily_pnl": equity - self._position_manager._initial_cash if self._position_manager else 0,
                 "num_positions": len(positions),
                 "positions": positions,
             }
+            self._exchange_snapshot_time = time.time()
 
-            # Keep session P&L in sync with exchange unrealized
-            if len(detailed) > 0:
-                self._session_pnl = total_upnl
+            # Display PnL = accumulated realized + live unrealized.
+            # (The old `_session_pnl = total_upnl` overwrite erased realized
+            # losses and neutered the session loss cap — audit P0-3.)
+            self._session_pnl = session_realized + total_upnl
 
         except Exception as e:
-            logger.debug("exchange_snapshot_update_failed", error=str(e))
+            age = (time.time() - self._exchange_snapshot_time
+                   if self._exchange_snapshot_time else None)
+            logger.warning(
+                "exchange_snapshot_update_failed",
+                error=str(e),
+                snapshot_age_sec=round(age, 1) if age is not None else None,
+            )
