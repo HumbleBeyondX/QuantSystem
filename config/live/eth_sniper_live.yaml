@@ -86,7 +86,13 @@ parameters:
 # ── Risk Limits ──
 risk:
   max_order_value: 5000
-  max_position_pct: 0.50
+  # Notional concentration vs equity. This is a DEDICATED single-symbol
+  # 50x-leverage account: the OKX min lot (0.1 ETH ≈ $180-200 notional)
+  # is always ~200%+ of the ~$90 equity, so a spot-style 50% cap blocks
+  # every entry (first seen 2026-07-04 after the risk checks started
+  # pricing MARKET orders). Real loss limits: ATR-stop risk override
+  # (50% via max_risk_override_pct), $15 session cap, 15% drawdown kill.
+  max_position_pct: 3.00
   max_leverage: 55.0
   max_daily_orders: 20
   max_daily_loss_pct: 0.05      # 5% daily loss limit

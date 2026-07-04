@@ -25,6 +25,9 @@ services:
     volumes:
       # Persist logs
       - qs-logs:/app/logs
+      # Persist strategy state (gamma scalp pickle). Mounted at the
+      # live_state SUBDIR — /app/data itself contains package code.
+      - qs-data:/app/data/live_state
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8002/health"]
       interval: 30s
@@ -39,3 +42,4 @@ services:
 
 volumes:
   qs-logs:
+  qs-data:
