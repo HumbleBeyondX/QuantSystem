@@ -38,6 +38,7 @@ COPY portfolio/ /app/portfolio/
 COPY backtesting/ /app/backtesting/
 COPY config/ /app/config/
 COPY dashboard/backend/ /app/dashboard/backend/
+COPY dashboard/alerts/ /app/dashboard/alerts/
 
 # Create empty __init__.py files where needed
 RUN touch /app/__init__.py
