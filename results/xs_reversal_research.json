@@ -1,0 +1,417 @@
+{
+  "config": {
+    "lookback": 5,
+    "rebal_bars": 5,
+    "n_per_side": 20,
+    "liq_min_usd": 50000000.0,
+    "liq_window": 20,
+    "is_end": "2021-12-31",
+    "oos_start": "2022-01-01",
+    "bps_variants": [
+      3.0,
+      5.0,
+      10.0
+    ]
+  },
+  "summary": {
+    "V1_5bps": {
+      "bps_per_side": 5.0,
+      "full_gross": {
+        "label": "V1_5bps_FULL_gross",
+        "sharpe": 0.525,
+        "cagr": 0.0513,
+        "max_dd": 0.2147,
+        "n_days": 2828,
+        "vol_ann": 0.1061,
+        "hit_rate": 0.518
+      },
+      "full_net": {
+        "label": "V1_5bps_FULL_net",
+        "sharpe": 0.125,
+        "cagr": 0.0076,
+        "max_dd": 0.2361,
+        "n_days": 2828,
+        "vol_ann": 0.106,
+        "hit_rate": 0.505
+      },
+      "IS_gross": {
+        "label": "V1_5bps_IS_gross",
+        "sharpe": 0.786,
+        "cagr": 0.0796,
+        "max_dd": 0.2147,
+        "n_days": 1742,
+        "vol_ann": 0.1045,
+        "hit_rate": 0.514
+      },
+      "IS_net": {
+        "label": "V1_5bps_IS_net",
+        "sharpe": 0.38,
+        "cagr": 0.0348,
+        "max_dd": 0.2361,
+        "n_days": 1742,
+        "vol_ann": 0.1043,
+        "hit_rate": 0.497
+      },
+      "OOS_gross": {
+        "label": "V1_5bps_OOS_gross",
+        "sharpe": 0.123,
+        "cagr": 0.0075,
+        "max_dd": 0.1493,
+        "n_days": 1086,
+        "vol_ann": 0.1086,
+        "hit_rate": 0.525
+      },
+      "OOS_net": {
+        "label": "V1_5bps_OOS_net",
+        "sharpe": -0.269,
+        "cagr": -0.0345,
+        "max_dd": 0.222,
+        "n_days": 1086,
+        "vol_ann": 0.1086,
+        "hit_rate": 0.517
+      },
+      "long_hit_rate_oos": 0.541,
+      "short_hit_rate_oos": 0.469,
+      "long_ann_ret_oos": 0.0997,
+      "short_ann_ret_oos": -0.0863,
+      "cost_drag_sharpe_full": 0.4,
+      "cost_drag_sharpe_oos": 0.392,
+      "turnover": {
+        "avg_rebal_turnover": 1.685,
+        "avg_daily_turnover": 0.337,
+        "rebalances": 566,
+        "approx_annual_turnover": 87.61
+      }
+    },
+    "V1_3bps": {
+      "bps_per_side": 3.0,
+      "full_gross": {
+        "label": "V1_3bps_FULL_gross",
+        "sharpe": 0.525,
+        "cagr": 0.0513,
+        "max_dd": 0.2147,
+        "n_days": 2828,
+        "vol_ann": 0.1061,
+        "hit_rate": 0.518
+      },
+      "full_net": {
+        "label": "V1_3bps_FULL_net",
+        "sharpe": 0.285,
+        "cagr": 0.0249,
+        "max_dd": 0.2276,
+        "n_days": 2828,
+        "vol_ann": 0.106,
+        "hit_rate": 0.511
+      },
+      "IS_gross": {
+        "label": "V1_3bps_IS_gross",
+        "sharpe": 0.786,
+        "cagr": 0.0796,
+        "max_dd": 0.2147,
+        "n_days": 1742,
+        "vol_ann": 0.1045,
+        "hit_rate": 0.514
+      },
+      "IS_net": {
+        "label": "V1_3bps_IS_net",
+        "sharpe": 0.543,
+        "cagr": 0.0525,
+        "max_dd": 0.2276,
+        "n_days": 1742,
+        "vol_ann": 0.1044,
+        "hit_rate": 0.506
+      },
+      "OOS_gross": {
+        "label": "V1_3bps_OOS_gross",
+        "sharpe": 0.123,
+        "cagr": 0.0075,
+        "max_dd": 0.1493,
+        "n_days": 1086,
+        "vol_ann": 0.1086,
+        "hit_rate": 0.525
+      },
+      "OOS_net": {
+        "label": "V1_3bps_OOS_net",
+        "sharpe": -0.112,
+        "cagr": -0.0179,
+        "max_dd": 0.1756,
+        "n_days": 1086,
+        "vol_ann": 0.1086,
+        "hit_rate": 0.519
+      },
+      "long_hit_rate_oos": 0.541,
+      "short_hit_rate_oos": 0.469,
+      "long_ann_ret_oos": 0.0997,
+      "short_ann_ret_oos": -0.0863,
+      "cost_drag_sharpe_full": 0.24,
+      "cost_drag_sharpe_oos": 0.235,
+      "turnover": {
+        "avg_rebal_turnover": 1.685,
+        "avg_daily_turnover": 0.337,
+        "rebalances": 566,
+        "approx_annual_turnover": 87.61
+      }
+    },
+    "V1_10bps": {
+      "bps_per_side": 10.0,
+      "full_gross": {
+        "label": "V1_10bps_FULL_gross",
+        "sharpe": 0.525,
+        "cagr": 0.0513,
+        "max_dd": 0.2147,
+        "n_days": 2828,
+        "vol_ann": 0.1061,
+        "hit_rate": 0.518
+      },
+      "full_net": {
+        "label": "V1_10bps_FULL_net",
+        "sharpe": -0.275,
+        "cagr": -0.0343,
+        "max_dd": 0.3894,
+        "n_days": 2828,
+        "vol_ann": 0.1062,
+        "hit_rate": 0.487
+      },
+      "IS_gross": {
+        "label": "V1_10bps_IS_gross",
+        "sharpe": 0.786,
+        "cagr": 0.0796,
+        "max_dd": 0.2147,
+        "n_days": 1742,
+        "vol_ann": 0.1045,
+        "hit_rate": 0.514
+      },
+      "IS_net": {
+        "label": "V1_10bps_IS_net",
+        "sharpe": -0.026,
+        "cagr": -0.0082,
+        "max_dd": 0.2937,
+        "n_days": 1742,
+        "vol_ann": 0.1045,
+        "hit_rate": 0.478
+      },
+      "OOS_gross": {
+        "label": "V1_10bps_OOS_gross",
+        "sharpe": 0.123,
+        "cagr": 0.0075,
+        "max_dd": 0.1493,
+        "n_days": 1086,
+        "vol_ann": 0.1086,
+        "hit_rate": 0.525
+      },
+      "OOS_net": {
+        "label": "V1_10bps_OOS_net",
+        "sharpe": -0.658,
+        "cagr": -0.0747,
+        "max_dd": 0.327,
+        "n_days": 1086,
+        "vol_ann": 0.109,
+        "hit_rate": 0.502
+      },
+      "long_hit_rate_oos": 0.541,
+      "short_hit_rate_oos": 0.469,
+      "long_ann_ret_oos": 0.0997,
+      "short_ann_ret_oos": -0.0863,
+      "cost_drag_sharpe_full": 0.8,
+      "cost_drag_sharpe_oos": 0.781,
+      "turnover": {
+        "avg_rebal_turnover": 1.685,
+        "avg_daily_turnover": 0.337,
+        "rebalances": 566,
+        "approx_annual_turnover": 87.61
+      }
+    },
+    "V2_5bps": {
+      "bps_per_side": 5.0,
+      "full_gross": {
+        "label": "V2_5bps_FULL_gross",
+        "sharpe": -0.064,
+        "cagr": -0.0085,
+        "max_dd": 0.2111,
+        "n_days": 2595,
+        "vol_ann": 0.0817,
+        "hit_rate": 0.491
+      },
+      "full_net": {
+        "label": "V2_5bps_FULL_net",
+        "sharpe": -0.524,
+        "cagr": -0.0452,
+        "max_dd": 0.3779,
+        "n_days": 2595,
+        "vol_ann": 0.0819,
+        "hit_rate": 0.476
+      },
+      "IS_gross": {
+        "label": "V2_5bps_IS_gross",
+        "sharpe": -0.068,
+        "cagr": -0.0081,
+        "max_dd": 0.1887,
+        "n_days": 1509,
+        "vol_ann": 0.0767,
+        "hit_rate": 0.486
+      },
+      "IS_net": {
+        "label": "V2_5bps_IS_net",
+        "sharpe": -0.556,
+        "cagr": -0.0446,
+        "max_dd": 0.272,
+        "n_days": 1509,
+        "vol_ann": 0.0769,
+        "hit_rate": 0.471
+      },
+      "OOS_gross": {
+        "label": "V2_5bps_OOS_gross",
+        "sharpe": -0.059,
+        "cagr": -0.0091,
+        "max_dd": 0.1184,
+        "n_days": 1086,
+        "vol_ann": 0.0883,
+        "hit_rate": 0.498
+      },
+      "OOS_net": {
+        "label": "V2_5bps_OOS_net",
+        "sharpe": -0.488,
+        "cagr": -0.0459,
+        "max_dd": 0.1813,
+        "n_days": 1086,
+        "vol_ann": 0.0884,
+        "hit_rate": 0.484
+      },
+      "long_hit_rate_oos": 0.539,
+      "short_hit_rate_oos": 0.457,
+      "long_ann_ret_oos": 0.0817,
+      "short_ann_ret_oos": -0.0869,
+      "cost_drag_sharpe_full": 0.46,
+      "cost_drag_sharpe_oos": 0.429,
+      "turnover": {
+        "avg_rebal_turnover": 1.494,
+        "avg_daily_turnover": 0.299,
+        "rebalances": 520,
+        "approx_annual_turnover": 77.7
+      }
+    },
+    "V2_3bps": {
+      "bps_per_side": 3.0,
+      "full_gross": {
+        "label": "V2_3bps_FULL_gross",
+        "sharpe": -0.064,
+        "cagr": -0.0085,
+        "max_dd": 0.2111,
+        "n_days": 2595,
+        "vol_ann": 0.0817,
+        "hit_rate": 0.491
+      },
+      "full_net": {
+        "label": "V2_3bps_FULL_net",
+        "sharpe": -0.34,
+        "cagr": -0.0307,
+        "max_dd": 0.2792,
+        "n_days": 2595,
+        "vol_ann": 0.0818,
+        "hit_rate": 0.48
+      },
+      "IS_gross": {
+        "label": "V2_3bps_IS_gross",
+        "sharpe": -0.068,
+        "cagr": -0.0081,
+        "max_dd": 0.1887,
+        "n_days": 1509,
+        "vol_ann": 0.0767,
+        "hit_rate": 0.486
+      },
+      "IS_net": {
+        "label": "V2_3bps_IS_net",
+        "sharpe": -0.361,
+        "cagr": -0.0302,
+        "max_dd": 0.2117,
+        "n_days": 1509,
+        "vol_ann": 0.0767,
+        "hit_rate": 0.474
+      },
+      "OOS_gross": {
+        "label": "V2_3bps_OOS_gross",
+        "sharpe": -0.059,
+        "cagr": -0.0091,
+        "max_dd": 0.1184,
+        "n_days": 1086,
+        "vol_ann": 0.0883,
+        "hit_rate": 0.498
+      },
+      "OOS_net": {
+        "label": "V2_3bps_OOS_net",
+        "sharpe": -0.317,
+        "cagr": -0.0314,
+        "max_dd": 0.1263,
+        "n_days": 1086,
+        "vol_ann": 0.0883,
+        "hit_rate": 0.489
+      },
+      "long_hit_rate_oos": 0.539,
+      "short_hit_rate_oos": 0.457,
+      "long_ann_ret_oos": 0.0817,
+      "short_ann_ret_oos": -0.0869,
+      "cost_drag_sharpe_full": 0.276,
+      "cost_drag_sharpe_oos": 0.258,
+      "turnover": {
+        "avg_rebal_turnover": 1.494,
+        "avg_daily_turnover": 0.299,
+        "rebalances": 520,
+        "approx_annual_turnover": 77.7
+      }
+    }
+  },
+  "liquidity_quintiles_V1_5bps_full": {
+    "Q1_lowliq": {
+      "label": "Q1",
+      "sharpe": -0.064,
+      "cagr": -0.0113,
+      "max_dd": 0.3693,
+      "n_days": 2828,
+      "vol_ann": 0.0998,
+      "hit_rate": 0.495
+    },
+    "Q2_mid": {
+      "label": "Q2",
+      "sharpe": 0.187,
+      "cagr": 0.0141,
+      "max_dd": 0.2502,
+      "n_days": 2828,
+      "vol_ann": 0.1043,
+      "hit_rate": 0.509
+    },
+    "Q3_mid": {
+      "label": "Q3",
+      "sharpe": 0.318,
+      "cagr": 0.0267,
+      "max_dd": 0.2099,
+      "n_days": 2828,
+      "vol_ann": 0.0981,
+      "hit_rate": 0.512
+    },
+    "Q4_mid": {
+      "label": "Q4",
+      "sharpe": -0.017,
+      "cagr": -0.0069,
+      "max_dd": 0.2578,
+      "n_days": 2828,
+      "vol_ann": 0.1015,
+      "hit_rate": 0.492
+    },
+    "Q5_highliq": {
+      "label": "Q5",
+      "sharpe": -0.078,
+      "cagr": -0.0169,
+      "max_dd": 0.3945,
+      "n_days": 2828,
+      "vol_ann": 0.1223,
+      "hit_rate": 0.501
+    }
+  },
+  "gate": {
+    "threshold": 1.5,
+    "V1_OOS_net_sharpe": -0.269,
+    "V2_OOS_net_sharpe": -0.488,
+    "best_OOS_net_sharpe": -0.269,
+    "decision": "REJECT"
+  }
+}

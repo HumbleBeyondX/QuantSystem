@@ -31,6 +31,15 @@ FILERS = {
     "thirdpoint": "0001040273",  # Third Point (Loeb)
     "duquesne":  "0001536411",   # Duquesne Family Office (Druckenmiller)
     "scion":     "0001649339",   # Scion Asset Management (Burry)
+    # ── expansion batch (verify entity names on fetch!) ──
+    "baupost":   "0001061768",   # Baupost Group (Klarman)
+    "greenlight": "0001079114",  # Greenlight Capital (Einhorn)
+    "lonepine":  "0001061165",   # Lone Pine Capital
+    "viking":    "0001103804",   # Viking Global
+    "tiger":     "0001167483",   # Tiger Global
+    "coatue":    "0001135730",   # Coatue Management
+    "icahn":     "0000921669",   # Icahn (Carl C.)
+    "valueact":  "0001418814",   # ValueAct Capital
 }
 
 FIGI_CACHE = ROOT / "data" / "altdata" / "cusip_ticker_cache.json"
@@ -87,6 +96,7 @@ def fetch(url: str) -> bytes:
 
 def get_13f_filings(cik: str) -> list[dict]:
     data = json.loads(fetch(f"https://data.sec.gov/submissions/CIK{cik}.json"))
+    print(f"  CIK {cik} = {data.get('name', '?')}")  # entity-name sanity check
     recent = data["filings"]["recent"]
     out = []
     for form, acc, fdate, rdate in zip(recent["form"], recent["accessionNumber"],

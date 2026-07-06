@@ -1,0 +1,46 @@
+{
+  "full_sample": {
+    "n_days": 2094,
+    "years": 8.31,
+    "sharpe": -0.045,
+    "sortino": -0.058,
+    "cagr": -0.0061,
+    "max_dd": 0.2581,
+    "calmar": -0.024,
+    "win_rate": 0.505,
+    "n_rebalances": 99,
+    "n_trades": 5358,
+    "turnover_per_year": 5.7,
+    "final_equity": 0.9506
+  },
+  "in_sample_2018_2021": {
+    "n_days": 1008,
+    "years": 4.0,
+    "sharpe": -0.047,
+    "sortino": -0.057,
+    "cagr": -0.0068,
+    "max_dd": 0.1754,
+    "calmar": -0.039,
+    "win_rate": 0.574,
+    "n_rebalances": 47,
+    "n_trades": 2529,
+    "turnover_per_year": 5.6,
+    "final_equity": 0.9729
+  },
+  "out_of_sample_2022_2026": {
+    "n_days": 1086,
+    "years": 4.31,
+    "sharpe": -0.012,
+    "sortino": -0.017,
+    "cagr": -0.0032,
+    "max_dd": 0.131,
+    "calmar": -0.025,
+    "win_rate": 0.451,
+    "n_rebalances": 51,
+    "n_trades": 2819,
+    "turnover_per_year": 5.9,
+    "final_equity": 0.9853
+  },
+  "gate_pass": "False",
+  "user_gate_threshold": 1.5
+}
