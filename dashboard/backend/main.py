@@ -96,6 +96,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("daily_report_scheduler_start_failed", error=str(e))
 
+    # Start uptime watchdog (emails on deployment/scheduler silence)
+    from core.services.uptime_watchdog import get_watchdog
+    watchdog = get_watchdog()
+    try:
+        await watchdog.start()
+        logger.info("uptime_watchdog_started_status", status=watchdog.status())
+    except Exception as e:
+        logger.error("uptime_watchdog_start_failed", error=str(e))
+
     # Start cloud sync scheduler (no-op if Supabase not configured)
     from core.services.cloud_sync_scheduler import get_cloud_sync_scheduler
     cloud_scheduler = get_cloud_sync_scheduler()
@@ -119,6 +128,10 @@ async def lifespan(app: FastAPI):
         await cloud_scheduler.stop()
     except Exception as e:
         logger.warning("cloud_sync_scheduler_stop_failed", error=str(e))
+    try:
+        await watchdog.stop()
+    except Exception as e:
+        logger.warning("uptime_watchdog_stop_failed", error=str(e))
     try:
         from core.cloud import close_supabase_client
         await close_supabase_client()
