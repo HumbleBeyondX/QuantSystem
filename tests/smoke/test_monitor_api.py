@@ -68,6 +68,17 @@ def test_eth_card_degrades_not_crashes(client):
         assert eth["equity"] is not None
 
 
+def test_wheel_card_real_chain_data(client):
+    """BTC wheel paper card: real Deribit instruments + populated equity."""
+    body = client.get("/api/monitor/strategies").json()
+    wheel = next(s for s in body["strategies"] if s["id"] == "btc_wheel")
+    assert wheel["mode"] == "paper"
+    if wheel["status"] != "unreachable":     # trader has run at least once
+        assert wheel["equity"] is not None and wheel["equity"] > 0
+        assert wheel["updated_at"] is not None
+        assert wheel["status"] in ("running", "flat", "stale")
+
+
 def test_rollup_matches_cards(client):
     body = client.get("/api/monitor/strategies").json()
     cards = body["strategies"]

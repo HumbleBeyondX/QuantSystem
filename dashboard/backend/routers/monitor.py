@@ -151,6 +151,53 @@ def _gamma_card() -> StrategyCard:
 
 
 # ────────────────────────────────────────────────────────────
+# BTC wheel (local paper, REAL Deribit chains — shadow fills)
+# ────────────────────────────────────────────────────────────
+
+def _wheel_card() -> StrategyCard:
+    card = StrategyCard(
+        id="btc_wheel", name="BTC Wheel (real-chain paper)", direction="neutral",
+        mode="paper", status="flat", source="local:deribit_shadow",
+    )
+    daily = LOG_DIR / "btc_wheel_daily.jsonl"
+    try:
+        lines = daily.read_text().strip().splitlines()
+        if not lines:
+            card.status = "unreachable"
+            return card
+        last = json.loads(lines[-1])
+        prev = json.loads(lines[-2]) if len(lines) > 1 else last
+        card.equity = float(last["total_equity"])
+        card.unrealized = float(last.get("unrealized", 0.0))
+        card.today_realized = round(
+            float(last["realized"]) - float(prev["realized"]), 2)
+        prev_eq = float(prev["total_equity"]) or GAMMA_INITIAL_CAPITAL
+        card.today_pct = round((card.equity / prev_eq - 1) * 100, 2)
+        card.total_return_pct = round(
+            (card.equity / GAMMA_INITIAL_CAPITAL - 1) * 100, 2)
+        card.positions = 1 if last.get("position_open") else 0
+        card.status = "running" if last.get("position_open") else "flat"
+        card.updated_at = last.get("logged_at")
+        card.trades = int(last.get("n_trades", 0))
+        if card.trades:
+            card.win_rate = round(last.get("wins", 0) / card.trades * 100, 1)
+        card.spark = [round(float(json.loads(x)["total_equity"]), 2)
+                      for x in lines[-30:]]
+        logged = datetime.fromisoformat(last["logged_at"])
+        if (datetime.now(timezone.utc) - logged).days > 4:
+            card.status = "stale"
+    except FileNotFoundError:
+        card.status = "unreachable"
+        card.source = "local:not_started"
+    except Exception as e:
+        logger.warning("monitor_wheel_card_failed", error=str(e))
+        card.status = "unreachable"
+    card.expectancy = _expectancy(card.win_rate, card.profit_factor)
+    card.flags = _flags(card)
+    return card
+
+
+# ────────────────────────────────────────────────────────────
 # ETH sniper (Tokyo VPS live runner, proxied)
 # ────────────────────────────────────────────────────────────
 
@@ -208,10 +255,11 @@ async def _eth_card() -> StrategyCard:
 @router.get("/strategies", response_model=MonitorSnapshot)
 async def monitor_strategies() -> MonitorSnapshot:
     """All effective strategies in monitor-card form + portfolio rollup."""
-    gamma, eth = await asyncio.gather(
-        asyncio.to_thread(_gamma_card), _eth_card(),
+    gamma, wheel, eth = await asyncio.gather(
+        asyncio.to_thread(_gamma_card), asyncio.to_thread(_wheel_card),
+        _eth_card(),
     )
-    cards = [gamma, eth]
+    cards = [gamma, wheel, eth]
     return MonitorSnapshot(
         generated_at=datetime.now(timezone.utc).isoformat(),
         total_equity=round(sum(c.equity or 0 for c in cards), 2),
