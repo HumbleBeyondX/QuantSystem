@@ -60,6 +60,7 @@ class StrategyCard(BaseModel):
     flags: List[str] = []
     source: str = ""
     updated_at: Optional[str] = None
+    spark: Optional[List[float]] = None   # real equity history (last ≤30 marks)
 
 
 class MonitorSnapshot(BaseModel):
@@ -118,6 +119,8 @@ def _gamma_card() -> StrategyCard:
         card.positions = 1 if last.get("position_open") else 0
         card.status = "running" if last.get("position_open") else "flat"
         card.updated_at = last.get("logged_at")
+        card.spark = [round(float(json.loads(x)["total_equity"]), 2)
+                      for x in lines[-30:]]
 
         # freshness: >4 calendar days without a row = stale scheduler
         logged = datetime.fromisoformat(last["logged_at"])

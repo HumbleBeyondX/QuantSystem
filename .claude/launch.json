@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "backend",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uvicorn", "dashboard.backend.main:app", "--port", "8002"],
+      "port": 8002
+    },
+    {
       "name": "dashboard",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["next", "dev", "--port", "3000"],
