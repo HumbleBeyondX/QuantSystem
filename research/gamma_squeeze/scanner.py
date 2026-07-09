@@ -148,11 +148,23 @@ class GammaSqueezeScanner:
         risk_free_rate: float = 0.045,
         otm_band: tuple = (0.05, 0.15),
         iv_lookback_days: int = 252,
+        data_source: str = "alpaca",
     ):
         self.max_dte = max_dte
         self.min_dollar_volume = min_dollar_volume
         self.min_option_strikes = min_option_strikes
         self.risk_free_rate = risk_free_rate
+        # Chain source: Alpaca OPRA (real greeks/IV/OI) preferred; yfinance
+        # fallback keeps the scanner usable without credentials.
+        self._alpaca = None
+        if data_source == "alpaca":
+            try:
+                from research.gamma_squeeze.alpaca_data import AlpacaOptionsProvider
+                self._alpaca = AlpacaOptionsProvider()
+            except Exception as e:
+                import warnings
+                warnings.warn(f"Alpaca chain provider unavailable ({e}); "
+                              f"falling back to yfinance chains + BS greeks")
         self.otm_band = otm_band
         self.iv_lookback_days = iv_lookback_days
 
@@ -188,51 +200,68 @@ class GammaSqueezeScanner:
                 result.error = "below_liquidity_threshold"
                 return result
 
-            # ── Option chain: collect calls + puts under max_dte ──
-            try:
-                expirations = t.options or []
-            except Exception as e:
-                result.error = f"options_unavailable:{e}"
-                return result
-
-            today = date.today()
-            usable_exps = []
-            for exp_str in expirations:
+            # ── Option chain: Alpaca OPRA (real greeks) or yfinance fallback ──
+            if self._alpaca is not None:
                 try:
-                    exp_date = datetime.strptime(exp_str, "%Y-%m-%d").date()
-                    dte = (exp_date - today).days
-                    if 1 <= dte <= self.max_dte:
-                        usable_exps.append((exp_str, dte))
-                except ValueError:
-                    continue
-
-            if not usable_exps:
-                result.error = "no_usable_expirations"
-                return result
-
-            all_calls: List[pd.DataFrame] = []
-            all_puts: List[pd.DataFrame] = []
-            for exp_str, dte in usable_exps[:6]:  # cap at 6 expiries for speed
+                    chain_df = self._alpaca.get_chain(ticker, self.max_dte)
+                except Exception as e:
+                    result.error = f"alpaca_chain_failed:{e}"
+                    return result
+                if chain_df.empty:
+                    result.error = "no_chain_data"
+                    return result
+                calls_df = chain_df[chain_df["type"] == "call"].copy()
+                puts_df = chain_df[chain_df["type"] == "put"].copy()
+                if calls_df.empty:
+                    result.error = "no_chain_data"
+                    return result
+                result.nearest_expiry = str(calls_df["expiry"].min())
+            else:
                 try:
-                    chain = t.option_chain(exp_str)
-                    calls = chain.calls.copy()
-                    puts = chain.puts.copy()
-                    calls["dte"] = dte
-                    puts["dte"] = dte
-                    all_calls.append(calls)
-                    all_puts.append(puts)
-                except Exception:
-                    continue
+                    expirations = t.options or []
+                except Exception as e:
+                    result.error = f"options_unavailable:{e}"
+                    return result
 
-            if not all_calls:
-                result.error = "no_chain_data"
-                return result
+                today = date.today()
+                usable_exps = []
+                for exp_str in expirations:
+                    try:
+                        exp_date = datetime.strptime(exp_str, "%Y-%m-%d").date()
+                        dte = (exp_date - today).days
+                        if 1 <= dte <= self.max_dte:
+                            usable_exps.append((exp_str, dte))
+                    except ValueError:
+                        continue
 
-            calls_df = pd.concat(all_calls, ignore_index=True)
-            puts_df = pd.concat(all_puts, ignore_index=True)
+                if not usable_exps:
+                    result.error = "no_usable_expirations"
+                    return result
+
+                all_calls: List[pd.DataFrame] = []
+                all_puts: List[pd.DataFrame] = []
+                for exp_str, dte in usable_exps[:6]:  # cap at 6 expiries for speed
+                    try:
+                        chain = t.option_chain(exp_str)
+                        calls = chain.calls.copy()
+                        puts = chain.puts.copy()
+                        calls["dte"] = dte
+                        puts["dte"] = dte
+                        all_calls.append(calls)
+                        all_puts.append(puts)
+                    except Exception:
+                        continue
+
+                if not all_calls:
+                    result.error = "no_chain_data"
+                    return result
+
+                calls_df = pd.concat(all_calls, ignore_index=True)
+                puts_df = pd.concat(all_puts, ignore_index=True)
+                result.nearest_expiry = str(usable_exps[0][0])
+
             n_strikes = calls_df["strike"].nunique()
             result.n_strikes = int(n_strikes)
-            result.nearest_expiry = str(usable_exps[0][0])
 
             if n_strikes < self.min_option_strikes:
                 result.error = "thin_chain"
@@ -252,25 +281,33 @@ class GammaSqueezeScanner:
             # Assumption: dealers are short calls, long puts → net gamma sign
             # comes from imbalance. Approximate dollar gamma per option as:
             #   contract_gamma × OI × 100 × spot²  (in $ per 1% move)
+            # Prefer exchange-computed gamma (Alpaca OPRA snapshots); fall
+            # back to Black-Scholes only for contracts missing greeks.
+            def _row_gamma(row) -> float:
+                g = float(row.get("gamma", 0) or 0)
+                if g > 0:
+                    return g
+                iv = float(row.get("impliedVolatility", 0) or 0)
+                if iv <= 0:
+                    return 0.0
+                return bs_gamma(spot, float(row["strike"]),
+                                row["dte"] / 365, iv, self.risk_free_rate)
+
             call_gex_dollars = 0.0
             for _, row in calls_df.iterrows():
-                iv = float(row.get("impliedVolatility", 0))
-                strike = float(row["strike"])
                 oi = float(row["openInterest"])
-                if iv <= 0 or oi <= 0:
+                if oi <= 0:
                     continue
-                gamma = bs_gamma(spot, strike, row["dte"] / 365, iv, self.risk_free_rate)
+                gamma = _row_gamma(row)
                 call_gex_dollars += gamma * oi * 100 * (spot ** 2) * 0.01
 
             put_gex_dollars = 0.0
             puts_df["impliedVolatility"] = puts_df["impliedVolatility"].fillna(0).astype(float)
             for _, row in puts_df.iterrows():
-                iv = float(row.get("impliedVolatility", 0))
-                strike = float(row["strike"])
                 oi = float(row["openInterest"])
-                if iv <= 0 or oi <= 0:
+                if oi <= 0:
                     continue
-                gamma = bs_gamma(spot, strike, row["dte"] / 365, iv, self.risk_free_rate)
+                gamma = _row_gamma(row)
                 put_gex_dollars += gamma * oi * 100 * (spot ** 2) * 0.01
 
             # Dealer net gamma ≈ −(call GEX) + put GEX
