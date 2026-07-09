@@ -82,9 +82,36 @@ async def report_preview_text():
 
 @router.post("/send-now")
 async def report_send_now():
-    """Manually trigger and send the daily report immediately."""
+    """Manually trigger and send the daily report immediately.
+
+    Production rule: a failed send must tell the operator WHY — the most
+    common cause (no email credentials configured) is a config task, not a
+    debugging session.
+    """
+    # Pre-flight: distinguish "not configured" from genuine send failures.
+    try:
+        from dashboard.alerts.email_notifier import EmailNotifier
+        notifier = EmailNotifier()
+        configured = notifier.is_configured
+    except Exception:
+        configured = True   # introspection must never mask the real attempt
+    if not configured:
+        raise HTTPException(422, detail={
+            "error": "email_not_configured",
+            "detail": "No email credentials found. Set ALERT_EMAIL_SENDER + "
+                      "ALERT_EMAIL_PASSWORD (Gmail App Password) in .env, or "
+                      "provision Gmail OAuth2 credentials, then restart the "
+                      "backend.",
+            "checked_env_keys": ["ALERT_EMAIL_SENDER", "ALERT_EMAIL_PASSWORD"],
+        })
+
     scheduler = get_scheduler()
     ok = await scheduler.trigger_now()
     if not ok:
-        raise HTTPException(500, "Report failed to build or send. Check logs.")
+        st = scheduler.status()
+        raise HTTPException(500, detail={
+            "error": "report_send_failed",
+            "detail": st.get("last_error") or "Report failed to build or send.",
+            "scheduler_status": st,
+        })
     return {"status": "sent", "recipient_info": scheduler.status()}
