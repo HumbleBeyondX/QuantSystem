@@ -32,8 +32,13 @@ from strategies.registry import discover_strategies, create_strategy
 
 
 def load_data(csv_path: str) -> pd.DataFrame:
-    """Load SPY gamma scalp CSV with features."""
+    """Load SPY gamma scalp CSV with features (quality-guarded)."""
+    from data.quality.guards import ensure_bars_valid
     df = pd.read_csv(csv_path, parse_dates=["timestamp"])
+    _checked, rep = ensure_bars_valid(
+        df.set_index("timestamp"), name="gamma_scalp_csv", stale_after_days=None)
+    print(f"  DQ: {rep}")
+    df = _checked.reset_index().rename(columns={"index": "timestamp"})
     print(f"  Loaded {len(df)} rows from {csv_path}")
     print(f"  Date range: {df['timestamp'].iloc[0].date()} to {df['timestamp'].iloc[-1].date()}")
     print(f"  SPY: ${df['close'].iloc[0]:.2f} to ${df['close'].iloc[-1]:.2f}")

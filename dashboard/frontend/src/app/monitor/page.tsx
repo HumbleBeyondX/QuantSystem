@@ -221,6 +221,7 @@ export default function MonitorPage() {
 
   const flagged = snap?.strategies.filter((s) => s.flags.includes('thin_edge')) ?? []
   const unreachable = snap?.strategies.filter((s) => s.status === 'unreachable') ?? []
+  const staleOnes = snap?.strategies.filter((s) => s.status === 'stale') ?? []
 
   return (
     <div className="p-6 space-y-4">
@@ -251,7 +252,7 @@ export default function MonitorPage() {
         </div>
       )}
 
-      {(flagged.length > 0 || unreachable.length > 0) && (
+      {(flagged.length > 0 || unreachable.length > 0 || staleOnes.length > 0) && (
         <div className="border border-amber-500/40 bg-amber-500/5 rounded-lg px-4 py-2.5 text-sm space-x-3">
           {flagged.length > 0 && (
             <span>
@@ -263,6 +264,12 @@ export default function MonitorPage() {
             <span>
               <b className="text-rose-400">✕ 失联:</b>{' '}
               {unreachable.map((s) => s.id).join('、')}
+            </span>
+          )}
+          {staleOnes.length > 0 && (
+            <span>
+              <b className="text-amber-400">◔ 数据陈旧(调度器可能停了):</b>{' '}
+              {staleOnes.map((s) => s.id).join('、')}
             </span>
           )}
         </div>

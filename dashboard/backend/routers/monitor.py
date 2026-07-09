@@ -122,9 +122,10 @@ def _gamma_card() -> StrategyCard:
         card.spark = [round(float(json.loads(x)["total_equity"]), 2)
                       for x in lines[-30:]]
 
-        # freshness: >4 calendar days without a row = stale scheduler
+        # freshness: >2 calendar days without a row = stale scheduler
+        # (daily strategies; weekends tolerated, silence beyond that = incident)
         logged = datetime.fromisoformat(last["logged_at"])
-        if (datetime.now() - logged).days > 4:
+        if (datetime.now() - logged).days > 2:
             card.status = "stale"
 
         if trades.exists():
@@ -184,7 +185,7 @@ def _wheel_card() -> StrategyCard:
         card.spark = [round(float(json.loads(x)["total_equity"]), 2)
                       for x in lines[-30:]]
         logged = datetime.fromisoformat(last["logged_at"])
-        if (datetime.now(timezone.utc) - logged).days > 4:
+        if (datetime.now(timezone.utc) - logged).days > 2:
             card.status = "stale"
     except FileNotFoundError:
         card.status = "unreachable"

@@ -61,6 +61,11 @@ def load_aligned(sym: str, cur: str) -> pd.DataFrame:
     df = pd.DataFrame({"px": px, "dvol": dvol})
     n_px, n_dv = df["px"].notna().sum(), df["dvol"].notna().sum()
     df = df.dropna()
+    from data.quality.guards import ensure_bars_valid, flat_series
+    df, rep = ensure_bars_valid(df, name=f"{sym}+dvol", stale_after_days=None)
+    print(f"  DQ: {rep}")
+    if flat_series(df["dvol"], window=10):
+        raise ValueError(f"[{sym}] DVOL flat for 10 days — vendor data suspect")
     print(f"  [{sym}] alignment: {n_px} px days ∩ {n_dv} dvol days → "
           f"{len(df)} aligned ({df.index[0].date()} → {df.index[-1].date()})")
     return df

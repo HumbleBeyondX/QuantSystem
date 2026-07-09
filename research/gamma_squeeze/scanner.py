@@ -210,6 +210,13 @@ class GammaSqueezeScanner:
                 if chain_df.empty:
                     result.error = "no_chain_data"
                     return result
+                # Anomaly guard: a chain that parses but is all zeros poisoned
+                # this scanner for two weeks (yfinance incident, 2026-07).
+                from data.quality.guards import chain_sanity
+                rep = chain_sanity(chain_df, ticker)
+                if not rep.ok:
+                    result.error = f"chain_anomaly:{';'.join(rep.issues)}"
+                    return result
                 calls_df = chain_df[chain_df["type"] == "call"].copy()
                 puts_df = chain_df[chain_df["type"] == "put"].copy()
                 if calls_df.empty:
