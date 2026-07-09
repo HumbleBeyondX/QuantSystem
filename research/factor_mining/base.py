@@ -99,6 +99,7 @@ def get_all_factors(
         academic,
         crash_risk,
         composite,
+        alpha101,
     )
 
     factors = [cls() for cls in _REGISTRY.values()]

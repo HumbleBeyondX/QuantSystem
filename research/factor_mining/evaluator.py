@@ -457,9 +457,10 @@ def cluster_factors(
     # Distance = 1 - |corr|
     dist = 1 - valid.abs()
     dist = (dist + dist.T) / 2
-    np.fill_diagonal(dist.values, 0.0)
+    dist_arr = np.ascontiguousarray(dist.values, dtype=float)
+    np.fill_diagonal(dist_arr, 0.0)
 
-    condensed = squareform(dist.values, checks=False)
+    condensed = squareform(dist_arr, checks=False)
     if not np.all(np.isfinite(condensed)):
         return {i + 1: [name] for i, name in enumerate(corr_matrix.index)}
 
