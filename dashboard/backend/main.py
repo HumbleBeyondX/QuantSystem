@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from core.logging import get_logger, setup_logging
 from core.paths import ensure_user_dir_scaffolded, get_env_path
-from dashboard.backend.routers import backtest, data_layer, deployments, live_trading, logs as logs_router, market_data, paper_trading, portfolio, reports, risk, strategies, system, workshop
+from dashboard.backend.routers import backtest, data_layer, deployments, live_trading, logs as logs_router, market_data, monitor, paper_trading, portfolio, reports, risk, strategies, system, workshop
 
 logger = get_logger(__name__)
 
@@ -165,6 +165,7 @@ app.include_router(data_layer.router, prefix="/api/data", tags=["Data Layer"])
 app.include_router(deployments.router, tags=["Cloud Deployments"])
 app.include_router(reports.router, tags=["Reports"])
 app.include_router(logs_router.router, tags=["Logs"])
+app.include_router(monitor.router, prefix="/api/monitor", tags=["Monitor"])
 
 
 @app.get("/")
