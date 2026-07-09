@@ -26,6 +26,7 @@ sys.path.insert(0, str(ROOT))
 import numpy as np
 import pandas as pd
 import yfinance as yf
+from data.quality.guards import ensure_utc_naive
 from strategies.options.gamma_scalp_strategy import bs_call, bs_put
 
 R, SPREAD = 0.03, 0.03
@@ -56,7 +57,7 @@ def fetch_dvol(currency: str) -> pd.Series:
 
 def load_aligned(sym: str, cur: str) -> pd.DataFrame:
     px = yf.Ticker(sym).history(start="2020-06-01")["Close"]
-    px.index = px.index.tz_localize(None).normalize()
+    px = ensure_utc_naive(px)
     dvol = fetch_dvol(cur)
     df = pd.DataFrame({"px": px, "dvol": dvol})
     n_px, n_dv = df["px"].notna().sum(), df["dvol"].notna().sum()

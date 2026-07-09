@@ -27,18 +27,31 @@ import pandas as pd
 # Timestamps
 # ────────────────────────────────────────────────────────────
 
-def ensure_utc_naive(obj: Union[pd.Series, pd.DataFrame, pd.DatetimeIndex]):
-    """Normalize a datetime index (or the index of a Series/DataFrame) to
-    tz-naive UTC, normalized to midnight. THE single sanctioned way to align
-    daily data — use this instead of ad-hoc `tz_localize(None)` chains."""
+def to_utc_naive(obj: Union[pd.Series, pd.DataFrame, pd.DatetimeIndex, pd.Timestamp]):
+    """tz-aware → tz-naive UTC, PRESERVING intraday times. Use for 1h/4h bars
+    and scalar Timestamps. (Daily data should use ensure_utc_naive, which
+    also midnight-normalizes.)"""
+    if isinstance(obj, pd.Timestamp):
+        return obj.tz_convert("UTC").tz_localize(None) if obj.tzinfo else obj
     if isinstance(obj, (pd.Series, pd.DataFrame)):
         obj = obj.copy()
-        obj.index = ensure_utc_naive(obj.index)
+        obj.index = to_utc_naive(obj.index)
         return obj
     idx = pd.DatetimeIndex(obj)
     if idx.tz is not None:
         idx = idx.tz_convert("UTC").tz_localize(None)
-    return idx.normalize()
+    return idx
+
+
+def ensure_utc_naive(obj: Union[pd.Series, pd.DataFrame, pd.DatetimeIndex]):
+    """Normalize a datetime index (or the index of a Series/DataFrame) to
+    tz-naive UTC, normalized to midnight. THE single sanctioned way to align
+    DAILY data — use this instead of ad-hoc `tz_localize(None)` chains."""
+    if isinstance(obj, (pd.Series, pd.DataFrame)):
+        obj = obj.copy()
+        obj.index = ensure_utc_naive(obj.index)
+        return obj
+    return to_utc_naive(obj).normalize()
 
 
 # ────────────────────────────────────────────────────────────

@@ -35,7 +35,8 @@ class DataPanel:
         long_df = long_df.copy()
         long_df["timestamp"] = pd.to_datetime(long_df["timestamp"])
         if hasattr(long_df["timestamp"].dt, "tz") and long_df["timestamp"].dt.tz is not None:
-            long_df["timestamp"] = long_df["timestamp"].dt.tz_localize(None)
+            from data.quality.guards import to_utc_naive
+            long_df["timestamp"] = to_utc_naive(pd.DatetimeIndex(long_df["timestamp"]))
 
         self._long = long_df.sort_values(["ticker", "timestamp"]).reset_index(drop=True)
 

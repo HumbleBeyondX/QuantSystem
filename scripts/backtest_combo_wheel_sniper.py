@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 import numpy as np
 import pandas as pd
+from data.quality.guards import ensure_utc_naive, to_utc_naive
 from strategies.options.gamma_scalp_strategy import bs_call, bs_put
 from scripts.backtest_crypto_wheel_v2 import load_aligned
 
@@ -68,7 +69,7 @@ def wheel_curve(df: pd.DataFrame) -> pd.Series:
 def sniper_curve() -> pd.Series:
     df = pd.read_csv(ROOT / "data/sample/ETH_USDT_4h.csv")
     df.columns = [c.lower() for c in df.columns]
-    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).dt.tz_localize(None)
+    df["timestamp"] = to_utc_naive(pd.DatetimeIndex(pd.to_datetime(df["timestamp"], utc=True)))
     df = df.sort_values("timestamp").reset_index(drop=True)
     bt = BTCSniperBacktest(initial_capital=100_000, leverage=50,
                            atr_trail=3.0, max_hold=180)

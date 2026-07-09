@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT))
 import numpy as np
 import pandas as pd
 import yfinance as yf
+from data.quality.guards import ensure_utc_naive, to_utc_naive
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -65,7 +66,7 @@ def get_bars(symbols, start, end):
         time.sleep(0.3)
         for s in need:
             bars = data.get(s, [])
-            ser = pd.Series({pd.Timestamp(b.timestamp).tz_localize(None).normalize():
+            ser = pd.Series({ensure_utc_naive(pd.DatetimeIndex([b.timestamp]))[0]:
                              float(b.close) for b in bars}).sort_index()
             _bar_cache[(s, start.date(), end.date())] = ser
     return {s: _bar_cache[(s, start.date(), end.date())] for s in symbols}
@@ -110,7 +111,7 @@ def main():
     px = {}
     for t in LEADERS + ["SPY"]:
         s = yf.Ticker(t).history(start="2023-01-01", auto_adjust=True)["Close"]
-        s.index = s.index.tz_localize(None).normalize()
+        s = ensure_utc_naive(s)
         px[t] = s
     px = pd.DataFrame(px).ffill()
     ma50, ma200 = px.rolling(50).mean(), px.rolling(200).mean()

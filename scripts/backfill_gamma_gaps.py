@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT))
 import numpy as np
 import pandas as pd
 import yfinance as yf
+from data.quality.guards import ensure_utc_naive, to_utc_naive
 import yaml
 from scripts.backtest_gamma_scalp import run_backtest_sync
 
@@ -30,7 +31,7 @@ spy = yf.Ticker("SPY").history(start="2025-10-01", interval="1d")
 vix = yf.Ticker("^VIX").history(start="2025-10-01", interval="1d")
 irx = yf.Ticker("^IRX").history(start="2025-10-01", interval="1d")
 for df_ in (spy, vix, irx):
-    df_.index = df_.index.tz_localize(None).normalize()
+    df_.index = ensure_utc_naive(df_.index)
 
 df = pd.DataFrame({
     "open": spy["Open"], "high": spy["High"], "low": spy["Low"],

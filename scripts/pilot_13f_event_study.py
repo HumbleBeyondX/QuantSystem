@@ -21,6 +21,7 @@ import warnings
 warnings.filterwarnings("ignore")
 import numpy as np
 import pandas as pd
+from data.quality.guards import ensure_utc_naive, to_utc_naive
 
 UA = {"User-Agent": "QuantSystem research boxiao.huang.duke@gmail.com"}
 
@@ -166,12 +167,12 @@ def main():
     # ── Event study via yfinance ──
     import yfinance as yf
     spy = yf.Ticker("SPY").history(start="2022-01-01")["Close"]
-    spy.index = spy.index.tz_localize(None)
+    spy = ensure_utc_naive(spy)
     rows = []
     for _, e in ev.iterrows():
         try:
             px = yf.Ticker(e["ticker"]).history(start="2022-01-01")["Close"]
-            px.index = px.index.tz_localize(None)
+            px = ensure_utc_naive(px)
         except Exception:
             continue
         fd = pd.Timestamp(e["filing_date"])

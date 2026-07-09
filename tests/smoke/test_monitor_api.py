@@ -99,3 +99,19 @@ def test_expectancy_and_flags_rule():
     card2 = StrategyCard(id="y", name="y", direction="long", mode="paper",
                          status="running", expectancy=_expectancy(38.0, 2.48))
     assert "thin_edge" not in _flags(card2)
+
+
+def test_data_health_real_probes(client):
+    """Week-2: /api/data-health/sources runs REAL probes, bounded, never 500s."""
+    import time as _t
+    t0 = _t.time()
+    r = client.get("/api/data-health/sources")
+    assert r.status_code == 200
+    assert _t.time() - t0 < 20, "probes must run in parallel and be bounded"
+    body = r.json()
+    ids = {s["id"] for s in body["sources"]}
+    assert {"deribit", "alpaca", "edgar_13f", "yahoo", "tokyo_vps"} <= ids
+    for s in body["sources"]:
+        assert isinstance(s["ok"], bool) and s["latency_ms"] is not None
+    names = {d["name"] for d in body["datasets"]}
+    assert any("gamma" in n for n in names) and any("wheel" in n for n in names)

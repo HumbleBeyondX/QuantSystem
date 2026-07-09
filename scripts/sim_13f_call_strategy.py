@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT))
 import numpy as np
 import pandas as pd
 import yfinance as yf
+from data.quality.guards import ensure_utc_naive, to_utc_naive
 from strategies.options.gamma_scalp_strategy import bs_call
 
 CSV = ROOT / "results" / "pilot_13f_event_study.csv"
@@ -38,7 +39,7 @@ _px_cache: dict[str, pd.Series] = {}
 def prices(tk: str) -> pd.Series:
     if tk not in _px_cache:
         s = yf.Ticker(tk).history(start="2021-06-01")["Close"]
-        s.index = s.index.tz_localize(None)
+        s = ensure_utc_naive(s)
         _px_cache[tk] = s
     return _px_cache[tk]
 
