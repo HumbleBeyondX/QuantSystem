@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8001'
@@ -111,6 +112,62 @@ interface DeployedStrategy {
   spy_price: number
 }
 
+interface WheelPosition {
+  put: string
+  call: string
+  kp: number
+  kc: number
+  expiry_ms: number
+  mult: number
+  entry_index: number
+  entry_bid_p: number
+  entry_bid_c: number
+  credit_total: number
+  opened: string
+}
+
+interface WheelMark {
+  date: string
+  index: number
+  action: string
+  realized: number
+  unrealized: number
+  total_equity: number
+  position_open: boolean
+  put: string | null
+  call: string | null
+  n_trades: number
+  wins: number
+}
+
+interface WheelTrade {
+  ts: string
+  action: string
+  put?: string
+  call?: string
+  credit_total?: number
+  pnl?: number
+  intrinsic?: number
+  settle_index?: number
+}
+
+interface WheelData {
+  strategy_id: string
+  state: {
+    equity: number
+    realized: number
+    n_trades: number
+    wins: number
+    created: string
+  }
+  position: WheelPosition | null
+  last_mark: WheelMark | null
+  equity_curve: { date: string; equity: number }[]
+  trades: WheelTrade[]
+  n_trades: number
+  wins: number
+}
+
 // ── Helper Components ────────────────────────────────────────
 
 function MetricCard({ title, value, sub, color = 'text-gray-100' }: {
@@ -121,31 +178,6 @@ function MetricCard({ title, value, sub, color = 'text-gray-100' }: {
       <p className="text-[11px] text-gray-500 uppercase tracking-wider">{title}</p>
       <p className={`text-lg font-bold mt-1 font-mono ${color}`}>{value}</p>
       {sub && <p className="text-[10px] text-gray-500 mt-0.5">{sub}</p>}
-    </div>
-  )
-}
-
-function GreekGauge({ label, value, color }: {
-  label: string; value: number; color: string
-}) {
-  // Auto-scale: use absolute value to determine bar width, cap at 100%
-  const absVal = Math.abs(value)
-  // Dynamic scaling based on Greek type
-  const maxRef = label === 'Delta' ? 200 : label === 'Gamma' ? 100 : label === 'Theta' ? 3000 : 2000
-  const pct = Math.min(100, (absVal / maxRef) * 100)
-
-  return (
-    <div className="flex items-center gap-3">
-      <span className="text-xs text-gray-400 w-14 text-right">{label}</span>
-      <div className="flex-1 h-2 bg-background rounded-full overflow-hidden relative">
-        <div
-          className={`h-full rounded-full ${color}`}
-          style={{ width: `${Math.max(pct, 2)}%` }}
-        />
-      </div>
-      <span className={`text-xs font-mono w-20 text-right ${absVal > 0 ? 'text-gray-200' : 'text-gray-600'}`}>
-        {value > 0 ? '+' : ''}{value.toFixed(1)}
-      </span>
     </div>
   )
 }
@@ -206,6 +238,7 @@ export default function TradingPage() {
   const [running, setRunning] = useState(false)
   const [selectedSource, setSelectedSource] = useState('alpaca')
   const [useExecution, setUseExecution] = useState(true)
+  const [wheel, setWheel] = useState<WheelData | null>(null)
 
   // Fetch deployed strategies list
   const fetchDeployed = useCallback(async () => {
@@ -260,12 +293,27 @@ export default function TradingPage() {
     }
   }, [selectedStrategyId])
 
+  // Fetch BTC wheel paper-trading status (404 = wheel never ran)
+  const fetchWheel = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/api/paper-trading/btc-wheel`)
+      if (!res.ok) {
+        setWheel(null)
+        return
+      }
+      setWheel(await res.json())
+    } catch {
+      setWheel(null)
+    }
+  }, [])
+
   useEffect(() => {
     fetchDeployed()
     fetchData()
-    const interval = setInterval(() => { fetchData(); fetchDeployed() }, 10000)
+    fetchWheel()
+    const interval = setInterval(() => { fetchData(); fetchDeployed(); fetchWheel() }, 30000)
     return () => clearInterval(interval)
-  }, [fetchData, fetchDeployed])
+  }, [fetchData, fetchDeployed, fetchWheel])
 
   const handleRunOnce = async () => {
     setRunning(true)
@@ -387,6 +435,11 @@ export default function TradingPage() {
 
       {tab === 'monitor' ? (
         <>
+          {/* ── SPY Gamma Scalp ── */}
+          <h2 className="text-base font-semibold text-gray-200 border-b border-border pb-2">
+            SPY Gamma Scalp &mdash; paper (Alpaca OPRA)
+          </h2>
+
           {/* ── KPI Cards ── */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
             <MetricCard
@@ -458,56 +511,11 @@ export default function TradingPage() {
               )}
             </div>
 
-            {/* Greeks */}
-            <div className="bg-surface rounded-xl border border-border p-5">
-              <h3 className="text-sm font-semibold text-gray-300 mb-4">Portfolio Greeks</h3>
-              <div className="space-y-3">
-                <GreekGauge label="Delta" value={s.portfolio_delta ?? 0} color="bg-primary" />
-                <GreekGauge label="Gamma" value={s.portfolio_gamma ?? 0} color="bg-success" />
-                <GreekGauge label="Theta" value={s.portfolio_theta ?? 0} color="bg-danger" />
-                <GreekGauge label="Vega" value={s.portfolio_vega ?? 0} color="bg-accent" />
-              </div>
-            </div>
-
-            {/* Risk */}
-            <div className="bg-surface rounded-xl border border-border p-5">
-              <h3 className="text-sm font-semibold text-gray-300 mb-4">Risk Metrics</h3>
-              <div className="space-y-2.5 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Total Trades</span>
-                  <span className="font-mono">{s.total_trades}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Consec. Losses</span>
-                  <span className={`font-mono ${s.consecutive_losses >= 3 ? 'text-danger' : ''}`}>
-                    {s.consecutive_losses}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Peak Equity</span>
-                  <span className="font-mono">${(s.peak_equity ?? 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Drawdown</span>
-                  <span className={`font-mono ${
-                    s.peak_equity > 0 && s.total_equity < s.peak_equity + s.initial_capital ? 'text-warning' : ''
-                  }`}>
-                    {s.peak_equity > 0
-                      ? `${(((s.peak_equity + s.initial_capital - s.total_equity) / (s.peak_equity + s.initial_capital)) * 100).toFixed(2)}%`
-                      : '0.00%'
-                    }
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Win Rate</span>
-                  <span className="font-mono">
-                    {s.total_trades > 0
-                      ? `${((trades.filter(t => t.total_pnl > 0).length / Math.max(trades.length, 1)) * 100).toFixed(0)}%`
-                      : 'N/A'
-                    }
-                  </span>
-                </div>
-              </div>
+            {/* Greeks & risk metrics live on the Portfolio Risk page */}
+            <div className="lg:col-span-2 flex items-center">
+              <Link href="/risk" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">
+                Portfolio greeks &amp; risk limits &rarr; Portfolio Risk
+              </Link>
             </div>
           </div>
 
@@ -646,6 +654,152 @@ export default function TradingPage() {
               )}
             </div>
           </div>
+
+          {/* ── BTC Wheel ── */}
+          <h2 className="text-base font-semibold text-gray-200 border-b border-border pb-2">
+            BTC Wheel &mdash; paper (real Deribit chains)
+          </h2>
+
+          {wheel ? (
+            <>
+              {/* Summary Row */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                <MetricCard
+                  title="Total Equity"
+                  value={`$${(wheel.last_mark?.total_equity ?? wheel.state.equity).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                  color={(wheel.last_mark?.total_equity ?? wheel.state.equity) >= wheel.state.equity ? 'text-success' : 'text-danger'}
+                />
+                <MetricCard
+                  title="Realized P&L"
+                  value={`${(wheel.last_mark?.realized ?? wheel.state.realized) >= 0 ? '+' : ''}$${(wheel.last_mark?.realized ?? wheel.state.realized).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                  color={(wheel.last_mark?.realized ?? wheel.state.realized) >= 0 ? 'text-success' : 'text-danger'}
+                />
+                <MetricCard
+                  title="Unrealized P&L"
+                  value={`${(wheel.last_mark?.unrealized ?? 0) >= 0 ? '+' : ''}$${(wheel.last_mark?.unrealized ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                  color={(wheel.last_mark?.unrealized ?? 0) >= 0 ? 'text-success' : 'text-danger'}
+                />
+                <MetricCard
+                  title="BTC Index"
+                  value={wheel.last_mark ? `$${wheel.last_mark.index.toLocaleString(undefined, { minimumFractionDigits: 1 })}` : 'N/A'}
+                  sub={`Last: ${wheel.last_mark?.date ?? 'N/A'}`}
+                />
+                <div className="bg-surface rounded-xl border border-border p-4">
+                  <p className="text-[11px] text-gray-500 uppercase tracking-wider">Last Action</p>
+                  <span className={`inline-block mt-1.5 px-2 py-0.5 rounded text-xs font-bold ${
+                    wheel.last_mark?.action === 'OPEN' ? 'bg-primary/20 text-primary' :
+                    wheel.last_mark?.action === 'SETTLE' ? 'bg-warning/20 text-warning' :
+                    'bg-gray-700/50 text-gray-400'
+                  }`}>
+                    {wheel.last_mark?.action ?? 'N/A'}
+                  </span>
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    {wheel.n_trades} trades &middot; {wheel.wins} wins
+                  </p>
+                </div>
+              </div>
+
+              {/* Open Position */}
+              {wheel.position && (
+                <div className="bg-surface rounded-xl border border-border p-5">
+                  <h3 className="text-sm font-semibold text-gray-300 mb-4">Open Position — Short Strangle</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                    <div className="bg-background rounded-lg p-3">
+                      <span className="px-2 py-0.5 rounded text-xs font-bold bg-danger/20 text-danger">
+                        SHORT PUT {wheel.position.kp.toLocaleString()}
+                      </span>
+                      <p className="font-mono text-sm mt-2 text-gray-200">{wheel.position.put}</p>
+                    </div>
+                    <div className="bg-background rounded-lg p-3">
+                      <span className="px-2 py-0.5 rounded text-xs font-bold bg-danger/20 text-danger">
+                        SHORT CALL {wheel.position.kc.toLocaleString()}
+                      </span>
+                      <p className="font-mono text-sm mt-2 text-gray-200">{wheel.position.call}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                    <div><span className="text-gray-500">Entry index:</span> <span className="font-mono">${wheel.position.entry_index.toLocaleString(undefined, { minimumFractionDigits: 1 })}</span></div>
+                    <div><span className="text-gray-500">Total credit:</span> <span className="font-mono text-success">${wheel.position.credit_total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                    <div>
+                      <span className="text-gray-500">Expiry:</span>{' '}
+                      <span className="font-mono">
+                        {new Date(wheel.position.expiry_ms).toISOString().split('T')[0]}
+                        {' '}({Math.max(0, Math.ceil((wheel.position.expiry_ms - Date.now()) / 86400000))}d)
+                      </span>
+                    </div>
+                    <div><span className="text-gray-500">Multiplier:</span> <span className="font-mono">{wheel.position.mult.toFixed(4)}</span></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Equity Curve */}
+              <div className="bg-surface rounded-xl border border-border p-5">
+                <h3 className="text-sm font-semibold text-gray-300 mb-3">Equity Curve</h3>
+                <EquityCurveChart data={wheel.equity_curve.map(p => ({ ...p, drawdown: 0 }))} />
+                {wheel.equity_curve.length > 0 && (
+                  <div className="flex justify-between text-[10px] text-gray-600 mt-1 px-1">
+                    <span>{wheel.equity_curve[0]?.date}</span>
+                    <span>{wheel.equity_curve[wheel.equity_curve.length - 1]?.date}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Trades */}
+              <div className="bg-surface rounded-xl border border-border p-5">
+                <h3 className="text-sm font-semibold text-gray-300 mb-3">
+                  Trade History
+                  {wheel.trades.length > 0 && <span className="text-gray-500 font-normal ml-2">({wheel.trades.length} trades)</span>}
+                </h3>
+                <div className="overflow-x-auto max-h-72 overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-surface">
+                      <tr className="text-gray-500 border-b border-border">
+                        <th className="text-left py-2 px-2">Date</th>
+                        <th className="text-left px-2">Action</th>
+                        <th className="text-left px-2">Instruments</th>
+                        <th className="text-right px-2">Credit / P&L</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...wheel.trades].reverse().map((t, i) => (
+                        <tr key={i} className="border-b border-border/30 hover:bg-background/50 transition-colors">
+                          <td className="py-1.5 px-2 font-mono">{t.ts?.split('T')[0]}</td>
+                          <td className="px-2">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                              t.action === 'OPEN' ? 'bg-primary/20 text-primary' :
+                              (t.pnl ?? 0) >= 0 ? 'bg-success/20 text-success' : 'bg-danger/20 text-danger'
+                            }`}>
+                              {t.action}
+                            </span>
+                          </td>
+                          <td className="px-2 font-mono text-gray-400">
+                            {[t.put, t.call].filter(Boolean).join(' / ') || '--'}
+                          </td>
+                          <td className={`text-right px-2 font-mono ${
+                            t.action === 'OPEN' ? 'text-primary' : (t.pnl ?? 0) >= 0 ? 'text-success' : 'text-danger'
+                          }`}>
+                            {t.action === 'OPEN'
+                              ? `+$${(t.credit_total ?? 0).toFixed(2)}`
+                              : `${(t.pnl ?? 0) >= 0 ? '+' : ''}$${(t.pnl ?? 0).toFixed(2)}`
+                            }
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {wheel.trades.length === 0 && (
+                    <p className="text-center text-gray-500 py-6 text-sm">No wheel trades yet.</p>
+                  )}
+                </div>
+              </div>
+
+              <p className="text-[10px] text-gray-600">
+                Shadow fills at real Deribit bids &middot; marks at real mark prices &middot; settlement at intrinsic. First weekly settlement 2026-07-17.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-gray-500">BTC wheel not papering yet.</p>
+          )}
         </>
       ) : (
         /* ── Control Panel Tab ── */

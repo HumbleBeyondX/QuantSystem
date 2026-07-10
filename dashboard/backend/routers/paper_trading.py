@@ -481,3 +481,47 @@ async def get_config(strategy_id: str = Query(default="spy_gamma_scalp")):
         "execution_modes": ["internal", "alpaca", "ib"],
         "state_exists": _resolve_state_file(strategy_id).exists(),
     }
+
+
+# ---------------------------------------------------------------------------
+# BTC Wheel paper telemetry (real Deribit chains, shadow fills)
+# State: data/live_state/btc_wheel_state.json (human-readable JSON, not pkl)
+# Logs:  logs/paper_trading/btc_wheel_daily.jsonl / btc_wheel_trades.jsonl
+# ---------------------------------------------------------------------------
+
+@router.get("/btc-wheel")
+async def btc_wheel_status(history: int = Query(90, le=1000),
+                           trades: int = Query(30, le=500)):
+    """BTC wheel paper state + daily marks + settled trades."""
+    state_file = STATE_DIR / "btc_wheel_state.json"
+    if not state_file.exists():
+        raise HTTPException(404, "btc_wheel_state.json not found — wheel not papering yet")
+    state = json.loads(state_file.read_text(encoding="utf-8"))
+
+    def _tail_jsonl(path: Path, n: int) -> List[Dict[str, Any]]:
+        if not path.exists():
+            return []
+        rows = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line:
+                try:
+                    rows.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+        return rows[-n:]
+
+    daily = _tail_jsonl(LOG_DIR / "btc_wheel_daily.jsonl", history)
+    trade_rows = _tail_jsonl(LOG_DIR / "btc_wheel_trades.jsonl", trades)
+    last = daily[-1] if daily else {}
+    return {
+        "strategy_id": "btc_wheel",
+        "state": state,
+        "position": state.get("position"),
+        "last_mark": last,
+        "equity_curve": [{"date": r.get("date"), "equity": r.get("total_equity")}
+                         for r in daily],
+        "trades": trade_rows,
+        "n_trades": state.get("n_trades", 0),
+        "wins": state.get("wins", 0),
+    }

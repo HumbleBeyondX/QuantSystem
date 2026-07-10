@@ -120,6 +120,8 @@ export default function CloudPage() {
   const [reportStatus, setReportStatus] = useState<ReportStatus | null>(null)
   const [reportSending, setReportSending] = useState(false)
   const [reportToast, setReportToast] = useState<string | null>(null)
+  const [localRunner, setLocalRunner] = useState<RunnerSnapshot | null>(null)
+  const [runnerLoading, setRunnerLoading] = useState<string | null>(null)
 
   const fetchAll = useCallback(async () => {
     try {
@@ -163,12 +165,53 @@ export default function CloudPage() {
     window.open(`${API}/api/reports/daily/preview.html`, '_blank')
   }
 
+  // Fetch local standalone runner status (renders only when a runner is active)
+  const fetchLocalRunner = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/api/live/runner/status`)
+      if (!res.ok) {
+        setLocalRunner(null)
+        return
+      }
+      const data = await res.json()
+      // Backend returns {running: false, message: ...} when no runner exists —
+      // only treat payloads with a strategy_id as a real runner.
+      setLocalRunner(data && data.strategy_id ? data : null)
+    } catch {
+      setLocalRunner(null)
+    }
+  }, [])
+
+  const doRunnerAction = async (action: 'emergency-stop' | 'force-close') => {
+    setRunnerLoading(action)
+    setError(null)
+    try {
+      const res = await fetch(`${API}/api/live/runner/${action}`, { method: 'POST' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ detail: res.statusText }))
+        setError(body.detail || body.message || 'Action failed')
+      }
+      await fetchLocalRunner()
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setRunnerLoading(null)
+    }
+  }
+
   // Poll every 5 seconds
   useEffect(() => {
     fetchAll()
     const interval = setInterval(fetchAll, 5000)
     return () => clearInterval(interval)
   }, [fetchAll])
+
+  // Poll local runner every 10 seconds
+  useEffect(() => {
+    fetchLocalRunner()
+    const interval = setInterval(fetchLocalRunner, 10000)
+    return () => clearInterval(interval)
+  }, [fetchLocalRunner])
 
   // Actions
   const doAction = async (deployId: string, action: string) => {
@@ -212,7 +255,7 @@ export default function CloudPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">Cloud Deployments</h1>
+        <h1 className="text-2xl font-bold">Ops &middot; Live Execution</h1>
         <p className="text-sm text-gray-500 mt-1">
           Manage live trading strategies across cloud servers
         </p>
@@ -267,6 +310,87 @@ export default function CloudPage() {
               logsLoading={logsLoading && expandedLogs === d.deployment.id}
             />
           ))}
+        </div>
+      )}
+
+      {/* Local Standalone Runner (renders only when a runner is active) */}
+      {localRunner && (
+        <div className="bg-surface rounded-xl border border-green-800/50 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <span className={`w-3 h-3 rounded-full ${localRunner.emergency_stopped ? 'bg-red-500' : 'bg-green-500 animate-pulse'}`} />
+              <div>
+                <h2 className="text-lg font-semibold">
+                  Local Runner &middot; {localRunner.strategy_id}
+                </h2>
+                <p className="text-xs text-gray-500">
+                  {localRunner.exchange?.toUpperCase()} / {localRunner.symbol}
+                  {localRunner.sandbox ? ' (TESTNET)' : ' (MAINNET)'}
+                </p>
+              </div>
+            </div>
+            <span className={`text-sm font-semibold ${localRunner.emergency_stopped ? 'text-red-400' : 'text-green-400'}`}>
+              {localRunner.emergency_stopped ? 'EMERGENCY STOPPED' : 'RUNNING'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-4 gap-3 mb-4">
+            <div className="bg-background rounded-lg p-3">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Session P&L</p>
+              <p className={`text-lg font-mono font-bold ${localRunner.session_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {formatPnl(localRunner.session_pnl)}
+              </p>
+            </div>
+            <div className="bg-background rounded-lg p-3">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Trades</p>
+              <p className="text-lg font-mono font-bold">{localRunner.session_trades}</p>
+            </div>
+            <div className="bg-background rounded-lg p-3">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Orders</p>
+              <p className="text-lg font-mono font-bold">{localRunner.session_orders}</p>
+            </div>
+            <div className="bg-background rounded-lg p-3">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Started</p>
+              <p className="text-sm font-mono text-gray-300">
+                {formatTime(localRunner.session_start)}
+              </p>
+            </div>
+          </div>
+
+          {localRunner.position_manager_snapshot && localRunner.position_manager_snapshot.positions.length > 0 && (
+            <div className="mb-4 bg-background rounded-lg p-3">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">Open Positions</p>
+              {localRunner.position_manager_snapshot.positions.map((pos, i) => (
+                <div key={i} className="flex items-center justify-between text-sm py-1">
+                  <span className="font-mono text-gray-300">{pos.symbol}</span>
+                  <span className={pos.quantity > 0 ? 'text-green-400' : 'text-red-400'}>
+                    {pos.quantity > 0 ? 'LONG' : 'SHORT'} {Math.abs(pos.quantity).toFixed(4)}
+                  </span>
+                  <span className="font-mono text-gray-400">@ ${pos.avg_price.toFixed(2)}</span>
+                  <span className={`font-mono ${pos.unrealized_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {formatPnl(pos.unrealized_pnl)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => doRunnerAction('emergency-stop')}
+              disabled={runnerLoading !== null || localRunner.emergency_stopped}
+              className="px-4 py-2 bg-red-800 hover:bg-red-700 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
+            >
+              Emergency Stop
+            </button>
+            <button
+              onClick={() => doRunnerAction('force-close')}
+              disabled={runnerLoading !== null}
+              className="px-4 py-2 bg-orange-800 hover:bg-orange-700 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
+            >
+              Force Close Positions
+            </button>
+          </div>
         </div>
       )}
 

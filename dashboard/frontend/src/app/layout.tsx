@@ -7,17 +7,17 @@ export const metadata: Metadata = {
   description: 'Production Quantitative Trading System',
 }
 
+// Ordered by the strategy lifecycle: research → backtest → paper → live.
+// Live Trading merged into Ops (/cloud); Monitor absorbed into Overview (/).
 const navItems = [
   { href: '/', label: 'Overview', icon: '◎' },
-  { href: '/monitor', label: 'Monitor', icon: '◉' },
   { href: '/strategies', label: 'Strategies', icon: '⚡' },
-  { href: '/workshop', label: 'Workshop', icon: '🔧' },
-  { href: '/cloud', label: 'Cloud', icon: '☁' },
-  { href: '/live', label: 'Live Trading', icon: '▶' },
-  { href: '/trading', label: 'Paper Trading', icon: '⚙' },
   { href: '/backtest', label: 'Backtest', icon: '↻' },
-  { href: '/risk', label: 'Risk', icon: '⛊' },
+  { href: '/trading', label: 'Paper Trading', icon: '⚙' },
+  { href: '/cloud', label: 'Ops · Live', icon: '▶' },
+  { href: '/risk', label: 'Portfolio Risk', icon: '⛊' },
   { href: '/data', label: 'Data Layer', icon: '▥' },
+  { href: '/workshop', label: 'Workshop', icon: '🔧' },
   { href: '/logs', label: 'Logs', icon: '≡' },
 ]
 

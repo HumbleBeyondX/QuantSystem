@@ -197,10 +197,10 @@ export default function StrategyDetailPage() {
           </Link>
           {isDeployed ? (
             <Link
-              href="/live"
+              href="/cloud"
               className="px-4 py-2 bg-accent/10 border border-accent/30 text-accent rounded-lg text-sm font-medium hover:bg-accent/20 transition-colors"
             >
-              Live Trading &rarr;
+              Ops &middot; Live &rarr;
             </Link>
           ) : (
             <Link

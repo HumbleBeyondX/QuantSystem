@@ -37,17 +37,24 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 # ── Schemas ────────────────────────────────────────────────────
 
 class StrategyInfo(BaseModel):
-    """Available strategy definition."""
+    """Available strategy definition (loaded from config/strategy_registry.yaml)."""
     id: str
     name: str
     description: str
     asset_class: str
-    category: str  # options, equity, crypto
+    category: str  # options, equity, crypto, portfolio
     symbols: List[str] = []
     default_params: Dict[str, Any] = {}
     backtest_sharpe: Optional[float] = None
     backtest_win_rate: Optional[float] = None
     backtest_trades: Optional[int] = None
+    # Lifecycle (research → backtest/validated → paper → live)
+    stage: str = "research"
+    gate: Dict[str, Any] = {}
+    metrics: Dict[str, Any] = {}
+    links: Dict[str, Any] = {}
+    notes: str = ""
+    runnable: bool = False
 
 
 class DeployedStrategy(BaseModel):
@@ -92,212 +99,43 @@ class AdjustRequest(BaseModel):
     params: Dict[str, Any] = {}
 
 
-# ── Strategy catalog ────────────────────────────────────────────
+# ── Strategy catalog: loaded from config/strategy_registry.yaml ──
+# Single source of truth for the strategy lifecycle. No hardcoded
+# entries here — edit the YAML, not this file.
 
-STRATEGY_CATALOG: List[StrategyInfo] = [
-    StrategyInfo(
-        id="spy_gamma_scalp",
-        name="SPY Gamma Scalp",
-        description="Volatility risk premium exploitation via ATM straddle selling + delta hedging on SPY. Harvests theta decay with gamma hedging protection.",
-        asset_class="options",
-        category="options",
-        symbols=["SPY"],
-        default_params={
-            "initial_capital": 100000,
-            "contracts_per_trade": 1,
-            "hedge_threshold_pct": 0.5,
-            "dte_range": [3, 7],
-            "signal_threshold": 0.25,
-        },
-        backtest_sharpe=1.98,
-        backtest_win_rate=0.80,
-        backtest_trades=40,
-    ),
-    StrategyInfo(
-        id="delta_neutral",
-        name="Options Delta-Neutral",
-        description="Maintain delta-neutral portfolio via continuous option hedging. Profits from volatility movements regardless of direction.",
-        asset_class="options",
-        category="options",
-        symbols=["SPY", "QQQ"],
-        default_params={"rebalance_threshold": 0.1, "max_position_size": 10},
-        backtest_sharpe=1.52,
-        backtest_win_rate=0.71,
-        backtest_trades=85,
-    ),
-    StrategyInfo(
-        id="equity_factor",
-        name="Equity Factor Strategy",
-        description="Multi-factor equity strategy combining momentum, value, quality, and low-volatility factors for stock selection.",
-        asset_class="equity",
-        category="equity",
-        symbols=["SPY", "QQQ", "IWM"],
-        default_params={"lookback": 60, "rebalance_freq": "monthly", "n_stocks": 20},
-        backtest_sharpe=1.87,
-        backtest_win_rate=0.58,
-        backtest_trades=240,
-    ),
-    StrategyInfo(
-        id="equity_timing",
-        name="Market Timing",
-        description="Macro-based market timing using yield curve, credit spreads, and momentum signals to switch between risk-on/risk-off.",
-        asset_class="equity",
-        category="equity",
-        symbols=["SPY", "TLT", "GLD"],
-        default_params={"lookback": 120, "signal_smoothing": 5},
-        backtest_sharpe=1.34,
-        backtest_win_rate=0.62,
-        backtest_trades=48,
-    ),
-    StrategyInfo(
-        id="equity_long_short",
-        name="Long/Short Equity",
-        description="Statistical pairs trading strategy identifying cointegrated equity pairs and trading mean-reversion spreads.",
-        asset_class="equity",
-        category="equity",
-        symbols=["AAPL", "MSFT", "GOOGL", "AMZN"],
-        default_params={"lookback": 90, "z_threshold": 2.0, "max_pairs": 5},
-        backtest_sharpe=1.45,
-        backtest_win_rate=0.55,
-        backtest_trades=180,
-    ),
-    StrategyInfo(
-        id="crypto_scalping",
-        name="Crypto Scalping",
-        description="High-frequency crypto scalping using orderbook imbalance and microstructure signals on BTC/USDT.",
-        asset_class="crypto",
-        category="crypto",
-        symbols=["BTC-USD", "ETH-USD"],
-        default_params={"tick_interval": 100, "profit_target_bps": 15, "stop_loss_bps": 10},
-        backtest_sharpe=2.41,
-        backtest_win_rate=0.62,
-        backtest_trades=1200,
-    ),
-    StrategyInfo(
-        id="crypto_swing",
-        name="Crypto Swing",
-        description="Medium-term crypto swing trading based on RSI divergences, volume profiles, and trend following.",
-        asset_class="crypto",
-        category="crypto",
-        symbols=["BTC-USD", "ETH-USD", "SOL-USD"],
-        default_params={"lookback": 14, "rsi_oversold": 30, "rsi_overbought": 70},
-        backtest_sharpe=0.95,
-        backtest_win_rate=0.48,
-        backtest_trades=65,
-    ),
-    StrategyInfo(
-        id="btc_sniper",
-        name="BTC Momentum Sniper v5",
-        description="High-leverage BTC perpetual futures trend-following with fixed-risk position sizing. "
-                    "50x leverage, 5% equity risk per trade, ATR-based trailing stops. "
-                    "Dual entry: Donchian breakout + EMA21 pullback. 4H timeframe.",
-        asset_class="crypto",
-        category="crypto",
-        symbols=["BTC/USDT"],
-        default_params={
-            "leverage": 50.0,
-            "risk_per_trade": 0.05,
-            "atr_stop": 3.5,
-            "atr_trail": 2.5,
-            "min_score": 2,
-            "initial_capital": 10000,
-        },
-        backtest_sharpe=1.68,
-        backtest_win_rate=0.546,
-        backtest_trades=260,
-    ),
-    StrategyInfo(
-        id="crypto_momentum",
-        name="Crypto Momentum",
-        description="Cross-sectional momentum in crypto markets, rotating into top performers with trend confirmation.",
-        asset_class="crypto",
-        category="crypto",
-        symbols=["BTC-USD", "ETH-USD", "SOL-USD", "ADA-USD"],
-        default_params={"lookback": 30, "top_n": 3, "rebalance_freq": "weekly"},
-        backtest_sharpe=1.15,
-        backtest_win_rate=0.52,
-        backtest_trades=96,
-    ),
-    StrategyInfo(
-        id="crypto_breakout",
-        name="Crypto Breakout",
-        description="Breakout detection strategy using price structure analysis, volume confirmation, and momentum filters. "
-                    "Identifies consolidation patterns and trades the breakout with ATR-based position sizing.",
-        asset_class="crypto",
-        category="crypto",
-        symbols=["BTC/USDT", "ETH/USDT"],
-        default_params={"lookback": 20, "volume_threshold": 1.5, "atr_multiplier": 2.0},
-        backtest_sharpe=1.25,
-        backtest_win_rate=0.52,
-        backtest_trades=180,
-    ),
-    StrategyInfo(
-        id="crypto_orderbook",
-        name="Crypto Orderbook",
-        description="Orderbook depth analysis strategy using bid-ask imbalance, liquidity walls, and microstructure "
-                    "signals for short-term directional trading on centralized exchanges.",
-        asset_class="crypto",
-        category="crypto",
-        symbols=["BTC/USDT"],
-        default_params={"depth_levels": 20, "imbalance_threshold": 0.6, "update_interval_ms": 1000},
-        backtest_sharpe=1.80,
-        backtest_win_rate=0.58,
-        backtest_trades=500,
-    ),
-    StrategyInfo(
-        id="crypto_event",
-        name="Crypto Event-Driven",
-        description="Event-driven strategy capturing price dislocations around major crypto events: halvings, "
-                    "protocol upgrades, regulatory announcements, and exchange listings.",
-        asset_class="crypto",
-        category="crypto",
-        symbols=["BTC/USDT", "ETH/USDT"],
-        default_params={"event_window_hours": 48, "position_size_pct": 0.10, "stop_loss_pct": 0.05},
-        backtest_sharpe=0.95,
-        backtest_win_rate=0.60,
-        backtest_trades=45,
-    ),
-    StrategyInfo(
-        id="crypto_macro_cycle",
-        name="BTC/ETH Macro Cycle",
-        description="5x leveraged macro cycle entry signals with wide stops. Multi-factor composite scoring "
-                    "(trend, momentum, volume, drawdown, volatility regime). 4H timeframe, max 3 trades/day. "
-                    "Designed for capturing major directional moves in BTC and ETH.",
-        asset_class="crypto",
-        category="crypto",
-        symbols=["BTC/USDT", "ETH/USDT"],
-        default_params={"leverage": 5.0, "max_trades_per_day": 3, "lookback": 60, "composite_threshold": 0.7},
-        backtest_sharpe=0.41,
-        backtest_win_rate=0.626,
-        backtest_trades=222,
-    ),
-    StrategyInfo(
-        id="spy_iron_condor",
-        name="SPY Iron Condor",
-        description="Systematic iron condor strategy on SPY options. Sells OTM put and call spreads, "
-                    "targeting monthly premium collection with defined risk and mechanical adjustment rules.",
-        asset_class="options",
-        category="options",
-        symbols=["SPY"],
-        default_params={"target_dte": 30, "wing_width": 5, "delta_target": 0.16, "max_positions": 3},
-        backtest_sharpe=1.45,
-        backtest_win_rate=0.72,
-        backtest_trades=120,
-    ),
-    StrategyInfo(
-        id="spy_wheel",
-        name="SPY Wheel Strategy",
-        description="The Wheel (cash-secured put → covered call) on SPY. Sells puts for entry, holds shares, "
-                    "sells calls for exit. Systematic premium harvesting with automatic roll management.",
-        asset_class="options",
-        category="options",
-        symbols=["SPY"],
-        default_params={"put_delta": -0.30, "call_delta": 0.30, "target_dte": 30},
-        backtest_sharpe=1.30,
-        backtest_win_rate=0.68,
-        backtest_trades=85,
-    ),
-]
+_REGISTRY_PATH = PROJECT_ROOT / "config" / "strategy_registry.yaml"
+
+STAGE_ORDER = ["live", "paper", "validated", "research", "retired", "rejected"]
+
+
+def _load_registry() -> List[StrategyInfo]:
+    import yaml
+    raw = yaml.safe_load(_REGISTRY_PATH.read_text(encoding="utf-8"))
+    out: List[StrategyInfo] = []
+    for s in raw.get("strategies", []):
+        m = s.get("metrics") or {}
+        out.append(StrategyInfo(
+            id=s["id"],
+            name=s["name"],
+            description=" ".join(str(s.get("description", "")).split()),
+            asset_class=s.get("asset_class", ""),
+            category=s.get("category", ""),
+            symbols=s.get("symbols", []),
+            default_params=s.get("default_params") or {},
+            backtest_sharpe=m.get("backtest_sharpe"),
+            backtest_win_rate=m.get("win_rate"),
+            backtest_trades=m.get("trades"),
+            stage=s.get("stage", "research"),
+            gate=s.get("gate") or {},
+            metrics=m,
+            links=s.get("links") or {},
+            notes=" ".join(str(s.get("notes", "")).split()),
+            runnable=bool(s.get("runnable", False)),
+        ))
+    return out
+
+
+STRATEGY_CATALOG: List[StrategyInfo] = _load_registry()
 
 CATALOG_MAP = {s.id: s for s in STRATEGY_CATALOG}
 
@@ -415,6 +253,21 @@ def _enrich_deployment(dep: Dict[str, Any]) -> DeployedStrategy:
 
 
 # ── Endpoints ────────────────────────────────────────────────────
+
+@router.get("/registry")
+async def get_strategy_registry():
+    """Lifecycle view: strategies grouped by stage (live → paper → validated
+    → research → retired → rejected), in pipeline order."""
+    groups = {stage: [] for stage in STAGE_ORDER}
+    for s in STRATEGY_CATALOG:
+        groups.setdefault(s.stage, []).append(s.model_dump())
+    return {
+        "stages": STAGE_ORDER,
+        "groups": groups,
+        "gate_rule": "OOS Sharpe >= 1.5 or auto-reject",
+        "counts": {stage: len(items) for stage, items in groups.items()},
+    }
+
 
 @router.get("/catalog", response_model=List[StrategyInfo])
 async def get_strategy_catalog():

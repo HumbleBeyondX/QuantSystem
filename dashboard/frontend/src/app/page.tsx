@@ -1,645 +1,602 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+/**
+ * Overview — quant-fund command center. Real data only.
+ *
+ * Sections (all from live endpoints, graceful degradation, no fake numbers):
+ *   1. Header strip     — /api/monitor/strategies rollup (equity, P&L, positions)
+ *   2. Pipeline band    — /api/strategies/registry (lifecycle stages + gate rule)
+ *   3. Deployed cards   — /api/monitor/strategies (per-strategy cards + sparklines)
+ *   4. Validated records — /api/backtest/records (official research registry)
+ *   5. Ops strip        — /api/deployments/summary (cloud runners)
+ *
+ * Card design / sparkline / API shape shared with monitor/page.tsx.
+ * Auto-refreshes every 15s.
+ */
+
+import { useCallback, useEffect, useState } from 'react'
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002'
+const REFRESH_MS = 15_000
 
-/* ── types ─────────────────────────────────────────────── */
-interface Overview {
-  trading_mode: string
-  total_equity: number
-  initial_capital: number
-  total_return_pct: number
-  realized_pnl: number
-  unrealized_pnl: number
-  max_drawdown_pct: number
-  sharpe_ratio: number
-  total_strategies: number
-  running_strategies: number
-  stopped_strategies: number
-  total_trades: number
+/* ── Types ──────────────────────────────────────────────────── */
+
+interface Card {
+  id: string
+  name: string
+  direction: string
+  mode: string
+  status: string
+  equity: number | null
+  today_realized: number | null
+  today_pct: number | null
+  unrealized: number | null
+  total_return_pct: number | null
   win_rate: number | null
-  broker_connected: boolean
-  broker_equity: number | null
-  last_updated: string
+  trades: number | null
+  profit_factor: number | null
+  expectancy: number | null
+  positions: number | null
+  flags: string[]
+  source: string
+  updated_at: string | null
+  spark: number[] | null
 }
 
-interface CloudSummary {
+interface Snapshot {
+  generated_at: string
+  total_equity: number
+  today_realized: number
+  unrealized: number
+  open_positions: number
+  strategies: Card[]
+}
+
+interface Registry {
+  stages: string[]
+  groups: Record<string, { id: string; name: string }[]>
+  gate_rule: string
+  counts: Record<string, number>
+}
+
+interface BacktestRecord {
+  id: string
+  name: string
+  status: string
+  verdict: string
+  headline: {
+    sharpe?: number
+    oos_sharpe?: number
+    max_dd?: number
+    cagr?: number
+    correlation?: number
+  }
+  script: string
+  has_curve: boolean
+  rerun: string | null
+}
+
+interface RecordsPayload {
+  gate_rule: string
+  records: BacktestRecord[]
+}
+
+interface OpsSummary {
   total_deployments: number
   online: number
   running: number
   total_session_pnl: number
   total_session_trades: number
+  total_session_orders?: number
 }
 
-interface CatalogStrategy {
-  id: string
-  name: string
-  description: string
-  asset_class: string
-  category: string
-  symbols: string[]
-  backtest_sharpe: number | null
-  backtest_win_rate: number | null
-  backtest_trades: number | null
+/* ── Helpers (shared with monitor page) ─────────────────────── */
+
+const fmt$ = (v: number | null, signed = true) =>
+  v == null
+    ? '—'
+    : `${signed && v >= 0 ? '+' : ''}$${Math.abs(v).toLocaleString('en-US', {
+        maximumFractionDigits: 2,
+      })}${v < 0 ? '' : ''}`.replace('+$-', '-$')
+
+const pnlColor = (v: number | null) =>
+  v == null ? 'text-gray-500' : v >= 0 ? 'text-emerald-400' : 'text-rose-400'
+
+const STATUS_STYLE: Record<string, string> = {
+  running: 'bg-emerald-500/15 text-emerald-400',
+  flat: 'bg-sky-500/15 text-sky-300',
+  stale: 'bg-amber-500/15 text-amber-400',
+  unreachable: 'bg-rose-500/15 text-rose-400',
+}
+const STATUS_LABEL: Record<string, string> = {
+  running: 'RUNNING', flat: 'FLAT', stale: 'STALE', unreachable: 'UNREACHABLE',
 }
 
-interface DeployedStrategy {
-  id: string
-  strategy_id: string
-  name: string
-  mode: string
-  status: string
-  data_source: string
-  execution_broker: string
-  initial_capital: number
-  deployed_at: string
-  last_run: string | null
-  realized_pnl: number
-  unrealized_pnl: number
-  total_equity: number
-  total_trades: number
-  win_rate: number | null
-  current_position: string | null
-  spy_price: number
+const MODE_STYLE: Record<string, string> = {
+  live: 'bg-emerald-500/20 text-emerald-400',
+  paper: 'bg-sky-500/20 text-sky-300',
 }
 
-/* ── main component ─────────────────────────────────────── */
-export default function DashboardPage() {
-  const [overview, setOverview] = useState<Overview | null>(null)
-  const [catalog, setCatalog] = useState<CatalogStrategy[]>([])
-  const [deployed, setDeployed] = useState<DeployedStrategy[]>([])
-  const [cloudSummary, setCloudSummary] = useState<CloudSummary | null>(null)
+/* ── Generic polled-endpoint hook ───────────────────────────── */
+
+function usePolled<T>(path: string, refreshMs: number) {
+  const [data, setData] = useState<T | null>(null)
+  const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [lastUpdate, setLastUpdate] = useState('')
 
-  // Deploy modal state
-  const [showDeploy, setShowDeploy] = useState(false)
-  const [deployStrategy, setDeployStrategy] = useState<CatalogStrategy | null>(null)
-  const [deployMode, setDeployMode] = useState<'paper' | 'live'>('paper')
-  const [deploySource, setDeploySource] = useState('alpaca')
-  const [deployBroker, setDeployBroker] = useState('internal')
-  const [deployCapital, setDeployCapital] = useState(100000)
-  const [deploying, setDeploying] = useState(false)
-
-  // Adjust modal state
-  const [showAdjust, setShowAdjust] = useState(false)
-  const [adjustTarget, setAdjustTarget] = useState<DeployedStrategy | null>(null)
-  const [adjustMode, setAdjustMode] = useState('paper')
-  const [adjustSource, setAdjustSource] = useState('alpaca')
-  const [adjustBroker, setAdjustBroker] = useState('internal')
-
-  /* ── data fetching ──────────────────────────────────── */
-  const fetchAll = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
-      const [ovRes, catRes, depRes, cloudRes] = await Promise.all([
-        fetch(`${API}/api/system/overview`),
-        fetch(`${API}/api/strategies/catalog`),
-        fetch(`${API}/api/strategies/`),
-        fetch(`${API}/api/deployments/summary`).catch(() => null),
-      ])
-      if (ovRes.ok) setOverview(await ovRes.json())
-      if (catRes.ok) setCatalog(await catRes.json())
-      if (depRes.ok) setDeployed(await depRes.json())
-      if (cloudRes?.ok) setCloudSummary(await cloudRes.json())
-      setLastUpdate(new Date().toLocaleTimeString())
+      const r = await fetch(`${API}${path}`, { cache: 'no-store' })
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      setData(await r.json())
+      setErr(null)
     } catch (e) {
-      console.error('Fetch error:', e)
+      setErr(String(e))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [path])
 
   useEffect(() => {
-    fetchAll()
-    const iv = setInterval(fetchAll, 15000)
-    return () => clearInterval(iv)
-  }, [fetchAll])
+    load()
+    const t = setInterval(load, refreshMs)
+    return () => clearInterval(t)
+  }, [load, refreshMs])
 
-  /* ── actions ─────────────────────────────────────────── */
-  const handleDeploy = async () => {
-    if (!deployStrategy) return
-    setDeploying(true)
-    try {
-      const res = await fetch(`${API}/api/strategies/deploy`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          strategy_id: deployStrategy.id,
-          mode: deployMode,
-          data_source: deploySource,
-          execution_broker: deployBroker,
-          initial_capital: deployCapital,
-        }),
-      })
-      if (res.ok) {
-        setShowDeploy(false)
-        await fetchAll()
-      } else {
-        const err = await res.json()
-        alert(err.detail || 'Deploy failed')
-      }
-    } catch (e: any) {
-      alert(`Deploy error: ${e.message}`)
-    } finally {
-      setDeploying(false)
-    }
-  }
+  return { data, err, loading }
+}
 
-  const handleStart = async (deployId: string) => {
-    try {
-      await fetch(`${API}/api/strategies/${deployId}/start`, { method: 'POST' })
-      await fetchAll()
-    } catch (e) { console.error(e) }
-  }
+/* ── Sparkline (from monitor page) ──────────────────────────── */
 
-  const handleStop = async (deployId: string) => {
-    try {
-      await fetch(`${API}/api/strategies/${deployId}/stop`, { method: 'POST' })
-      await fetchAll()
-    } catch (e) { console.error(e) }
-  }
+function Spark({ data }: { data: number[] | null }) {
+  if (!data || data.length < 2)
+    return (
+      <div className="w-32 h-10 flex items-center justify-center text-[10px] text-gray-600 border border-dashed border-gray-700 rounded">
+        no history
+      </div>
+    )
+  const mn = Math.min(...data)
+  const mx = Math.max(...data)
+  const rg = mx - mn || 1
+  const pts = data
+    .map(
+      (v, i) =>
+        `${(i / (data.length - 1)) * 124 + 2},${36 - ((v - mn) / rg) * 30}`,
+    )
+    .join(' ')
+  const up = data[data.length - 1] >= data[0]
+  const col = up ? '#34d399' : '#fb7185'
+  const [lx, ly] = pts.split(' ').pop()!.split(',')
+  return (
+    <svg width="128" height="40" className="flex-none" aria-hidden="true">
+      <polyline points={pts} fill="none" stroke={col} strokeWidth="1.5" />
+      <polygon points={`2,38 ${pts} 126,38`} fill={col} opacity="0.12" />
+      <circle cx={lx} cy={ly} r="2.5" fill={col} />
+    </svg>
+  )
+}
 
-  const handleRemove = async (deployId: string) => {
-    if (!confirm('Remove this strategy deployment?')) return
-    try {
-      await fetch(`${API}/api/strategies/${deployId}`, { method: 'DELETE' })
-      await fetchAll()
-    } catch (e) { console.error(e) }
-  }
+/* ── Deployed strategy card (from monitor page) ─────────────── */
 
-  const handleAdjust = async () => {
-    if (!adjustTarget) return
-    try {
-      await fetch(`${API}/api/strategies/${adjustTarget.id}/adjust`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode: adjustMode,
-          data_source: adjustSource,
-          execution_broker: adjustBroker,
-        }),
-      })
-      setShowAdjust(false)
-      await fetchAll()
-    } catch (e) { console.error(e) }
-  }
+function StrategyCard({ c }: { c: Card }) {
+  const flagged = c.flags.includes('thin_edge')
+  return (
+    <div
+      className={`bg-surface border border-border rounded-xl p-4 hover:border-gray-600 transition-colors ${
+        flagged ? 'border-l-4 border-l-amber-500' : ''
+      } ${c.status === 'unreachable' ? 'opacity-70' : ''}`}
+    >
+      <div className="flex items-center gap-2">
+        <span className="font-mono font-bold text-[15px]">{c.id}</span>
+        <span className="text-xs text-gray-400 truncate flex-1" title={c.name}>
+          {c.name}
+        </span>
+        <span
+          className={`text-[10px] px-2 py-0.5 rounded font-semibold uppercase ${
+            MODE_STYLE[c.mode] ?? 'bg-gray-700/40 text-gray-300'
+          }`}
+        >
+          {c.mode}
+        </span>
+        <span
+          className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
+            STATUS_STYLE[c.status] ?? 'bg-gray-700/40 text-gray-300'
+          }`}
+        >
+          {STATUS_LABEL[c.status] ?? c.status}
+        </span>
+      </div>
 
-  const openAdjustModal = (dep: DeployedStrategy) => {
-    setAdjustTarget(dep)
-    setAdjustMode(dep.mode)
-    setAdjustSource(dep.data_source)
-    setAdjustBroker(dep.execution_broker)
-    setShowAdjust(true)
-  }
+      {c.status === 'unreachable' ? (
+        <div className="mt-4 text-sm text-gray-500">
+          Data source unreachable (<span className="font-mono">{c.source}</span>)
+          — stale numbers are hidden. Updates resume automatically on reconnect.
+        </div>
+      ) : (
+        <>
+          <div className="flex items-end justify-between mt-3 gap-3">
+            <div>
+              <div
+                className={`text-2xl font-bold font-mono ${pnlColor(c.today_pct)}`}
+              >
+                {c.today_pct == null
+                  ? '—'
+                  : `${c.today_pct >= 0 ? '+' : ''}${c.today_pct.toFixed(2)}%`}
+              </div>
+              <div className="text-xs text-gray-500 mt-1 font-mono">
+                today realized {fmt$(c.today_realized)} · unrealized {fmt$(c.unrealized)}
+              </div>
+            </div>
+            <Spark data={c.spark} />
+          </div>
 
-  /* ── derived ──────────────────────────────────────────── */
-  const deployedIds = useMemo(() => new Set(deployed.map(d => d.strategy_id)), [deployed])
-  const tradingMode = overview?.trading_mode || 'paper'
-  const modeColor = tradingMode === 'live' ? 'text-red-400' : tradingMode === 'paper' ? 'text-yellow-400' : 'text-blue-400'
-  const modeBg = tradingMode === 'live' ? 'bg-red-500/20' : tradingMode === 'paper' ? 'bg-yellow-500/20' : 'bg-blue-500/20'
-  const modeDot = tradingMode === 'live' ? 'bg-red-500' : 'bg-yellow-400'
+          <div className="grid grid-cols-3 gap-x-3 gap-y-2 mt-3 pt-3 border-t border-border text-[13px]">
+            <div>
+              <div className="text-[10px] text-gray-600">Total return</div>
+              <div className={`font-mono font-semibold ${pnlColor(c.total_return_pct)}`}>
+                {c.total_return_pct == null
+                  ? '—'
+                  : `${c.total_return_pct >= 0 ? '+' : ''}${c.total_return_pct.toFixed(2)}%`}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-gray-600">Equity</div>
+              <div className="font-mono font-semibold">
+                {c.equity == null ? '—' : `$${c.equity.toLocaleString('en-US', { maximumFractionDigits: 0 })}`}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-gray-600">Positions</div>
+              <div className="font-mono font-semibold">{c.positions ?? '—'}</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-gray-600">Win rate × PF</div>
+              <div className="font-mono font-semibold">
+                {c.win_rate != null ? `${c.win_rate}%` : '—'}
+                {c.profit_factor != null ? ` × ${c.profit_factor}` : ''}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-gray-600">Expectancy</div>
+              <div
+                className={`font-mono font-semibold ${
+                  c.expectancy == null
+                    ? 'text-gray-500'
+                    : c.expectancy < 0.03
+                      ? 'text-amber-400'
+                      : 'text-emerald-400'
+                }`}
+              >
+                {c.expectancy == null ? 'low sample' : c.expectancy.toFixed(3)}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-gray-600">Trades</div>
+              <div className="font-mono font-semibold">{c.trades ?? '—'}</div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
-  const fmt = (n: number, d = 2) => n?.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }) ?? '—'
+/* ── Section heading ────────────────────────────────────────── */
+
+function SectionHeading({ title, caption, href, hrefLabel }: {
+  title: string
+  caption?: string
+  href?: string
+  hrefLabel?: string
+}) {
+  return (
+    <div className="flex items-baseline gap-3 flex-wrap">
+      <h3 className="text-xs uppercase tracking-wider text-gray-400 font-semibold">
+        {title}
+      </h3>
+      {caption && <span className="text-[11px] text-gray-600">{caption}</span>}
+      {href && (
+        <a href={href} className="text-[11px] text-accent hover:underline ml-auto">
+          {hrefLabel ?? 'View all →'}
+        </a>
+      )}
+    </div>
+  )
+}
+
+function SectionError({ what, err }: { what: string; err: string }) {
+  return (
+    <div className="bg-surface border border-border rounded-xl p-4 text-sm text-gray-500">
+      {what} unavailable — <span className="font-mono text-rose-400/80">{err}</span>
+    </div>
+  )
+}
+
+function SectionLoading({ what }: { what: string }) {
+  return (
+    <div className="bg-surface border border-border rounded-xl p-4 text-sm text-gray-500 animate-pulse">
+      Loading {what}…
+    </div>
+  )
+}
+
+/* ── 2. Pipeline band ───────────────────────────────────────── */
+
+const PIPELINE_STAGES: { key: string; label: string; style: string }[] = [
+  { key: 'research', label: 'RESEARCH', style: 'border-purple-800/50 bg-purple-900/20 text-purple-300' },
+  { key: 'validated', label: 'BACKTEST / VALIDATED', style: 'border-cyan-800/50 bg-cyan-900/20 text-cyan-300' },
+  { key: 'paper', label: 'PAPER', style: 'border-sky-800/50 bg-sky-900/20 text-sky-300' },
+  { key: 'live', label: 'LIVE', style: 'border-emerald-800/50 bg-emerald-900/20 text-emerald-400' },
+]
+
+function PipelineBand({ reg }: { reg: Registry }) {
+  return (
+    <div className="bg-surface border border-border rounded-xl p-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        {PIPELINE_STAGES.map((st, i) => (
+          <span key={st.key} className="flex items-center gap-2">
+            {i > 0 && <span className="text-gray-600">→</span>}
+            <a
+              href="/strategies"
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold tracking-wide hover:brightness-125 transition ${st.style}`}
+            >
+              {st.label}
+              <span className="font-mono text-sm">{reg.counts[st.key] ?? 0}</span>
+            </a>
+          </span>
+        ))}
+        <span className="flex items-center gap-2 ml-auto">
+          <a
+            href="/strategies"
+            className="px-2 py-1 rounded border border-border text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
+          >
+            RETIRED <span className="font-mono">{reg.counts.retired ?? 0}</span>
+          </a>
+          <a
+            href="/strategies"
+            className="px-2 py-1 rounded border border-border text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
+          >
+            REJECTED <span className="font-mono">{reg.counts.rejected ?? 0}</span>
+          </a>
+        </span>
+      </div>
+      <p className="text-[11px] text-gray-600 mt-2">
+        Gate: OOS Sharpe ≥ 1.5 or auto-reject
+      </p>
+    </div>
+  )
+}
+
+/* ── 4. Validated records strip ─────────────────────────────── */
+
+function RecordsStrip({ payload }: { payload: RecordsPayload }) {
+  const validated = payload.records.filter((r) => r.status === 'validated')
+  const rejected = payload.records.filter((r) => r.status !== 'validated')
+
+  return (
+    <div className="space-y-3">
+      {validated.length === 0 ? (
+        <div className="bg-surface border border-border rounded-xl p-4 text-sm text-gray-500">
+          No validated records yet.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {validated.map((r) => (
+            <a
+              key={r.id}
+              href="/backtest"
+              className="bg-surface border border-emerald-800/40 rounded-xl p-4 hover:border-emerald-600/60 transition-colors block"
+            >
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-bold text-[15px]">{r.id}</span>
+                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-semibold">
+                  VALIDATED
+                </span>
+                {r.rerun && (
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 font-semibold uppercase">
+                    rerun: {r.rerun}
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-6 mt-3">
+                <div>
+                  <div className="text-[10px] text-gray-600 uppercase tracking-wider">Sharpe</div>
+                  <div className="font-mono font-bold text-lg text-gray-100">
+                    {r.headline.sharpe != null ? r.headline.sharpe.toFixed(2) : '—'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-gray-600 uppercase tracking-wider">OOS Sharpe</div>
+                  <div className="font-mono font-bold text-lg text-emerald-400">
+                    {r.headline.oos_sharpe != null ? r.headline.oos_sharpe.toFixed(2) : '—'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-gray-600 uppercase tracking-wider">Max DD</div>
+                  <div className="font-mono font-bold text-lg text-rose-400">
+                    {r.headline.max_dd != null ? `${(r.headline.max_dd * 100).toFixed(1)}%` : '—'}
+                  </div>
+                </div>
+                {r.headline.cagr != null && (
+                  <div>
+                    <div className="text-[10px] text-gray-600 uppercase tracking-wider">CAGR</div>
+                    <div className="font-mono font-bold text-lg text-gray-100">
+                      {(r.headline.cagr * 100).toFixed(1)}%
+                    </div>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-gray-400 mt-3 leading-relaxed">{r.verdict}</p>
+            </a>
+          ))}
+        </div>
+      )}
+      {rejected.length > 0 && (
+        <a
+          href="/backtest"
+          className="block text-[11px] text-gray-500 hover:text-gray-300 transition-colors"
+        >
+          {rejected.length} rejected by gate ({payload.gate_rule}) →
+        </a>
+      )}
+    </div>
+  )
+}
+
+/* ── 5. Ops strip ───────────────────────────────────────────── */
+
+function OpsStrip({ ops }: { ops: OpsSummary }) {
+  return (
+    <div className="bg-surface border border-border rounded-xl p-4 flex items-center justify-between gap-4 flex-wrap">
+      <div className="flex items-center gap-6 flex-wrap">
+        <div>
+          <div className="text-[10px] text-gray-500 uppercase tracking-wider">Deployments</div>
+          <div className="font-mono font-bold text-lg">
+            <span className={ops.running > 0 ? 'text-emerald-400' : 'text-gray-100'}>
+              {ops.running}
+            </span>
+            <span className="text-gray-500 text-sm"> running</span>
+            <span className="text-gray-600"> / </span>
+            <span className={ops.online > 0 ? 'text-emerald-400' : 'text-gray-400'}>
+              {ops.online}
+            </span>
+            <span className="text-gray-500 text-sm"> online</span>
+            <span className="text-gray-600"> / </span>
+            {ops.total_deployments}
+            <span className="text-gray-500 text-sm"> total</span>
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] text-gray-500 uppercase tracking-wider">Session P&L</div>
+          <div className={`font-mono font-bold text-lg ${pnlColor(ops.total_session_pnl)}`}>
+            {fmt$(ops.total_session_pnl)}
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] text-gray-500 uppercase tracking-wider">Session trades</div>
+          <div className="font-mono font-bold text-lg">{ops.total_session_trades}</div>
+        </div>
+      </div>
+      <a
+        href="/cloud"
+        className="px-3 py-1.5 bg-accent/20 hover:bg-accent/30 text-accent text-xs rounded-lg transition-colors font-medium"
+      >
+        Ops · Live →
+      </a>
+    </div>
+  )
+}
+
+/* ── Main ───────────────────────────────────────────────────── */
+
+export default function OverviewPage() {
+  const monitor = usePolled<Snapshot>('/api/monitor/strategies', REFRESH_MS)
+  const registry = usePolled<Registry>('/api/strategies/registry', 60_000)
+  const records = usePolled<RecordsPayload>('/api/backtest/records', 60_000)
+  const ops = usePolled<OpsSummary>('/api/deployments/summary', REFRESH_MS)
+
+  const snap = monitor.data
+  const deployed = snap?.strategies ?? []
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Dashboard Overview</h2>
-        <div className="flex items-center gap-4">
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${modeBg}`}>
-            <span className={`w-2 h-2 rounded-full ${modeDot} animate-pulse`} />
-            <span className={`text-sm font-medium ${modeColor} uppercase`}>
-              {tradingMode === 'paper' ? 'Paper Trading' : tradingMode === 'live' ? 'Live Trading' : 'Mixed Mode'}
-            </span>
-          </div>
-          {overview?.broker_connected && (
-            <div className="flex items-center gap-2 text-xs text-gray-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-              Alpaca: ${fmt(overview.broker_equity || 0, 0)}
-            </div>
-          )}
-          <span className="text-xs text-gray-500">Last: {lastUpdate}</span>
-        </div>
+      {/* ── 1. Header strip ──────────────────────────────── */}
+      <div className="flex items-baseline gap-3 flex-wrap">
+        <h2 className="text-2xl font-bold">Command Center</h2>
+        <span className="text-xs text-gray-500">
+          {monitor.err
+            ? `backend unreachable (${monitor.err})`
+            : snap
+              ? `live · refreshes every ${REFRESH_MS / 1000}s · generated ${new Date(snap.generated_at).toLocaleTimeString()}`
+              : 'loading…'}
+        </span>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KPICard
-          label="Portfolio Value"
-          value={`$${fmt(overview?.total_equity || 100000, 0)}`}
-          sub={`Initial: $${fmt(overview?.initial_capital || 100000, 0)}`}
-          color="text-gray-100"
-        />
-        <KPICard
-          label="Total Return"
-          value={`${(overview?.total_return_pct ?? 0) >= 0 ? '+' : ''}${fmt(overview?.total_return_pct || 0)}%`}
-          sub={`Realized P&L: $${fmt(overview?.realized_pnl || 0)}`}
-          color={(overview?.total_return_pct ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}
-        />
-        <KPICard
-          label="Max Drawdown"
-          value={`-${fmt(overview?.max_drawdown_pct || 0)}%`}
-          sub="Peak to trough"
-          color="text-red-400"
-        />
-        <KPICard
-          label="Win Rate"
-          value={overview?.win_rate != null ? `${overview.win_rate}%` : '—'}
-          sub={`${overview?.total_trades || 0} total trades`}
-          color="text-blue-400"
-        />
-      </div>
-
-      {/* Cloud Deployments Quick View */}
-      {cloudSummary && cloudSummary.total_deployments > 0 && (
-        <div className="bg-surface rounded-xl border border-border p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-base opacity-60">&#9729;</span>
-              <div>
-                <h3 className="text-sm font-semibold">Cloud Deployments</h3>
-                <p className="text-[10px] text-gray-500">
-                  {cloudSummary.running} running / {cloudSummary.online} online / {cloudSummary.total_deployments} total
-                </p>
-              </div>
+      {monitor.err && !snap ? (
+        <SectionError what="Portfolio rollup" err={monitor.err} />
+      ) : snap ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            ['Total equity', `$${snap.total_equity.toLocaleString('en-US', { maximumFractionDigits: 0 })}`, 'text-gray-100'],
+            ['Today realized', fmt$(snap.today_realized), pnlColor(snap.today_realized)],
+            ['Unrealized', fmt$(snap.unrealized), pnlColor(snap.unrealized)],
+            ['Open positions', String(snap.open_positions), 'text-gray-100'],
+          ].map(([l, v, cls]) => (
+            <div key={l as string} className="bg-surface border border-border rounded-xl p-4">
+              <div className="text-xs text-gray-500 uppercase tracking-wider">{l}</div>
+              <div className={`text-xl font-bold font-mono mt-1 ${cls}`}>{v}</div>
             </div>
-            <div className="flex items-center gap-6">
-              <div className="text-center">
-                <p className="text-[10px] text-gray-500">Session P&L</p>
-                <p className={`text-sm font-mono font-bold ${cloudSummary.total_session_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {cloudSummary.total_session_pnl >= 0 ? '+' : ''}${cloudSummary.total_session_pnl.toFixed(2)}
-                </p>
-              </div>
-              <div className="text-center">
-                <p className="text-[10px] text-gray-500">Trades</p>
-                <p className="text-sm font-mono font-bold">{cloudSummary.total_session_trades}</p>
-              </div>
-              <a href="/cloud" className="px-3 py-1.5 bg-accent/20 hover:bg-accent/30 text-accent text-xs rounded-lg transition-colors font-medium">
-                Manage &rarr;
-              </a>
-            </div>
-          </div>
+          ))}
         </div>
+      ) : (
+        <SectionLoading what="portfolio rollup" />
       )}
 
-      {/* Strategy Deployment Section */}
-      <div className="bg-surface rounded-xl border border-border p-6">
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h3 className="text-lg font-semibold">Strategy Deployments</h3>
-            <p className="text-xs text-gray-500 mt-1">
-              {overview?.running_strategies || 0} running · {overview?.stopped_strategies || 0} stopped · {overview?.total_strategies || 0} total
-            </p>
-          </div>
-          <button
-            onClick={() => setShowDeploy(true)}
-            className="px-4 py-2 bg-accent hover:bg-accent/80 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-          >
-            <span className="text-lg leading-none">+</span> Deploy Strategy
-          </button>
-        </div>
+      {/* ── 2. Pipeline band ─────────────────────────────── */}
+      <div className="space-y-2">
+        <SectionHeading title="Strategy pipeline" href="/strategies" hrefLabel="Strategies →" />
+        {registry.loading ? (
+          <SectionLoading what="pipeline" />
+        ) : registry.err || !registry.data ? (
+          <SectionError what="Pipeline" err={registry.err ?? 'no data'} />
+        ) : (
+          <PipelineBand reg={registry.data} />
+        )}
+      </div>
 
-        {/* Deployed strategies table */}
-        {deployed.length > 0 ? (
-          <div className="space-y-3">
-            {deployed.map((dep) => (
-              <StrategyRow
-                key={dep.id}
-                dep={dep}
-                onStart={() => handleStart(dep.id)}
-                onStop={() => handleStop(dep.id)}
-                onAdjust={() => openAdjustModal(dep)}
-                onRemove={() => handleRemove(dep.id)}
-              />
-            ))}
+      {/* ── 3. Deployed strategy cards ───────────────────── */}
+      <div className="space-y-2">
+        <SectionHeading
+          title="Deployed strategies"
+          caption="live + paper, real fills only"
+          href="/monitor"
+          hrefLabel="Monitor →"
+        />
+        {monitor.loading ? (
+          <SectionLoading what="deployed strategies" />
+        ) : monitor.err && !snap ? (
+          <SectionError what="Deployed strategies" err={monitor.err} />
+        ) : deployed.length === 0 ? (
+          <div className="bg-surface border border-border rounded-xl p-4 text-sm text-gray-500">
+            No deployed strategies reported.
           </div>
         ) : (
-          <div className="text-center py-12 text-gray-500">
-            <p className="text-4xl mb-3">📊</p>
-            <p className="text-sm">No strategies deployed yet.</p>
-            <p className="text-xs mt-1">Click &quot;Deploy Strategy&quot; to get started.</p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+            {deployed.map((c) => (
+              <StrategyCard key={c.id} c={c} />
+            ))}
           </div>
         )}
       </div>
 
-      {/* Strategy Catalog */}
-      <div className="bg-surface rounded-xl border border-border p-6">
-        <h3 className="text-lg font-semibold mb-4">Strategy Catalog</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {catalog.map((strat) => {
-            const isDeployed = deployedIds.has(strat.id)
-            return (
-              <div key={strat.id} className="bg-background rounded-lg border border-border p-4 hover:border-accent/50 transition-colors">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-sm font-semibold text-gray-100">{strat.name}</h4>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium uppercase ${
-                    strat.category === 'options' ? 'bg-purple-500/20 text-purple-400' :
-                    strat.category === 'equity' ? 'bg-blue-500/20 text-blue-400' :
-                    'bg-orange-500/20 text-orange-400'
-                  }`}>
-                    {strat.category}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-500 mb-3 line-clamp-2">{strat.description}</p>
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex gap-3">
-                    {strat.backtest_sharpe && (
-                      <span className="text-gray-400">SR <span className="text-gray-200 font-mono">{strat.backtest_sharpe.toFixed(2)}</span></span>
-                    )}
-                    {strat.backtest_win_rate && (
-                      <span className="text-gray-400">WR <span className="text-gray-200 font-mono">{(strat.backtest_win_rate * 100).toFixed(0)}%</span></span>
-                    )}
-                    {strat.backtest_trades && (
-                      <span className="text-gray-400">{strat.backtest_trades} trades</span>
-                    )}
-                  </div>
-                  {isDeployed ? (
-                    <span className="text-green-400 text-[10px] font-medium px-2 py-0.5 rounded bg-green-500/10">DEPLOYED</span>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setDeployStrategy(strat)
-                        setShowDeploy(true)
-                      }}
-                      className="text-accent hover:text-accent/80 font-medium transition-colors"
-                    >
-                      Deploy →
-                    </button>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
+      {/* ── 4. Validated records strip ───────────────────── */}
+      <div className="space-y-2">
+        <SectionHeading
+          title="Validated research"
+          caption={records.data ? `gate: ${records.data.gate_rule}` : undefined}
+          href="/backtest"
+          hrefLabel="Backtest →"
+        />
+        {records.loading ? (
+          <SectionLoading what="research records" />
+        ) : records.err || !records.data ? (
+          <SectionError what="Research records" err={records.err ?? 'no data'} />
+        ) : (
+          <RecordsStrip payload={records.data} />
+        )}
       </div>
 
-      {/* Deploy Modal */}
-      {showDeploy && deployStrategy && (
-        <Modal title={`Deploy: ${deployStrategy.name}`} onClose={() => setShowDeploy(false)}>
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs text-gray-400 block mb-1.5">Trading Mode</label>
-              <div className="flex gap-2">
-                <ModeButton active={deployMode === 'paper'} onClick={() => setDeployMode('paper')} color="yellow">
-                  📋 Paper Trading
-                </ModeButton>
-                <ModeButton active={deployMode === 'live'} onClick={() => setDeployMode('live')} color="red">
-                  🔴 Live Trading
-                </ModeButton>
-              </div>
-              {deployMode === 'live' && (
-                <p className="text-[10px] text-red-400 mt-1.5">⚠ Live trading uses real money. Ensure broker is configured.</p>
-              )}
-            </div>
-
-            <div>
-              <label className="text-xs text-gray-400 block mb-1.5">Data Source</label>
-              <select value={deploySource} onChange={e => setDeploySource(e.target.value)}
-                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-gray-100">
-                <option value="yahoo">Yahoo Finance (Free)</option>
-                <option value="alpaca">Alpaca API (Real-time)</option>
-                <option value="ib">Interactive Brokers</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs text-gray-400 block mb-1.5">Execution Broker</label>
-              <select value={deployBroker} onChange={e => setDeployBroker(e.target.value)}
-                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-gray-100">
-                <option value="internal">Internal (Simulated)</option>
-                <option value="alpaca">Alpaca Paper/Live</option>
-                <option value="ib">Interactive Brokers TWS</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs text-gray-400 block mb-1.5">Initial Capital ($)</label>
-              <input type="number" value={deployCapital} onChange={e => setDeployCapital(Number(e.target.value))}
-                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-gray-100 font-mono" />
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <button onClick={() => setShowDeploy(false)}
-                className="flex-1 px-4 py-2 bg-background border border-border rounded-lg text-sm text-gray-400 hover:text-gray-100 transition-colors">
-                Cancel
-              </button>
-              <button onClick={handleDeploy} disabled={deploying}
-                className="flex-1 px-4 py-2 bg-accent hover:bg-accent/80 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
-                {deploying ? 'Deploying...' : `Deploy (${deployMode})`}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* Adjust Modal */}
-      {showAdjust && adjustTarget && (
-        <Modal title={`Adjust: ${adjustTarget.name}`} onClose={() => setShowAdjust(false)}>
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs text-gray-400 block mb-1.5">Trading Mode</label>
-              <div className="flex gap-2">
-                <ModeButton active={adjustMode === 'paper'} onClick={() => setAdjustMode('paper')} color="yellow">
-                  📋 Paper
-                </ModeButton>
-                <ModeButton active={adjustMode === 'live'} onClick={() => setAdjustMode('live')} color="red">
-                  🔴 Live
-                </ModeButton>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs text-gray-400 block mb-1.5">Data Source</label>
-              <select value={adjustSource} onChange={e => setAdjustSource(e.target.value)}
-                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-gray-100">
-                <option value="yahoo">Yahoo Finance</option>
-                <option value="alpaca">Alpaca API</option>
-                <option value="ib">Interactive Brokers</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs text-gray-400 block mb-1.5">Execution Broker</label>
-              <select value={adjustBroker} onChange={e => setAdjustBroker(e.target.value)}
-                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-gray-100">
-                <option value="internal">Internal (Simulated)</option>
-                <option value="alpaca">Alpaca</option>
-                <option value="ib">Interactive Brokers</option>
-              </select>
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <button onClick={() => setShowAdjust(false)}
-                className="flex-1 px-4 py-2 bg-background border border-border rounded-lg text-sm text-gray-400 hover:text-gray-100 transition-colors">
-                Cancel
-              </button>
-              <button onClick={handleAdjust}
-                className="flex-1 px-4 py-2 bg-accent hover:bg-accent/80 text-white rounded-lg text-sm font-medium transition-colors">
-                Save Changes
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-    </div>
-  )
-}
-
-
-/* ── Strategy Row Component ──────────────────────────────── */
-function StrategyRow({ dep, onStart, onStop, onAdjust, onRemove }: {
-  dep: DeployedStrategy
-  onStart: () => void
-  onStop: () => void
-  onAdjust: () => void
-  onRemove: () => void
-}) {
-  const isRunning = dep.status === 'running'
-  const pnl = dep.realized_pnl + dep.unrealized_pnl
-  const returnPct = dep.initial_capital > 0
-    ? ((dep.total_equity - dep.initial_capital) / dep.initial_capital * 100)
-    : 0
-
-  return (
-    <div className={`bg-background rounded-lg border p-4 transition-colors ${
-      isRunning ? 'border-green-500/30' : 'border-border'
-    }`}>
-      <div className="flex items-center justify-between">
-        {/* Left: name + status */}
-        <div className="flex items-center gap-3">
-          <div className={`w-2.5 h-2.5 rounded-full ${
-            isRunning ? 'bg-green-500 animate-pulse' :
-            dep.status === 'error' ? 'bg-red-500' :
-            'bg-gray-500'
-          }`} />
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-gray-100">{dep.name}</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium uppercase ${
-                dep.mode === 'live'
-                  ? 'bg-red-500/20 text-red-400'
-                  : 'bg-yellow-500/20 text-yellow-400'
-              }`}>
-                {dep.mode}
-              </span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface text-gray-500 uppercase">
-                {dep.data_source}
-              </span>
-            </div>
-            <div className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-3">
-              <span>Position: {dep.current_position || '—'}</span>
-              {dep.last_run && <span>Last: {dep.last_run}</span>}
-            </div>
-          </div>
-        </div>
-
-        {/* Center: metrics */}
-        <div className="flex items-center gap-6 text-xs">
-          <div className="text-center">
-            <p className="text-gray-500">Equity</p>
-            <p className="text-gray-100 font-mono font-medium">${dep.total_equity.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
-          </div>
-          <div className="text-center">
-            <p className="text-gray-500">P&L</p>
-            <p className={`font-mono font-medium ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {pnl >= 0 ? '+' : ''}${pnl.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-            </p>
-          </div>
-          <div className="text-center">
-            <p className="text-gray-500">Return</p>
-            <p className={`font-mono font-medium ${returnPct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {returnPct >= 0 ? '+' : ''}{returnPct.toFixed(2)}%
-            </p>
-          </div>
-          <div className="text-center">
-            <p className="text-gray-500">Trades</p>
-            <p className="text-gray-100 font-mono">{dep.total_trades}</p>
-          </div>
-          {dep.win_rate != null && (
-            <div className="text-center">
-              <p className="text-gray-500">Win Rate</p>
-              <p className="text-gray-100 font-mono">{dep.win_rate}%</p>
-            </div>
-          )}
-        </div>
-
-        {/* Right: controls */}
-        <div className="flex items-center gap-2">
-          {isRunning ? (
-            <button onClick={onStop}
-              className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-xs font-medium transition-colors">
-              ⏹ Stop
-            </button>
-          ) : (
-            <button onClick={onStart}
-              className="px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-xs font-medium transition-colors">
-              ▶ Start
-            </button>
-          )}
-          <button onClick={onAdjust}
-            className="px-3 py-1.5 bg-surface hover:bg-background border border-border text-gray-400 hover:text-gray-100 rounded-lg text-xs font-medium transition-colors">
-            ⚙ Adjust
-          </button>
-          {!isRunning && (
-            <button onClick={onRemove}
-              className="px-2 py-1.5 text-gray-500 hover:text-red-400 rounded-lg text-xs transition-colors"
-              title="Remove deployment">
-              ✕
-            </button>
-          )}
-        </div>
+      {/* ── 5. Ops strip ─────────────────────────────────── */}
+      <div className="space-y-2">
+        <SectionHeading title="Ops · Live runners" href="/cloud" hrefLabel="Ops →" />
+        {ops.loading ? (
+          <SectionLoading what="deployments" />
+        ) : ops.err || !ops.data ? (
+          <SectionError what="Deployments" err={ops.err ?? 'no data'} />
+        ) : (
+          <OpsStrip ops={ops.data} />
+        )}
       </div>
     </div>
-  )
-}
-
-
-/* ── KPI Card ──────────────────────────────────────────── */
-function KPICard({ label, value, sub, color = 'text-gray-100' }: {
-  label: string; value: string; sub?: string; color?: string
-}) {
-  return (
-    <div className="bg-surface rounded-xl border border-border p-4">
-      <p className="text-xs text-gray-500 uppercase tracking-wider">{label}</p>
-      <p className={`text-xl font-bold mt-1 font-mono ${color}`}>{value}</p>
-      {sub && <p className="text-xs text-gray-500 mt-0.5">{sub}</p>}
-    </div>
-  )
-}
-
-
-/* ── Modal ──────────────────────────────────────────────── */
-function Modal({ title, children, onClose }: {
-  title: string; children: React.ReactNode; onClose: () => void
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-surface border border-border rounded-xl shadow-2xl w-full max-w-md mx-4 p-6">
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-semibold">{title}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-100 text-lg transition-colors">✕</button>
-        </div>
-        {children}
-      </div>
-    </div>
-  )
-}
-
-
-/* ── Mode Toggle Button ──────────────────────────────────── */
-function ModeButton({ active, onClick, color, children }: {
-  active: boolean; onClick: () => void; color: string; children: React.ReactNode
-}) {
-  const colors = {
-    yellow: active ? 'border-yellow-500/50 bg-yellow-500/10 text-yellow-400' : 'border-border text-gray-400 hover:text-gray-100',
-    red: active ? 'border-red-500/50 bg-red-500/10 text-red-400' : 'border-border text-gray-400 hover:text-gray-100',
-  }
-  return (
-    <button onClick={onClick}
-      className={`flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${colors[color as keyof typeof colors]}`}>
-      {children}
-    </button>
   )
 }

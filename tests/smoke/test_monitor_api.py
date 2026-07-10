@@ -126,3 +126,63 @@ def test_sla_endpoint(client):
     assert "sources" in body["sla_config"]
     for b in body["breaches"]:
         assert {"target", "critical", "detail"} <= set(b)
+
+
+# ── IA restructure: lifecycle registry + backtest records ──
+
+def test_strategy_registry_lifecycle(client):
+    """Registry groups strategies by honest lifecycle stage."""
+    r = client.get("/api/strategies/registry")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["stages"][0] == "live"
+    ids = {s["id"] for g in body["groups"].values() for s in g}
+    assert {"eth_sniper", "spy_gamma_scalp", "btc_wheel",
+            "combo_wheel_sniper", "btc_sniper"} <= ids
+    # BTC Momentum Sniper v5 must NOT be live/paper (user opted out of papering)
+    stages = {s["id"]: s["stage"] for g in body["groups"].values() for s in g}
+    assert stages["btc_sniper"] == "retired"
+    assert stages["btc_wheel"] == "paper"
+    # every entry declares the 1.5 gate
+    for g in body["groups"].values():
+        for s in g:
+            assert s["gate"].get("threshold", 1.5) == 1.5
+
+
+def test_no_fake_paper_deployments(client):
+    """strategy_deployments.json must not resurrect btc_sniper as paper."""
+    r = client.get("/api/strategies/")
+    assert r.status_code == 200
+    assert all(d["strategy_id"] != "btc_sniper" for d in r.json())
+
+
+def test_backtest_records_combo(client):
+    """Official combo record surfaces with the validated numbers."""
+    r = client.get("/api/backtest/records")
+    assert r.status_code == 200
+    recs = {x["id"]: x for x in r.json()["records"]}
+    combo = recs["combo_wheel_sniper"]
+    assert combo["status"] == "validated"
+    assert combo["headline"]["sharpe"] == 2.81
+    assert combo["headline"]["oos_sharpe"] == 2.66
+    assert combo["has_curve"]
+    # rejected research is on the record too, honestly
+    assert recs["tsmom_research"]["status"] == "rejected"
+
+
+def test_backtest_record_curve(client):
+    r = client.get("/api/backtest/records/combo_wheel_sniper/curve")
+    assert r.status_code == 200
+    series = r.json()["series"]
+    assert {"wheel", "sniper", "combo_70_30"} <= set(series)
+    pts = series["combo_70_30"]
+    assert len(pts) > 100 and pts[0]["equity"] == 100000.0
+
+
+def test_btc_wheel_paper_endpoint(client):
+    r = client.get("/api/paper-trading/btc-wheel")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["strategy_id"] == "btc_wheel"
+    assert isinstance(body["equity_curve"], list)
+    assert "position" in body

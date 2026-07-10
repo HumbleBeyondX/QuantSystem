@@ -858,3 +858,189 @@ async def list_available_strategies():
     from strategies.registry import discover_strategies, list_strategies
     discover_strategies()
     return list_strategies()
+
+
+# ---------------------------------------------------------------------------
+# Validated backtest records — the permanent research registry.
+#
+# Unlike ad-hoc runs above (ephemeral, in-memory), records are the OFFICIAL
+# results that drove deploy/reject decisions. Each maps to a JSON produced
+# by its research script under results/, and can be REPRODUCED from the UI
+# by re-running that script (real data, same code path).
+# ---------------------------------------------------------------------------
+
+REPO_RESULTS = PROJECT_ROOT / "results"
+
+# rid → (json file, reproduce script, optional equity-curves CSV)
+RECORD_MAP: Dict[str, Dict[str, Optional[str]]] = {
+    "combo_wheel_sniper": {
+        "json": "combo_wheel_sniper_research.json",
+        "script": "scripts/backtest_combo_wheel_sniper.py",
+        "curves": "combo_wheel_sniper_curves.csv",
+    },
+    "tsmom_research": {
+        "json": "tsmom_research.json",
+        "script": "scripts/backtest_tsmom_diversified.py",
+        "curves": None,
+    },
+    "pairs_trading_research": {
+        "json": "pairs_trading_research.json",
+        "script": "scripts/backtest_pairs_trading.py",
+        "curves": None,
+    },
+    "xs_reversal_research": {
+        "json": "xs_reversal_research.json",
+        "script": "scripts/backtest_xs_reversal.py",
+        "curves": None,
+    },
+    "sp500_sector_neutral_qmom": {
+        "json": "sp500_sector_neutral_qmom.json",
+        "script": "scripts/backtest_sp500_sector_neutral_qmom.py",
+        "curves": None,
+    },
+}
+
+_rerun_tasks: Dict[str, Dict[str, Any]] = {}
+
+
+def _record_summary(rid: str) -> Optional[Dict[str, Any]]:
+    spec = RECORD_MAP.get(rid)
+    if not spec:
+        return None
+    path = REPO_RESULTS / spec["json"]
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    # Normalize headline stats across heterogeneous research JSONs
+    headline: Dict[str, Any] = {}
+    if rid == "combo_wheel_sniper":
+        rec = data.get("combos", {}).get(data.get("recommended", "70/30"), {})
+        headline = {
+            "sharpe": rec.get("full", {}).get("sharpe"),
+            "oos_sharpe": rec.get("oos", {}).get("sharpe"),
+            "max_dd": rec.get("full", {}).get("max_dd"),
+            "cagr": rec.get("full", {}).get("cagr"),
+            "correlation": data.get("correlation", {}).get("full"),
+        }
+        status, verdict = "validated", (
+            f"GATE PASS — recommended {data.get('recommended')} wheel/sniper; "
+            "both legs deployed (wheel paper / sniper live)")
+    else:
+        perf = data.get("performance", {})
+        headline = {
+            "sharpe": (perf.get("full") or {}).get("sharpe"),
+            "oos_sharpe": (perf.get("oos") or {}).get("sharpe"),
+            "max_dd": (perf.get("full") or {}).get("max_drawdown"),
+        }
+        if not any(v is not None for v in headline.values()):
+            # Research JSONs are heterogeneous — fall back to the registry
+            # entry linking this record (numbers recorded at decision time)
+            from dashboard.backend.routers.strategies import STRATEGY_CATALOG
+            for s in STRATEGY_CATALOG:
+                if s.links.get("record") == rid and s.id != "eth_sniper":
+                    headline = {"sharpe": s.metrics.get("backtest_sharpe"),
+                                "oos_sharpe": s.metrics.get("oos_sharpe"),
+                                "max_dd": s.metrics.get("max_dd")}
+                    break
+        status, verdict = "rejected", "OOS Sharpe < 1.5 — auto-rejected"
+    headline = {k: (round(v, 3) if isinstance(v, float) else v)
+                for k, v in headline.items() if v is not None}
+    return {
+        "id": rid,
+        "name": data.get("name") or data.get("strategy", rid),
+        "status": status,
+        "verdict": verdict,
+        "created": data.get("created") or data.get("generated_at"),
+        "period": data.get("period"),
+        "headline": {k: v for k, v in headline.items() if v is not None},
+        "data_note": data.get("data"),
+        "script": spec["script"],
+        "has_curve": bool(spec["curves"]),
+        "rerun": _rerun_tasks.get(rid, {}).get("status"),
+    }
+
+
+@router.get("/records")
+async def list_backtest_records():
+    """Official research records (validated + rejected), gate rule attached."""
+    records = [r for r in (_record_summary(rid) for rid in RECORD_MAP) if r]
+    records.sort(key=lambda r: (r["status"] != "validated", r["id"]))
+    return {"gate_rule": "OOS Sharpe >= 1.5 or auto-reject", "records": records}
+
+
+@router.get("/records/{rid}")
+async def get_backtest_record(rid: str):
+    spec = RECORD_MAP.get(rid)
+    if not spec:
+        raise HTTPException(404, f"unknown record: {rid}")
+    path = REPO_RESULTS / spec["json"]
+    if not path.exists():
+        raise HTTPException(404, f"record file missing: {spec['json']}")
+    return {"summary": _record_summary(rid),
+            "detail": json.loads(path.read_text(encoding="utf-8"))}
+
+
+@router.get("/records/{rid}/curve")
+async def get_record_curve(rid: str, max_points: int = 400):
+    """Equity curves for a record (per leg + recommended combo)."""
+    spec = RECORD_MAP.get(rid)
+    if not spec or not spec["curves"]:
+        raise HTTPException(404, "no curve data for this record")
+    import pandas as pd
+    df = pd.read_csv(REPO_RESULTS / spec["curves"], index_col=0, parse_dates=True)
+    series: Dict[str, Any] = {}
+    if rid == "combo_wheel_sniper":
+        rw = df["wheel"].pct_change().fillna(0)
+        rs = df["sniper"].pct_change().fillna(0)
+        df = df.copy()
+        df["combo_70_30"] = 100_000 * (1 + 0.7 * rw + 0.3 * rs).cumprod()
+        # Rebase legs to 100k so curves are visually comparable
+        for col in ("wheel", "sniper"):
+            df[col] = 100_000 * df[col] / df[col].iloc[0]
+    step = max(1, len(df) // max_points)
+    sampled = df.iloc[::step]
+    for col in sampled.columns:
+        series[col] = [{"date": str(d.date()), "equity": round(float(v), 2)}
+                       for d, v in sampled[col].items()]
+    return {"id": rid, "series": series}
+
+
+@router.post("/records/{rid}/rerun")
+async def rerun_backtest_record(rid: str, background_tasks: BackgroundTasks):
+    """Reproduce a record by re-running its research script (same code, real data)."""
+    spec = RECORD_MAP.get(rid)
+    if not spec:
+        raise HTTPException(404, f"unknown record: {rid}")
+    if _rerun_tasks.get(rid, {}).get("status") == "running":
+        raise HTTPException(409, "rerun already in progress")
+    _rerun_tasks[rid] = {"status": "running",
+                         "started_at": datetime.utcnow().isoformat(), "tail": []}
+
+    async def _run():
+        import sys as _sys
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                _sys.executable, str(PROJECT_ROOT / spec["script"]),
+                cwd=str(PROJECT_ROOT),
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+            out, _ = await asyncio.wait_for(proc.communicate(), timeout=1800)
+            tail = out.decode(errors="replace").splitlines()[-40:]
+            _rerun_tasks[rid].update(
+                status="completed" if proc.returncode == 0 else "failed",
+                returncode=proc.returncode, tail=tail,
+                finished_at=datetime.utcnow().isoformat())
+        except Exception as e:
+            _rerun_tasks[rid].update(status="failed", tail=[f"{type(e).__name__}: {e}"])
+
+    background_tasks.add_task(_run)
+    return {"id": rid, "status": "running", "script": spec["script"]}
+
+
+@router.get("/records/{rid}/rerun/status")
+async def rerun_status(rid: str):
+    if rid not in _rerun_tasks:
+        return {"id": rid, "status": "idle"}
+    return {"id": rid, **_rerun_tasks[rid]}
