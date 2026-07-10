@@ -201,13 +201,21 @@ class GammaSqueezeScanner:
                 return result
 
             # ── Option chain: Alpaca OPRA (real greeks) or yfinance fallback ──
-            if self._alpaca is not None:
+            use_alpaca = self._alpaca is not None
+            chain_df = None
+            if use_alpaca:
                 try:
                     chain_df = self._alpaca.get_chain(ticker, self.max_dte)
                 except Exception as e:
-                    result.error = f"alpaca_chain_failed:{e}"
-                    return result
-                if chain_df.empty:
+                    # runtime failover: one ticker's Alpaca hiccup should not
+                    # kill the scan — drop to yfinance for THIS ticker, log it.
+                    from data.quality.guards import record_correction
+                    record_correction(ticker, "failover",
+                                      f"alpaca chain failed ({type(e).__name__}), "
+                                      f"using yfinance fallback")
+                    use_alpaca = False
+            if use_alpaca:
+                if chain_df is None or chain_df.empty:
                     result.error = "no_chain_data"
                     return result
                 # Anomaly guard: a chain that parses but is all zeros poisoned

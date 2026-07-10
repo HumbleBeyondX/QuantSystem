@@ -117,3 +117,44 @@ def test_manifest_hashes_inputs(tmp_path):
     assert (json.loads(m2.read_text())["inputs"][0]["sha256"]
             == data["inputs"][0]["sha256"])
     m1.unlink(); m2.unlink()
+
+
+# ── Week-4: SLA gate ──
+
+def test_sla_preflight_blocks_only_critical(monkeypatch):
+    from data.quality import sla
+    monkeypatch.setattr(sla, "load_sla", lambda: {"sources": {
+        "srcA": {"critical": True, "max_latency_ms": 5000},
+        "srcB": {"critical": False, "max_latency_ms": 5000}}})
+    def fake_probe(sid, spec):
+        if sid == "srcB":
+            return sla.SLABreach(sid, spec["critical"], "down")
+        return None
+    monkeypatch.setattr(sla, "_probe_source", fake_probe)
+    ok, why = sla.preflight(["srcA", "srcB"], strategy="t")
+    assert ok  # non-critical breach does NOT block
+    def fake_probe2(sid, spec):
+        return sla.SLABreach(sid, spec["critical"], "down") if sid == "srcA" else None
+    monkeypatch.setattr(sla, "_probe_source", fake_probe2)
+    ok2, why2 = sla.preflight(["srcA"], strategy="t")
+    assert not ok2 and "srcA" in why2  # critical breach blocks OPEN
+
+
+def test_sla_preflight_fails_open_on_gate_error(monkeypatch):
+    from data.quality import sla
+    monkeypatch.setattr(sla, "check_sources",
+                        lambda only=None: (_ for _ in ()).throw(RuntimeError("boom")))
+    ok, why = sla.preflight(["deribit"])
+    assert ok and "gate_error" in why  # broken gate must not halt trading
+
+
+def test_sla_latency_breach(monkeypatch):
+    from data.quality import sla
+    import data.quality.probes as probes
+    import time as _t
+    slow = ("market_data", lambda: _t.sleep(0.05) or "ok")
+    monkeypatch.setitem(probes.PROBES, "slowsrc", slow)
+    monkeypatch.setattr(sla, "load_sla", lambda: {"sources": {
+        "slowsrc": {"critical": True, "max_latency_ms": 1}}})
+    res = sla.check_sources()
+    assert not res.ok and "latency" in res.breaches[0].detail

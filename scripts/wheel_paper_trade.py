@@ -128,9 +128,18 @@ def run_once() -> None:
 
     # ── open new strangle at real bids ──
     if pos is None:
-        sel = pick_strangle(idx)
+        # SLA preflight: risk-increasing action only. A degraded Deribit
+        # blocks OPENING; settlement/marking above always proceeded.
+        from data.quality.sla import preflight
+        allowed, why = preflight(["deribit"], strategy="btc_wheel")
+        if not allowed:
+            action += "+OPEN_BLOCKED_SLA"
+            sel = None
+        else:
+            sel = pick_strangle(idx)
         if sel is None:
-            action += "+NO_LISTING"
+            if "OPEN_BLOCKED_SLA" not in action:
+                action += "+NO_LISTING"
         else:
             tp, tc = ticker(sel["put"]["name"]), ticker(sel["call"]["name"])
             bid_p = float(tp.get("best_bid_price") or 0) * idx

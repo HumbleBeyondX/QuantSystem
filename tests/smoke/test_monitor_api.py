@@ -115,3 +115,14 @@ def test_data_health_real_probes(client):
         assert isinstance(s["ok"], bool) and s["latency_ms"] is not None
     names = {d["name"] for d in body["datasets"]}
     assert any("gamma" in n for n in names) and any("wheel" in n for n in names)
+
+
+def test_sla_endpoint(client):
+    """Week-4: /api/data-health/sla evaluates declared SLAs with real probes."""
+    r = client.get("/api/data-health/sla")
+    assert r.status_code == 200
+    body = r.json()
+    assert isinstance(body["trading_allowed"], bool)
+    assert "sources" in body["sla_config"]
+    for b in body["breaches"]:
+        assert {"target", "critical", "detail"} <= set(b)

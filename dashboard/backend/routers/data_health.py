@@ -23,6 +23,7 @@ from pydantic import BaseModel
 
 from core.logging import get_logger
 from core.paths import get_logs_dir, get_resource_root
+from data.quality.probes import PROBES
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -70,60 +71,6 @@ async def _probe(id_: str, kind: str, fn) -> SourceHealth:
                             detail=f"{type(e).__name__}: {e}"[:160])
 
 
-def _probe_deribit() -> str:
-    import urllib.request
-    with urllib.request.urlopen(
-            "https://www.deribit.com/api/v2/public/get_index_price"
-            "?index_name=btc_usd", timeout=PROBE_TIMEOUT) as r:
-        px = json.loads(r.read())["result"]["index_price"]
-    return f"BTC index {px:,.0f}"
-
-
-def _probe_alpaca() -> str:
-    import urllib.request
-    key = os.environ.get("ALPACA_API_KEY", "")
-    sec = os.environ.get("ALPACA_SECRET_KEY", "")
-    if not key:
-        raise RuntimeError("ALPACA_API_KEY not set")
-    req = urllib.request.Request(
-        "https://data.alpaca.markets/v2/stocks/SPY/bars/latest",
-        headers={"APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": sec})
-    with urllib.request.urlopen(req, timeout=PROBE_TIMEOUT) as r:
-        ts = json.loads(r.read()).get("bar", {}).get("t", "")
-    return f"SPY latest bar {ts}"
-
-
-def _probe_edgar() -> str:
-    import urllib.request
-    req = urllib.request.Request(
-        "https://data.sec.gov/submissions/CIK0001067983.json",
-        headers={"User-Agent": "QuantSystem health boxiao.huang.duke@gmail.com"})
-    with urllib.request.urlopen(req, timeout=PROBE_TIMEOUT) as r:
-        name = json.loads(r.read()).get("name", "?")
-    return f"EDGAR OK ({name})"
-
-
-def _probe_yahoo() -> str:
-    import urllib.request
-    req = urllib.request.Request(
-        "https://query1.finance.yahoo.com/v8/finance/chart/SPY"
-        "?range=1d&interval=1d", headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=PROBE_TIMEOUT) as r:
-        meta = json.loads(r.read())["chart"]["result"][0]["meta"]
-    return f"SPY {meta.get('regularMarketPrice')}"
-
-
-def _probe_vps() -> str:
-    import urllib.request
-    import yaml
-    cfg = yaml.safe_load(
-        (get_resource_root() / "config" / "deployments.yaml").read_text())
-    dep = next(d for d in cfg["deployments"] if d.get("enabled"))
-    with urllib.request.urlopen(
-            f"http://{dep['host']}:{dep['port']}/health",
-            timeout=PROBE_TIMEOUT) as r:
-        r.read()
-    return f"{dep['name']} healthy"
 
 
 def _dataset(name: str, filename: str, ts_field: str,
@@ -149,11 +96,7 @@ def _dataset(name: str, filename: str, ts_field: str,
 async def data_sources_health() -> DataHealthReport:
     """Live-probe every data source + check dependent dataset freshness."""
     sources = await asyncio.gather(
-        _probe("deribit", "market_data", _probe_deribit),
-        _probe("alpaca", "market_data", _probe_alpaca),
-        _probe("edgar_13f", "alt_data", _probe_edgar),
-        _probe("yahoo", "market_data", _probe_yahoo),
-        _probe("tokyo_vps", "execution", _probe_vps),
+        *[_probe(sid, kind, fn) for sid, (kind, fn) in PROBES.items()]
     )
     datasets = [
         _dataset("gamma_scalp daily", "gamma_scalp_daily.jsonl",
@@ -166,3 +109,18 @@ async def data_sources_health() -> DataHealthReport:
         sources=list(sources),
         datasets=datasets,
     )
+
+
+@router.get("/sla")
+async def sla_status():
+    """Evaluate all declared SLAs (config/data_sla.yaml). Critical breaches
+    are what the strategy preflight gate blocks new positions on."""
+    from data.quality.sla import check_sources, load_sla
+    res = await asyncio.to_thread(check_sources)
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "trading_allowed": res.ok,
+        "breaches": [{"target": b.target, "critical": b.critical,
+                      "detail": b.detail} for b in res.breaches],
+        "sla_config": load_sla(),
+    }

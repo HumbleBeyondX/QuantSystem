@@ -1,0 +1,35 @@
+# ============================================================
+# Data SLA — per-source service levels and criticality
+# ============================================================
+# critical: true  → a breach BLOCKS opening new positions in strategies
+#                   that declare the source as a dependency.
+#                   NEVER blocks closes/settlements (risk-reducing actions
+#                   must always proceed — same doctrine as pre-trade risk).
+# max_latency_ms  → probe slower than this counts as a breach even if it
+#                   technically succeeds (degraded ≠ healthy).
+# ============================================================
+
+sources:
+  deribit:
+    critical: true          # BTC wheel prices/settles off it
+    max_latency_ms: 5000
+  tokyo_vps:
+    critical: true          # live ETH sniper telemetry
+    max_latency_ms: 5000
+  alpaca:
+    critical: false         # scanner has yfinance fallback
+    max_latency_ms: 5000
+  edgar_13f:
+    critical: false         # filing-season only
+    max_latency_ms: 8000
+  yahoo:
+    critical: false         # gamma paper; DQC guards its output separately
+    max_latency_ms: 8000
+
+datasets:
+  gamma_scalp_daily:
+    critical: false
+    max_age_hours: 30
+  btc_wheel_daily:
+    critical: false
+    max_age_hours: 30

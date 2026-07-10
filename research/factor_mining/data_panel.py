@@ -54,9 +54,24 @@ class DataPanel:
     # Factory methods
     # ------------------------------------------------------------------
     @classmethod
-    def from_parquet(cls, path: str | Path) -> "DataPanel":
+    def from_parquet(cls, path: str | Path, validate: bool = True) -> "DataPanel":
+        """Load a long-format OHLCV panel from parquet.
+
+        With validate=True (default): records a sha256 data manifest (any
+        factor evaluation becomes traceable to exact input bytes) and runs
+        the bar-panel quality guard on the closes matrix — gaps, duplicate
+        days and NaN density are surfaced instead of silently feeding ICs.
+        """
         df = pd.read_parquet(path)
-        return cls(df)
+        panel = cls(df)
+        if validate:
+            from data.quality.guards import ensure_bars_valid, record_data_manifest
+            mf = record_data_manifest([path], "factor_panel")
+            _, rep = ensure_bars_valid(panel.closes_wide, name=Path(path).stem,
+                                       stale_after_days=None)
+            print(f"  DataPanel manifest: {mf.name}")
+            print(f"  DataPanel DQ: {rep}")
+        return panel
 
     @classmethod
     def from_long_df(cls, df: pd.DataFrame) -> "DataPanel":
