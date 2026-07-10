@@ -54,6 +54,88 @@ interface QuoteData {
 
 type Tab = 'quotes' | 'sources' | 'inventory' | 'collection' | 'features' | 'pipeline'
 
+// ── Week-2: real source-health probes (replaces mtime-based fake status) ──
+interface SourceHealth {
+  id: string
+  kind: string
+  ok: boolean
+  latency_ms: number | null
+  detail: string
+}
+interface DatasetFreshness {
+  name: string
+  age_hours: number | null
+  fresh: boolean
+  last_record: string | null
+}
+
+function LiveHealthPanel() {
+  const [hSources, setHSources] = useState<SourceHealth[]>([])
+  const [hDatasets, setHDatasets] = useState<DatasetFreshness[]>([])
+  const [checkedAt, setCheckedAt] = useState<string | null>(null)
+  const [probing, setProbing] = useState(false)
+
+  const probe = useCallback(async () => {
+    setProbing(true)
+    try {
+      const r = await fetch(`${API}/api/data-health/sources`, { cache: 'no-store' })
+      if (r.ok) {
+        const d = await r.json()
+        setHSources(d.sources)
+        setHDatasets(d.datasets)
+        setCheckedAt(new Date().toLocaleTimeString())
+      }
+    } catch { /* endpoint down → keep last result visible */ }
+    setProbing(false)
+  }, [])
+
+  useEffect(() => {
+    probe()
+    const t = setInterval(probe, 60_000)  // real API calls — 60s cadence
+    return () => clearInterval(t)
+  }, [probe])
+
+  return (
+    <div className="bg-surface rounded-xl border border-border p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-gray-100">
+          实时健康探测 <span className="text-xs text-gray-500 font-normal">真实 API 请求,非文件时间戳</span>
+        </h3>
+        <span className="text-xs text-gray-500">
+          {probing ? '探测中…' : checkedAt ? `每 60s · 上次 ${checkedAt}` : '加载中…'}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2">
+        {hSources.map((s) => (
+          <div key={s.id}
+            className={`rounded-lg border px-3 py-2 ${
+              s.ok ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-rose-500/40 bg-rose-500/10'
+            }`}>
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${s.ok ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+              <span className="font-mono text-sm font-semibold">{s.id}</span>
+              <span className="ml-auto font-mono text-[11px] text-gray-400">
+                {s.latency_ms != null ? `${Math.round(s.latency_ms)}ms` : '—'}
+              </span>
+            </div>
+            <div className="text-[11px] text-gray-500 mt-1 truncate" title={s.detail}>{s.detail}</div>
+          </div>
+        ))}
+      </div>
+      {hDatasets.length > 0 && (
+        <div className="flex gap-4 mt-3 pt-3 border-t border-border text-xs">
+          {hDatasets.map((d) => (
+            <span key={d.name} className={d.fresh ? 'text-gray-400' : 'text-amber-400'}>
+              {d.fresh ? '✓' : '⚠'} {d.name}
+              <span className="font-mono ml-1">{d.age_hours != null ? `${d.age_hours}h` : '?'}</span>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main Component ────────────────────────────────────────────
 
 export default function DataLayerPage() {
@@ -218,6 +300,7 @@ export default function DataLayerPage() {
           {/* ── Data Sources Tab ───────────────── */}
           {tab === 'sources' && (
             <div className="space-y-4">
+              <LiveHealthPanel />
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {sources.map((src) => (
                   <div
