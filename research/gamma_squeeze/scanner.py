@@ -215,6 +215,9 @@ class GammaSqueezeScanner:
                 from data.quality.guards import chain_sanity
                 rep = chain_sanity(chain_df, ticker)
                 if not rep.ok:
+                    from data.quality.guards import record_correction
+                    record_correction(ticker, "chain_anomaly",
+                                      ";".join(rep.issues), len(chain_df))
                     result.error = f"chain_anomaly:{';'.join(rep.issues)}"
                     return result
                 calls_df = chain_df[chain_df["type"] == "call"].copy()

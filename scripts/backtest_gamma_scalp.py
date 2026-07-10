@@ -33,7 +33,9 @@ from strategies.registry import discover_strategies, create_strategy
 
 def load_data(csv_path: str) -> pd.DataFrame:
     """Load SPY gamma scalp CSV with features (quality-guarded)."""
-    from data.quality.guards import ensure_bars_valid
+    from data.quality.guards import ensure_bars_valid, record_data_manifest
+    mf = record_data_manifest([csv_path], "gamma_scalp_bt")
+    print(f"  Data manifest: {mf.name}")
     df = pd.read_csv(csv_path, parse_dates=["timestamp"])
     _checked, rep = ensure_bars_valid(
         df.set_index("timestamp"), name="gamma_scalp_csv", stale_after_days=None)
