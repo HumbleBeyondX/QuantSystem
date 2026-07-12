@@ -1,0 +1,107 @@
+{
+ "name": "btc_wheel_leg (DVOL x live-chain calibrated)",
+ "base_sharpe": 1.34,
+ "walk_forward": {
+  "folds": [
+   {
+    "fold": 1,
+    "start": "2021-03-25",
+    "end": "2022-04-16",
+    "sharpe": 2.02
+   },
+   {
+    "fold": 2,
+    "start": "2022-04-17",
+    "end": "2023-05-08",
+    "sharpe": 1.76
+   },
+   {
+    "fold": 3,
+    "start": "2023-05-09",
+    "end": "2024-05-29",
+    "sharpe": 0.02
+   },
+   {
+    "fold": 4,
+    "start": "2024-05-30",
+    "end": "2025-06-20",
+    "sharpe": 1.78
+   },
+   {
+    "fold": 5,
+    "start": "2025-06-21",
+    "end": "2026-07-12",
+    "sharpe": 0.96
+   }
+  ],
+  "median_sharpe": 1.76,
+  "min_sharpe": 0.02,
+  "pct_positive_folds": 1.0,
+  "passed": true
+ },
+ "leave_one_out": {
+  "base_sharpe": 1.34,
+  "excluding": [
+   {
+    "excluded": "2021",
+    "sharpe": 1.07,
+    "n_days_dropped": 282
+   },
+   {
+    "excluded": "2022",
+    "sharpe": 1.25,
+    "n_days_dropped": 365
+   },
+   {
+    "excluded": "2023",
+    "sharpe": 1.58,
+    "n_days_dropped": 365
+   },
+   {
+    "excluded": "2024",
+    "sharpe": 1.46,
+    "n_days_dropped": 366
+   },
+   {
+    "excluded": "2025",
+    "sharpe": 1.27,
+    "n_days_dropped": 365
+   },
+   {
+    "excluded": "2026",
+    "sharpe": 1.43,
+    "n_days_dropped": 193
+   }
+  ],
+  "worst_case": 1.07,
+  "passed": true
+ },
+ "fee_stress": {
+  "points": [
+   {
+    "cost_mult": 0.5,
+    "sharpe": 1.48
+   },
+   {
+    "cost_mult": 1.0,
+    "sharpe": 1.34
+   },
+   {
+    "cost_mult": 2.0,
+    "sharpe": 1.08
+   },
+   {
+    "cost_mult": 3.0,
+    "sharpe": 0.84
+   }
+  ],
+  "breakeven_mult": "> 3.0",
+  "passed": true
+ },
+ "all_passed": true,
+ "checks": {
+  "walk_forward": true,
+  "leave_one_out": true,
+  "fee_stress": true
+ }
+}

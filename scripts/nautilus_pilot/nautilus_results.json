@@ -1,0 +1,46 @@
+{
+  "pure_stop": {
+    "final_equity": 197469.42,
+    "total_return_pct": 97.47,
+    "cagr_pct": 11.52,
+    "sharpe_daily_365": 0.475,
+    "max_dd_pct": -53.4,
+    "n_trades": 221,
+    "win_rate": 0.4706,
+    "profit_factor": 1.097,
+    "n_short": 98,
+    "avg_bars": 53.1,
+    "entry_types": {
+      "pullback": 130,
+      "breakout": 92
+    },
+    "exit_reasons": {
+      "trailing_stop": 93,
+      "stop_loss": 110,
+      "time_exit": 18
+    },
+    "venue_final_balance": 197419.47570602
+  },
+  "liq_cap": {
+    "final_equity": 230836.3,
+    "total_return_pct": 130.84,
+    "cagr_pct": 14.34,
+    "sharpe_daily_365": 0.539,
+    "max_dd_pct": -47.36,
+    "n_trades": 696,
+    "win_rate": 0.1825,
+    "profit_factor": 1.132,
+    "n_short": 315,
+    "avg_bars": 11.2,
+    "entry_types": {
+      "pullback": 458,
+      "breakout": 239
+    },
+    "exit_reasons": {
+      "trailing_stop": 127,
+      "liquidation": 568,
+      "time_exit": 1
+    },
+    "venue_final_balance": 230757.04800442
+  }
+}

@@ -878,6 +878,16 @@ RECORD_MAP: Dict[str, Dict[str, Optional[str]]] = {
         "script": "scripts/backtest_combo_wheel_sniper.py",
         "curves": "combo_wheel_sniper_curves.csv",
     },
+    "wheel_delta_strike": {
+        "json": "wheel_delta_strike_research.json",
+        "script": "scripts/backtest_wheel_delta_strike.py",
+        "curves": "wheel_delta_strike_curves.csv",
+    },
+    "combo_wheel_sniper_v2": {
+        "json": "combo_wheel_sniper_v2_research.json",
+        "script": "scripts/backtest_combo_wheel_sniper_v2.py",
+        "curves": "combo_wheel_sniper_v2_curves.csv",
+    },
     "tsmom_research": {
         "json": "tsmom_research.json",
         "script": "scripts/backtest_tsmom_diversified.py",
@@ -916,7 +926,12 @@ def _record_summary(rid: str) -> Optional[Dict[str, Any]]:
         return None
     # Normalize headline stats across heterogeneous research JSONs
     headline: Dict[str, Any] = {}
-    if rid == "combo_wheel_sniper":
+    if rid == "wheel_delta_strike":
+        headline = dict(data.get("headline", {}))
+        status = data.get("status", "validated")
+        verdict = ("GATE PASS (full post-incident protocol: IS-only selection, "
+                   "blind OOS 2.07, fee/WF/LOO suite, beta check)")
+    elif rid in ("combo_wheel_sniper", "combo_wheel_sniper_v2"):
         rec = data.get("combos", {}).get(data.get("recommended", "70/30"), {})
         headline = {
             "sharpe": rec.get("full", {}).get("sharpe"),
@@ -925,9 +940,15 @@ def _record_summary(rid: str) -> Optional[Dict[str, Any]]:
             "cagr": rec.get("full", {}).get("cagr"),
             "correlation": data.get("correlation", {}).get("full"),
         }
-        status, verdict = "validated", (
-            f"GATE PASS — recommended {data.get('recommended')} wheel/sniper; "
-            "both legs deployed (wheel paper / sniper live)")
+        if rid == "combo_wheel_sniper":
+            status, verdict = "invalidated", (
+                "INVALIDATED 2026-07-12 — sniper-leg engine capped losses at "
+                "-margin*0.95 without liquidating; see combo_wheel_sniper_v2 "
+                "for the honest re-run (found by NautilusTrader parity pilot)")
+        else:
+            status, verdict = "rejected", (
+                "Honest re-run: combo 70/30 OOS 0.32 < 1.5 — auto-rejected. "
+                "Wheel-only best mix (OOS 1.42, still below gate)")
     else:
         perf = data.get("performance", {})
         headline = {
@@ -1144,9 +1165,10 @@ async def record_analytics(rid: str, benchmark: Optional[str] = None,
     if spec and spec.get("curves"):
         df = pd.read_csv(REPO_RESULTS / spec["curves"], index_col=0,
                          parse_dates=True)
-        if rid == "combo_wheel_sniper" and series == "combo_70_30":
+        if rid in ("combo_wheel_sniper", "combo_wheel_sniper_v2") and series == "combo_70_30":
+            sn_col = "sniper" if "sniper" in df.columns else "sniper_honest"
             rw = df["wheel"].pct_change().fillna(0)
-            rs = df["sniper"].pct_change().fillna(0)
+            rs = df[sn_col].pct_change().fillna(0)
             equity = 100_000 * (1 + 0.7 * rw + 0.3 * rs).cumprod()
         elif series in df.columns:
             equity = df[series].astype(float)

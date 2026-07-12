@@ -1,0 +1,22 @@
+{
+  "final_equity": 230836.3,
+  "total_return_pct": 130.84,
+  "cagr_pct": 14.34,
+  "sharpe_daily_365": 0.539,
+  "max_dd_pct": -47.36,
+  "n_trades": 696,
+  "win_rate": 0.1825,
+  "profit_factor": 1.132,
+  "n_short": 315,
+  "avg_bars": 11.2,
+  "entry_types": {
+    "pullback": 458,
+    "breakout": 239
+  },
+  "exit_reasons": {
+    "trailing_stop": 127,
+    "liquidation": 568,
+    "time_exit": 1
+  },
+  "venue_final_balance": 230757.04800442
+}

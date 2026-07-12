@@ -1,0 +1,110 @@
+{
+  "params": {
+    "initial_capital": 100000,
+    "leverage": 50,
+    "atr_trail": 3.0,
+    "max_hold": 180,
+    "defaults": "risk 0.05, stop 3.5 ATR, activate 2.0 ATR, min_score 2, vol_min 1.2, DC10, cooldown 3, fee 0.0005, pause 5/18"
+  },
+  "native_metrics": {
+    "total_return_pct": 6644.23,
+    "annual_return_pct": 96.36,
+    "sharpe": 2.055,
+    "sortino": 3.959,
+    "calmar": 7.286,
+    "max_dd_pct": 13.22,
+    "volatility": 0.3305,
+    "win_rate": 0.5023,
+    "profit_factor": 3.28,
+    "avg_win": 91246.39,
+    "avg_loss": -28083.55,
+    "avg_bars": 56.4,
+    "trades": 213,
+    "fees": 288619.55,
+    "avg_equity_return_pct": 2.12,
+    "monthly_hit": 0.73,
+    "n_months": 74,
+    "best_month_pct": 20.95,
+    "worst_month_pct": -6.96,
+    "yearly": {
+      "2020": 160.3,
+      "2021": 111.29,
+      "2022": 91.19,
+      "2023": 70.15,
+      "2024": 59.66,
+      "2025": 108.49,
+      "2026": 13.06
+    },
+    "start_eq": 100000.0,
+    "end_eq": 6744233.0,
+    "exits": {
+      "trailing_stop": 98,
+      "liquidation": 99,
+      "time_exit": 15,
+      "end": 1
+    },
+    "entry_types": {
+      "breakout": 93,
+      "pullback": 120
+    }
+  },
+  "daily_stats": {
+    "final_equity": 6744233.0,
+    "total_return_pct": 6644.23,
+    "cagr_pct": 96.36,
+    "sharpe_daily_365": 2.24,
+    "max_dd_pct": -12.09
+  },
+  "n_open_trades": 213,
+  "n_short": 94,
+  "n_closed": 213,
+  "no_cap_native_metrics": {
+    "total_return_pct": 70.21,
+    "annual_return_pct": 8.9,
+    "sharpe": 0.271,
+    "sortino": 0.154,
+    "calmar": 0.155,
+    "max_dd_pct": 57.32,
+    "volatility": 0.3269,
+    "win_rate": 0.5023,
+    "profit_factor": 1.086,
+    "avg_win": 10059.12,
+    "avg_loss": -9350.31,
+    "avg_bars": 56.4,
+    "trades": 213,
+    "fees": 30169.81,
+    "avg_equity_return_pct": 0.46,
+    "monthly_hit": 0.541,
+    "n_months": 74,
+    "best_month_pct": 20.95,
+    "worst_month_pct": -23.04,
+    "yearly": {
+      "2020": 39.24,
+      "2021": 14.27,
+      "2022": 61.38,
+      "2023": -4.38,
+      "2024": -28.77,
+      "2025": 2.5,
+      "2026": -5.21
+    },
+    "start_eq": 100000.0,
+    "end_eq": 170205.76,
+    "exits": {
+      "trailing_stop": 98,
+      "stop_loss": 95,
+      "time_exit": 19,
+      "end": 1
+    },
+    "entry_types": {
+      "breakout": 93,
+      "pullback": 120
+    }
+  },
+  "no_cap_daily_stats": {
+    "final_equity": 170205.76,
+    "total_return_pct": 70.21,
+    "cagr_pct": 8.9,
+    "sharpe_daily_365": 0.418,
+    "max_dd_pct": -56.28
+  }
+}

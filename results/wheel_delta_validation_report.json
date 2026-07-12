@@ -1,0 +1,119 @@
+{
+ "name": "btc_wheel_delta putD=0.4 callD=0.2",
+ "base_sharpe": 1.74,
+ "walk_forward": {
+  "folds": [
+   {
+    "fold": 1,
+    "start": "2021-03-25",
+    "end": "2022-04-16",
+    "sharpe": 1.79
+   },
+   {
+    "fold": 2,
+    "start": "2022-04-17",
+    "end": "2023-05-08",
+    "sharpe": 2.05
+   },
+   {
+    "fold": 3,
+    "start": "2023-05-09",
+    "end": "2024-05-29",
+    "sharpe": 1.09
+   },
+   {
+    "fold": 4,
+    "start": "2024-05-30",
+    "end": "2025-06-20",
+    "sharpe": 2.75
+   },
+   {
+    "fold": 5,
+    "start": "2025-06-21",
+    "end": "2026-07-12",
+    "sharpe": 1.17
+   }
+  ],
+  "median_sharpe": 1.79,
+  "min_sharpe": 1.09,
+  "pct_positive_folds": 1.0,
+  "passed": true
+ },
+ "leave_one_out": {
+  "base_sharpe": 1.74,
+  "excluding": [
+   {
+    "excluded": "2021",
+    "sharpe": 1.63,
+    "n_days_dropped": 282
+   },
+   {
+    "excluded": "2022",
+    "sharpe": 1.81,
+    "n_days_dropped": 365
+   },
+   {
+    "excluded": "2023",
+    "sharpe": 1.76,
+    "n_days_dropped": 365
+   },
+   {
+    "excluded": "2024",
+    "sharpe": 1.76,
+    "n_days_dropped": 366
+   },
+   {
+    "excluded": "2025",
+    "sharpe": 1.62,
+    "n_days_dropped": 365
+   },
+   {
+    "excluded": "2026",
+    "sharpe": 1.87,
+    "n_days_dropped": 193
+   }
+  ],
+  "worst_case": 1.62,
+  "passed": true
+ },
+ "fee_stress": {
+  "points": [
+   {
+    "cost_mult": 0.5,
+    "sharpe": 1.94
+   },
+   {
+    "cost_mult": 1.0,
+    "sharpe": 1.74
+   },
+   {
+    "cost_mult": 2.0,
+    "sharpe": 1.36
+   },
+   {
+    "cost_mult": 3.0,
+    "sharpe": 0.99
+   }
+  ],
+  "breakeven_mult": "> 3.0",
+  "passed": true
+ },
+ "all_passed": true,
+ "checks": {
+  "walk_forward": true,
+  "leave_one_out": true,
+  "fee_stress": true
+ },
+ "is_oos": {
+  "is": {
+   "sharpe": 1.64,
+   "max_dd": -0.142,
+   "cagr": 0.306
+  },
+  "oos": {
+   "sharpe": 2.07,
+   "max_dd": -0.132,
+   "cagr": 0.287
+  }
+ }
+}
