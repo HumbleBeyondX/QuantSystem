@@ -15,7 +15,7 @@ recovery email when it comes back. Never raises into the host app.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
 import httpx
@@ -29,6 +29,23 @@ logger = get_logger(__name__)
 CHECK_INTERVAL = 300          # 5 min
 FAILS_TO_ALERT = 3            # ≈15 min of silence
 SCHEDULER_MAX_AGE_H = 30      # daily jobs: >30h without a row = dead
+
+# Schedulers whose job correctly SKIPS non-trading days (no jsonl row on
+# weekends) get a 24h allowance per weekend day in the staleness window —
+# otherwise every Saturday night is a false CRITICAL.
+WEEKDAY_ONLY_SCHEDULERS = {"gamma_scalp"}   # btc_wheel trades 7 days
+
+
+def scheduler_max_age_h(name: str, logged, now) -> float:
+    """Freshness threshold for a daily scheduler, weekend-aware."""
+    max_age = float(SCHEDULER_MAX_AGE_H)
+    if name in WEEKDAY_ONLY_SCHEDULERS:
+        day = logged.date()
+        while day <= now.date():
+            if day.weekday() >= 5:          # Sat/Sun in the window
+                max_age += 24.0
+            day += timedelta(days=1)
+    return max_age
 
 _watchdog: Optional["UptimeWatchdog"] = None
 
@@ -67,9 +84,12 @@ class UptimeWatchdog:
             last = json.loads(p.read_text().strip().splitlines()[-1])
             logged = datetime.fromisoformat(last["logged_at"].replace("Z", "+00:00"))
             if logged.tzinfo is None:
-                logged = logged.replace(tzinfo=timezone.utc)
-            age_h = (datetime.now(timezone.utc) - logged).total_seconds() / 3600
-            return age_h <= SCHEDULER_MAX_AGE_H
+                # logged_at comes from datetime.now() in the paper traders —
+                # naive LOCAL time, not UTC.
+                logged = logged.replace(tzinfo=datetime.now().astimezone().tzinfo)
+            now = datetime.now(timezone.utc)
+            age_h = (now - logged).total_seconds() / 3600
+            return age_h <= scheduler_max_age_h(name, logged, now)
         except Exception:
             return None
 

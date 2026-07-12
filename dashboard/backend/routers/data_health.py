@@ -74,7 +74,7 @@ async def _probe(id_: str, kind: str, fn) -> SourceHealth:
 
 
 def _dataset(name: str, filename: str, ts_field: str,
-             max_age_h: float) -> DatasetFreshness:
+             max_age_h: float, weekday_only: bool = False) -> DatasetFreshness:
     p = get_logs_dir() / "paper_trading" / filename
     d = DatasetFreshness(name=name, path=str(p))
     try:
@@ -82,10 +82,15 @@ def _dataset(name: str, filename: str, ts_field: str,
         raw = last[ts_field]
         ts = datetime.fromisoformat(raw.replace("Z", "+00:00"))
         if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
+            # logged_at is naive LOCAL time (datetime.now() in the traders)
+            ts = ts.replace(tzinfo=datetime.now().astimezone().tzinfo)
+        now = datetime.now(timezone.utc)
         d.last_record = raw
-        d.age_hours = round(
-            (datetime.now(timezone.utc) - ts).total_seconds() / 3600, 1)
+        d.age_hours = round((now - ts).total_seconds() / 3600, 1)
+        if weekday_only:
+            # weekday-only jobs legitimately write nothing on Sat/Sun
+            from core.services.uptime_watchdog import scheduler_max_age_h
+            max_age_h = (max_age_h - 30) + scheduler_max_age_h("gamma_scalp", ts, now)
         d.fresh = d.age_hours <= max_age_h
     except Exception as e:
         d.last_record = f"unreadable: {type(e).__name__}"
@@ -100,7 +105,7 @@ async def data_sources_health() -> DataHealthReport:
     )
     datasets = [
         _dataset("gamma_scalp daily", "gamma_scalp_daily.jsonl",
-                 "logged_at", max_age_h=30),
+                 "logged_at", max_age_h=30, weekday_only=True),
         _dataset("btc_wheel daily", "btc_wheel_daily.jsonl",
                  "logged_at", max_age_h=30),
     ]

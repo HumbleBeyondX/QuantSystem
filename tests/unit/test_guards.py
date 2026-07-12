@@ -158,3 +158,33 @@ def test_sla_latency_breach(monkeypatch):
         "slowsrc": {"critical": True, "max_latency_ms": 1}}})
     res = sla.check_sources()
     assert not res.ok and "latency" in res.breaches[0].detail
+
+
+# ── watchdog: weekend-aware scheduler freshness ──
+
+def test_watchdog_weekend_allowance():
+    from datetime import datetime, timezone
+    from core.services.uptime_watchdog import scheduler_max_age_h
+    fri = datetime(2026, 7, 10, 8, 30, tzinfo=timezone.utc)   # Fri run
+    sun = datetime(2026, 7, 12, 2, 0, tzinfo=timezone.utc)    # Sun morning
+    # gamma (weekday-only): Fri->Sun window contains Sat+Sun => 30+48h
+    assert scheduler_max_age_h("gamma_scalp", fri, sun) == 78.0
+    age_h = (sun - fri).total_seconds() / 3600                # ~41.5h
+    assert age_h <= 78.0                                      # weekend: FRESH
+    # midweek gap is still caught: Tue->Thu, no weekend days
+    tue = datetime(2026, 7, 7, 8, 30, tzinfo=timezone.utc)
+    thu = datetime(2026, 7, 9, 20, 0, tzinfo=timezone.utc)
+    assert scheduler_max_age_h("gamma_scalp", tue, thu) == 30.0
+    assert (thu - tue).total_seconds() / 3600 > 30.0          # midweek: DEAD
+    # wheel trades 7 days — no weekend allowance ever
+    assert scheduler_max_age_h("btc_wheel", fri, sun) == 30.0
+
+
+def test_watchdog_scheduler_check_live():
+    """Against the REAL gamma jsonl right now: must not false-alarm on weekends."""
+    from core.services.uptime_watchdog import UptimeWatchdog
+    wd = UptimeWatchdog()
+    res = wd._check_scheduler("gamma_scalp")
+    from datetime import datetime
+    if res is not None and datetime.now().weekday() in (5, 6, 0):
+        assert res is True   # weekend/Monday-pre-run must be fresh
