@@ -732,3 +732,14 @@ async def get_configured_symbols():
     """Get all symbols configured for tracking."""
     config = _load_config()
     return config.get("symbols", {})
+
+
+@router.get("/catalog")
+async def data_catalog_inventory():
+    """Unified data catalog inventory (the shared data spine)."""
+    import asyncio
+    def _load():
+        from data.catalog_api import catalog
+        return catalog.list()
+    entries = await asyncio.to_thread(_load)
+    return {"count": len(entries), "entries": entries}
