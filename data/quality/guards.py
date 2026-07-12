@@ -83,11 +83,16 @@ def ensure_bars_valid(
     max_gap_days: int = 7,
     max_nan_frac: float = 0.02,
     stale_after_days: Optional[int] = 5,
+    intraday: bool = False,
 ) -> tuple:
     """Validate a daily bar panel before research/backtest consumption.
 
     Returns (clean_df, BarReport). Raises ValueError only on catastrophic
     states (empty, non-datetime index, all-NaN column).
+
+    intraday=True keeps sub-daily timestamps (to_utc_naive, no midnight
+    normalization) — required for 1m/1h/4h bars, where normalizing would
+    collapse every bar of a day into a "duplicate".
     """
     rep = BarReport(name=name)
     if df is None or len(df) == 0:
@@ -95,7 +100,7 @@ def ensure_bars_valid(
     if not isinstance(df.index, pd.DatetimeIndex):
         raise ValueError(f"[bars:{name}] index is not DatetimeIndex")
 
-    df = ensure_utc_naive(df)
+    df = to_utc_naive(df) if intraday else ensure_utc_naive(df)
     before = len(df)
     df = df[~df.index.duplicated(keep="last")].sort_index()
     rep.dropped_dupes = before - len(df)

@@ -19,6 +19,13 @@ default:
   max_paper_drawdown: 0.15    # paper equity max DD
   require_sla_green: true     # declared critical sources healthy right now
   require_backtest_gate: true # registry gate passed (or validated combo link)
+  # ── post-incident doctrine (2026-07-12, sniper loss-cap) ──
+  # A single headline Sharpe is never sufficient again:
+  require_validation_suite: true   # fee stress + walk-forward + LOO all passed
+  require_cross_engine: true       # independent-engine confirmation, OR an
+                                   # explicit recorded waiver (e.g. options:
+                                   # no historical chain data — real-chain
+                                   # paper is the arbiter)
 
 strategies:
   btc_wheel:

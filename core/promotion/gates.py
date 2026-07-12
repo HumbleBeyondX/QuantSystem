@@ -203,8 +203,59 @@ def evaluate_promotion(strategy_id: str) -> PromotionReport:
             rep.checks.append(Check("backtest_gate", "Registry gate passed",
                                     None, f"gate error: {type(e).__name__}"))
 
+    # 7+8. post-incident doctrine: validation suite + cross-engine
+    if cfg.get("require_validation_suite", True) or cfg.get("require_cross_engine", True):
+        record = _load_linked_record(strategy_id)
+        if cfg.get("require_validation_suite", True):
+            suite = (record or {}).get("validation_suite") or {}
+            passed = suite.get("all_passed")
+            rep.checks.append(Check(
+                "validation_suite",
+                "Robustness suite passed (fee stress / WF / LOO)",
+                bool(passed) if passed is not None else None,
+                (f"all checks green: {suite.get('checks')}" if passed
+                 else "no validation_suite in linked record — run "
+                      "backtesting.validation.validation_report and attach")))
+        if cfg.get("require_cross_engine", True):
+            ce = (record or {}).get("cross_engine") or {}
+            caveats = " ".join((record or {}).get("caveats", []))
+            waived = ("cross-check infeasible" in caveats.lower()
+                      or ce.get("waiver"))
+            if ce.get("confirmed") is True:
+                rep.checks.append(Check(
+                    "cross_engine", "Cross-engine confirmation",
+                    True, f"confirmed via {ce.get('engine', 'independent engine')}"))
+            elif waived:
+                rep.checks.append(Check(
+                    "cross_engine", "Cross-engine confirmation",
+                    True, "WAIVED with recorded reason (options: no historical "
+                          "chains; real-chain paper is the arbiter)"))
+            else:
+                rep.checks.append(Check(
+                    "cross_engine", "Cross-engine confirmation",
+                    False, "no confirmation and no recorded waiver — port to "
+                           "the Nautilus harness (scripts/nautilus_pilot)"))
+
     rep.ready = all(c.passed is True for c in rep.checks)
     return rep
+
+
+def _load_linked_record(strategy_id: str) -> Optional[Dict[str, Any]]:
+    """The official research record the registry links for this strategy."""
+    try:
+        from dashboard.backend.routers.strategies import CATALOG_MAP
+        s = CATALOG_MAP.get(strategy_id)
+        rid = s.links.get("record") if s else None
+        if not rid:
+            return None
+        path = get_resource_root() / "results" / f"{rid}_research.json"
+        if not path.exists():
+            path = get_resource_root() / "results" / f"{rid}.json"
+        if path.exists():
+            return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return None
 
 
 # ── stage overrides + promotion action ────────────────────────────

@@ -76,6 +76,60 @@ interface RiskSummary {
   equity_curve: { date: string; equity: number; drawdown: number }[]
 }
 
+// ── Portfolio budgets (cross-strategy) ──
+interface BudgetUtilization {
+  id: string
+  label: string
+  used: number
+  limit: number
+  unit: string
+  utilization: number
+  breached: boolean
+}
+
+interface StressResult {
+  description: string
+  pnl_usd: number
+  loss_usd: number
+  loss_pct: number
+  per_strategy_pnl_usd: Record<string, number>
+  errors: string[]
+}
+
+interface BookExposure {
+  strategy_id: string
+  asset: string
+  equity_usd: number
+  position_open: boolean
+  vega_usd: number
+  delta_usd: number
+  short_vol_notional_usd: number
+  error: string | null
+}
+
+interface PortfolioRisk {
+  generated_at: string
+  advisory: boolean
+  action_on_breach: string
+  combined_equity_usd: number
+  budgets: Record<string, number>
+  exposures: {
+    strategies: Record<string, BookExposure>
+    combined_equity_usd: number
+    net_vega_usd: number
+    abs_vega_usd: number
+    short_vol_notional_usd: number
+    short_vol_notional_pct: number
+    degraded: string[]
+  }
+  stress: Record<string, StressResult>
+  utilization: BudgetUtilization[]
+  breaches: string[]
+  flags: Record<string, string>
+  degraded: string[]
+  error?: string
+}
+
 interface AlertConfig {
   email_enabled: boolean
   recipient: string
@@ -110,6 +164,8 @@ export default function RiskPage() {
   const [selected, setSelected] = useState<string>('spy_gamma_scalp')
   const [summary, setSummary] = useState<RiskSummary | null>(null)
   const [alertConfig, setAlertConfig] = useState<AlertConfig | null>(null)
+  const [portfolio, setPortfolio] = useState<PortfolioRisk | null>(null)
+  const [portfolioError, setPortfolioError] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showAlertPanel, setShowAlertPanel] = useState(false)
@@ -142,6 +198,21 @@ export default function RiskPage() {
     }
   }, [selected])
 
+  // Fetch cross-strategy portfolio budgets (slower: hits Deribit)
+  const fetchPortfolio = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/api/risk/portfolio`)
+      if (res.ok) {
+        setPortfolio(await res.json())
+        setPortfolioError(false)
+      } else {
+        setPortfolioError(true)
+      }
+    } catch {
+      setPortfolioError(true)
+    }
+  }, [])
+
   // Fetch alert config
   const fetchAlertConfig = useCallback(async () => {
     try {
@@ -158,7 +229,14 @@ export default function RiskPage() {
     fetchStrategies()
     fetchSummary()
     fetchAlertConfig()
-  }, [fetchStrategies, fetchSummary, fetchAlertConfig])
+    fetchPortfolio()
+  }, [fetchStrategies, fetchSummary, fetchAlertConfig, fetchPortfolio])
+
+  // Portfolio budgets auto-refresh (60s — endpoint fetches live greeks)
+  useEffect(() => {
+    const interval = setInterval(fetchPortfolio, 60000)
+    return () => clearInterval(interval)
+  }, [fetchPortfolio])
 
   // Auto-refresh
   useEffect(() => {
@@ -314,6 +392,166 @@ export default function RiskPage() {
             </span>
           )}
         </div>
+      </div>
+
+      {/* ── Portfolio Budgets (cross-strategy) ── */}
+      <div className="bg-surface rounded-xl border border-border p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <h3 className="text-lg font-semibold">Portfolio Budgets</h3>
+            <p className="text-xs text-gray-500">
+              Cross-strategy vega &amp; tail budgets — all paper books combined (advisory v1)
+            </p>
+          </div>
+          {portfolio && !portfolio.error && (
+            <div className="flex items-center gap-4">
+              {Object.entries(portfolio.flags || {}).map(([sid, flag]) => (
+                <span
+                  key={sid}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/20 text-rose-400 border border-rose-500/40"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
+                  {sid}: {flag}
+                </span>
+              ))}
+              <div className="text-right">
+                <span className="text-xs text-gray-500">Combined Equity</span>
+                <p className="text-lg font-bold text-success">
+                  ${fmt(portfolio.combined_equity_usd)}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {portfolioError || (portfolio && portfolio.error) ? (
+          <div className="bg-background rounded-lg p-6 text-center">
+            <p className="text-sm text-gray-500">Portfolio budgets unavailable</p>
+            <p className="text-xs text-gray-600 mt-1">
+              {portfolio?.error || 'Backend unreachable — retrying every 60s'}
+            </p>
+          </div>
+        ) : !portfolio ? (
+          <div className="bg-background rounded-lg p-6 text-center">
+            <p className="text-sm text-gray-500">Loading portfolio exposures…</p>
+          </div>
+        ) : (
+          <>
+            {/* Budget utilization bars (vega + notional) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+              {(portfolio.utilization || [])
+                .filter((u) => !u.id.startsWith('stress:'))
+                .map((u) => {
+                  const pct = Math.min(N(u.utilization) * 100, 100)
+                  const barColor = u.breached
+                    ? 'bg-rose-500'
+                    : pct > 80
+                    ? 'bg-amber-400'
+                    : 'bg-success'
+                  const usedStr =
+                    u.id === 'abs_vega'
+                      ? `$${fmt(u.used)}`
+                      : `${(N(u.used) * 100).toFixed(1)}%`
+                  const limitStr =
+                    u.id === 'abs_vega'
+                      ? `$${fmt(u.limit)} / vol-pt`
+                      : `${(N(u.limit) * 100).toFixed(0)}% of equity`
+                  return (
+                    <div key={u.id} className="bg-background rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm text-gray-100">{u.label}</span>
+                        <span
+                          className={`text-xs font-semibold ${
+                            u.breached
+                              ? 'text-rose-400'
+                              : pct > 80
+                              ? 'text-amber-400'
+                              : 'text-gray-400'
+                          }`}
+                        >
+                          {usedStr} <span className="text-gray-600">/ {limitStr}</span>
+                        </span>
+                      </div>
+                      <div className="h-2 bg-surface rounded-full overflow-hidden border border-border">
+                        <div
+                          className={`h-full rounded-full transition-all ${barColor}`}
+                          style={{ width: `${Math.max(pct, 1)}%` }}
+                        />
+                      </div>
+                      <p className="text-[11px] text-gray-500 mt-1">
+                        {(N(u.utilization) * 100).toFixed(1)}% of budget used
+                        {u.breached && <span className="text-rose-400 ml-1">— BREACHED</span>}
+                      </p>
+                    </div>
+                  )
+                })}
+            </div>
+
+            {/* Stress scenario cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {Object.entries(portfolio.stress || {}).map(([name, sc]) => {
+                const budgetPct = N(portfolio.budgets?.max_stress_loss_pct) * 100
+                const lossPct = N(sc.loss_pct) * 100
+                const util = budgetPct > 0 ? (lossPct / budgetPct) * 100 : 0
+                const breached = portfolio.breaches.includes(`stress:${name}`)
+                return (
+                  <div
+                    key={name}
+                    className={`bg-background rounded-lg p-4 border ${
+                      breached
+                        ? 'border-rose-500/50'
+                        : util > 80
+                        ? 'border-amber-400/40'
+                        : 'border-border'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-semibold text-gray-100">{name}</span>
+                      <span
+                        className={`text-sm font-bold ${
+                          breached ? 'text-rose-400' : util > 80 ? 'text-amber-400' : 'text-gray-100'
+                        }`}
+                      >
+                        -${fmt(sc.loss_usd)}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mb-2">{sc.description}</p>
+                    <div className="h-1.5 bg-surface rounded-full overflow-hidden border border-border">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          breached ? 'bg-rose-500' : util > 80 ? 'bg-amber-400' : 'bg-success'
+                        }`}
+                        style={{ width: `${Math.min(Math.max(util, 1), 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      {lossPct.toFixed(1)}% of equity <span className="text-gray-600">/ {budgetPct.toFixed(0)}% budget</span>
+                      {breached && <span className="text-rose-400 ml-1">— BREACHED</span>}
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Degraded books + timestamp */}
+            <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
+              <div className="flex items-center gap-2">
+                {(portfolio.degraded || []).map((sid) => (
+                  <span
+                    key={sid}
+                    className="text-[11px] px-2 py-0.5 rounded bg-amber-500/15 text-amber-400"
+                  >
+                    {sid}: data degraded
+                  </span>
+                ))}
+              </div>
+              <span className="text-[11px] text-gray-600">
+                Net vega ${fmt(portfolio.exposures?.net_vega_usd)}/vol-pt · updated{' '}
+                {portfolio.generated_at} · refreshes every 60s
+              </span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── Strategy Selector ── */}

@@ -1,0 +1,59 @@
+# ============================================================
+# Portfolio-Level Risk Budgets — the cross-strategy view
+# ============================================================
+#
+# Why this file exists: two short-vol books run side by side
+# (SPY gamma scalp paper + BTC wheel paper x2) and nobody owns the
+# aggregate. Each strategy has its own circuit breakers, but a
+# correlated vol spike hits BOTH books at once. These budgets cap
+# the portfolio, not the strategy.
+#
+# Consumed by core/risk/portfolio.py (portfolio_risk_report).
+# v1 is ADVISORY: breaches raise REDUCE_ONLY flags surfaced via
+# GET /api/risk/portfolio and the Risk dashboard. Wiring the flags
+# into the SLA-preflight gate is a follow-up, not done here.
+#
+# Starter values are honest guesses sized for ~$300k combined paper
+# equity (3 books x $100k) — revisit after the first month of
+# aggregate telemetry, they are NOT calibrated from history.
+
+budgets:
+  # Max absolute NET portfolio vega, in USD P&L per 1 vol-point move,
+  # both books summed (Deribit legs use exchange greeks; SPY gamma
+  # scalp uses its own BS portfolio vega — both already USD/vol-pt).
+  # $500/vol-pt means a 10-pt vol spike costs at most ~$5k (1.7% of
+  # combined equity) before convexity.
+  max_abs_vega_usd: 500
+
+  # Sum of short-premium underlying notionals / combined paper equity.
+  # One wheel strangle is ~0.8 BTC x $64k = ~$51k notional; two wheels
+  # plus a sold SPY straddle should stay under 1.2x combined equity.
+  max_short_vol_notional_pct: 1.2
+
+  # Max tolerated loss per stress scenario, as fraction of combined
+  # paper equity. 10% is the same number as the portfolio max-drawdown
+  # limit in config/risk/risk_limits.yaml — a single tail scenario
+  # must not be allowed to consume the whole drawdown budget.
+  max_stress_loss_pct: 0.10
+
+# Deterministic tail scenarios revalued in core/risk/portfolio.stress().
+# Scenarios are single-domain in v1 (a BTC crash shocks only BTC books,
+# an SPY crash only the SPY book). Honest caveat: in a real risk-off
+# event these fire together — treat per-scenario losses as lower bounds
+# on the joint tail.
+scenarios:
+  btc_crash_20:
+    description: "BTC -20% overnight, DVOL +30 vol pts"
+    domain: btc
+    spot_shock: -0.20      # multiplicative spot move
+    vol_shock_pts: 30      # additive, absolute vol points on each leg's mark IV
+  spy_crash_10:
+    description: "SPY -10%, VIX doubles"
+    domain: spy
+    spot_shock: -0.10
+    vol_multiplier: 2.0    # shocked IV = current IV x 2
+
+# What happens on breach. v1: advisory only — the report flags the
+# offending strategy REDUCE_ONLY (no new risk-adding trades); nothing
+# is auto-blocked yet.
+action: reduce_only

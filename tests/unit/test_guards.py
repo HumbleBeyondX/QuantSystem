@@ -219,6 +219,85 @@ def test_wf_and_loo_pass_steady_edge():
     assert leave_one_out(eq)["passed"] is True
 
 
+# ── data catalog (data/catalog_api.py) ──
+
+def _tmp_catalog(tmp_path, monkeypatch):
+    """Catalog rooted in tmp_path; ledger + manifests redirected too."""
+    import data.catalog_api as catalog_api
+    monkeypatch.setattr(guards, "_LEDGER_PATH", tmp_path / "ledger.jsonl")
+    monkeypatch.setattr(catalog_api, "record_data_manifest",
+                        lambda paths, tag: tmp_path / f"manifest_{tag}.json")
+    return catalog_api.DataCatalog(root=tmp_path / "catalog")
+
+
+def _bars(n=6, tz="America/New_York"):
+    idx = pd.date_range("2026-07-01 09:00", periods=n, freq="4h", tz=tz)
+    return pd.DataFrame({
+        "timestamp": idx, "Open": 1.0, "High": 2.0, "Low": 0.5,
+        "Close": np.linspace(1, 2, n), "Volume": 100.0})
+
+
+def test_catalog_roundtrip_preserves_rows_and_normalizes_tz(
+        tmp_path, monkeypatch):
+    cat = _tmp_catalog(tmp_path, monkeypatch)
+    df = _bars(6).sample(frac=1, random_state=0)      # shuffled on purpose
+    cat.write(df, "crypto", "TST_USDT", "4h", source="unit")
+    out = cat.read("crypto", "TST_USDT", "4h")
+    assert len(out) == 6                              # rows preserved
+    assert list(out.columns) == ["timestamp", "open", "high", "low",
+                                 "close", "volume"]   # lowercased
+    ts = pd.DatetimeIndex(out["timestamp"])
+    assert ts.tz is None                              # UTC-naive
+    assert ts.is_monotonic_increasing                 # sorted
+    # 09:00 EDT == 13:00 UTC — intraday hour converted, not stripped
+    assert ts[0] == pd.Timestamp("2026-07-01 13:00")
+
+
+def test_catalog_index_entry_has_sha256(tmp_path, monkeypatch):
+    cat = _tmp_catalog(tmp_path, monkeypatch)
+    entry = cat.write(_bars(4), "crypto", "TST_USDT", "4h", source="unit")
+    assert len(entry["sha256"]) == 64
+    on_disk = json.loads((tmp_path / "catalog" / "index.json").read_text())
+    e = on_disk["crypto/TST_USDT/4h"]
+    assert e["sha256"] == entry["sha256"]
+    assert e["rows"] == 4 and e["source"] == "unit"
+    assert "quality" in e                             # bar-report summary
+
+
+def test_catalog_duplicate_write_updates_not_duplicates(
+        tmp_path, monkeypatch):
+    cat = _tmp_catalog(tmp_path, monkeypatch)
+    e1 = cat.write(_bars(4), "crypto", "TST_USDT", "4h", source="unit")
+    e2 = cat.write(_bars(8), "crypto", "TST_USDT", "4h", source="unit2")
+    assert len(cat.list()) == 1                       # updated, not appended
+    got = cat.list()[0]
+    assert got["rows"] == 8 and got["source"] == "unit2"
+    assert got["sha256"] != e1["sha256"]              # new bytes, new hash
+    assert e2["sha256"] == got["sha256"]
+
+
+def test_catalog_dedups_timestamps_and_ledgers_it(tmp_path, monkeypatch):
+    cat = _tmp_catalog(tmp_path, monkeypatch)
+    df = pd.concat([_bars(5), _bars(5).tail(2)])      # 2 duplicate stamps
+    cat.write(df, "crypto", "DUP_USDT", "4h", source="unit")
+    assert len(cat.read("crypto", "DUP_USDT", "4h")) == 5
+    events = [json.loads(l) for l in
+              (tmp_path / "ledger.jsonl").read_text().splitlines()]
+    assert any(e["kind"] == "dropped_duplicates" and
+               e["source"] == "catalog_DUP_USDT_4h" for e in events)
+
+
+def test_catalog_export_bars_csv_matches_nautilus_contract(
+        tmp_path, monkeypatch):
+    cat = _tmp_catalog(tmp_path, monkeypatch)
+    cat.write(_bars(4), "crypto", "TST_USDT", "4h", source="unit")
+    out = cat.export_bars_csv("crypto", "TST_USDT", "4h",
+                              tmp_path / "export.csv")
+    head = out.read_text().splitlines()[0]
+    assert head == "timestamp,open,high,low,close,volume"
+    assert len(out.read_text().splitlines()) == 5     # header + 4 bars
+
+
 def test_fee_stress_breakeven():
     import numpy as np, pandas as pd
     from backtesting.validation import fee_stress
