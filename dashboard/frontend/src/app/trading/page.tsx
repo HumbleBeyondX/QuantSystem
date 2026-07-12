@@ -430,11 +430,33 @@ export default function TradingPage() {
               </button>
             )
           })}
+          {/* BTC wheel paper runner (jsonl telemetry, not a deployment record) */}
+          <button
+            onClick={() => setSelectedStrategyId('btc_wheel')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+              selectedStrategyId === 'btc_wheel'
+                ? 'bg-primary/20 border-primary/50 text-primary'
+                : 'bg-surface border-border text-gray-400 hover:border-gray-500 hover:text-gray-200'
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${wheel ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
+            <span>BTC Wheel</span>
+            <span className="text-[10px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-400">paper</span>
+            {wheel && (wheel.last_mark?.unrealized ?? 0) + (wheel.last_mark?.realized ?? 0) !== 0 && (
+              <span className={`font-mono ${
+                (wheel.last_mark?.realized ?? 0) + (wheel.last_mark?.unrealized ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'
+              }`}>
+                {(wheel.last_mark?.realized ?? 0) + (wheel.last_mark?.unrealized ?? 0) >= 0 ? '+' : ''}
+                ${((wheel.last_mark?.realized ?? 0) + (wheel.last_mark?.unrealized ?? 0)).toFixed(0)}
+              </span>
+            )}
+          </button>
         </div>
       )}
 
       {tab === 'monitor' ? (
         <>
+          {selectedStrategyId !== 'btc_wheel' && (<>
           {/* ── SPY Gamma Scalp ── */}
           <h2 className="text-base font-semibold text-gray-200 border-b border-border pb-2">
             SPY Gamma Scalp &mdash; paper (Alpaca OPRA)
@@ -655,7 +677,10 @@ export default function TradingPage() {
             </div>
           </div>
 
+          </>)}
+
           {/* ── BTC Wheel ── */}
+          {selectedStrategyId === 'btc_wheel' && (<>
           <h2 className="text-base font-semibold text-gray-200 border-b border-border pb-2">
             BTC Wheel &mdash; paper (real Deribit chains)
           </h2>
@@ -800,6 +825,7 @@ export default function TradingPage() {
           ) : (
             <p className="text-sm text-gray-500">BTC wheel not papering yet.</p>
           )}
+          </>)}
         </>
       ) : (
         /* ── Control Panel Tab ── */
