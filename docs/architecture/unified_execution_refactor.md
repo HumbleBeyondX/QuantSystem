@@ -1,6 +1,32 @@
 # 统一策略 / OMS / 风控 — 重构蓝图
 
-*2026-07-12 · status: DESIGN(未动任何运行中代码)· 原则:绞杀者模式,旧脚本在对账通过前始终是权威*
+*2026-07-12 · status: **DECIDED — Nautilus-first**(用户拍板:执行域采用 NautilusTrader,不自建 mini-Nautilus;政策域自建)· 原则不变:绞杀者模式,三条运行链在对账通过前一行不动*
+
+## 决定与分工(2026-07-12)
+
+| 域 | 归属 | 内容 |
+|---|---|---|
+| **执行域** | NautilusTrader | Strategy 契约、回测/实盘 parity、OMS、venue adapters(OKX/Deribit/Bybit/IB)、instrument 模型(含期权)、RiskEngine 下半层(单笔限额、速率、REDUCING 状态机) |
+| **政策域** | 自建(保留) | Risk Pipeline 上半层:**组合级 vega/尾部预算**(gamma+wheel 卖 vol 叠加正是盲区)、SLA 开仓闸、晋升节流、熔断政策;生命周期注册表 + 晋升系统;数据层(guards/SLA/ledger/manifest);dashboard |
+| **缺口自担** | 自建 adapter | Alpaca(Nautilus 无,RFC #3374)→ gamma scalp 执行暂留现脚本或自写 adapter |
+
+Nautilus 的 RiskEngine 提供预交易检查与 ACTIVE/REDUCING/HALTED 状态机(与
+"risk-reducing 永不拦"教义同构),组合 greeks 聚合是现成数据;但**预算与
+否决政策**(多少 vega、多少尾部、何时拒开仓)是我们的风险偏好,永远自建。
+
+## 未来余量(设计约束,不是承诺)
+
+1. **多资产数据层**:equities / options / futures / crypto / Polymarket /
+   news / alt-data。手段:数据层继续与执行域解耦 —— 所有源进统一的
+   catalog(Parquet)+ quality guards + PIT join;Nautilus 只消费 catalog,
+   不拥有数据。Polymarket/news 这类非 bar 数据走 Nautilus 的自定义
+   Data 类型(它支持任意 Data 子类进事件流)。
+2. **ML/DL/RL 层**:因子挖掘(已有 alpha101+miner)与组合优化未来上模型。
+   手段:训练/推理离线化 —— 模型产物(信号、权重)以数据形式进 catalog,
+   策略层只读信号,不在交易路径里跑训练。RL 执行代理若真要上,接口就是
+   Strategy 契约本身(观察=事件流,动作=OrderIntent),不需要新架构。
+3. **组合优化器**:未来的 owner 是政策域 —— 优化器输出目标权重,Risk
+   Pipeline 校验预算,执行域负责换仓。三层职责今天就这么划,以后不用改。
 
 ## 0. 为什么这是隐患(现状诊断)
 
