@@ -2,6 +2,8 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
+import TearSheet from '@/components/charts/TearSheet'
 
 /**
  * Backtest Page - Fully API-driven with workflow integration
@@ -71,6 +73,7 @@ function BacktestInner() {
   const [selectedFile, setSelectedFile] = useState('')
   const [statusMsg, setStatusMsg] = useState('')
   const [catalogLoaded, setCatalogLoaded] = useState(false)
+  const [recordsRefresh, setRecordsRefresh] = useState(0)
 
   // Fetch catalog, results, data files on mount
   useEffect(() => {
@@ -267,8 +270,11 @@ function BacktestInner() {
         </div>
       </div>
 
+      {/* Research pipeline map */}
+      <PipelineStrip />
+
       {/* Official Research Records */}
-      <OfficialRecords />
+      <OfficialRecords refreshKey={recordsRefresh} />
 
       {/* Configuration Form */}
       <div className="bg-surface rounded-xl border border-border p-6">
@@ -472,6 +478,13 @@ function BacktestInner() {
             </span>
           </div>
 
+          {/* Promote to official record */}
+          <PromotePanel
+            key={selectedResult.backtest_id}
+            result={selectedResult}
+            onPromoted={() => setRecordsRefresh(k => k + 1)}
+          />
+
           {/* KPI Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
             {[
@@ -504,6 +517,14 @@ function BacktestInner() {
               </div>
             </div>
           )}
+
+          {/* Tear sheet — full analytics vs benchmark */}
+          <div className="pt-2 border-t border-border/50">
+            <TearSheet
+              key={selectedResult.backtest_id}
+              analyticsUrl={`/api/backtest/results/${selectedResult.backtest_id}/analytics`}
+            />
+          </div>
 
           {/* Recent Trades */}
           {selectedResult.trades && selectedResult.trades.length > 0 && (
@@ -658,6 +679,175 @@ export default function BacktestPage() {
 
 
 // ---------------------------------------------------------------------------
+// Research Pipeline Strip — workflow map: data → strategy → backtest → record
+// ---------------------------------------------------------------------------
+
+const PIPELINE_STEPS: Array<{
+  n: number
+  label: string
+  href: string | null
+  caption: string
+  current?: boolean
+}> = [
+  { n: 1, label: 'Pull data', href: '/data', caption: 'fetch_market_data.py · Collection tab' },
+  { n: 2, label: 'Write strategy', href: '/workshop', caption: 'scaffold from template' },
+  { n: 3, label: 'Backtest', href: null, caption: 'run → tear sheet vs benchmark', current: true },
+  { n: 4, label: 'Record', href: '#records', caption: 'promote → IS/OOS validate → 1.5 gate' },
+]
+
+function PipelineStrip() {
+  return (
+    <div className="flex items-center gap-2 flex-wrap px-4 py-2.5 rounded-lg border border-border/50 bg-surface/50">
+      {PIPELINE_STEPS.map((step, i) => {
+        const inner = (
+          <span className="flex items-baseline gap-1.5 whitespace-nowrap">
+            <span
+              className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold self-center ${
+                step.current ? 'bg-accent text-white' : 'bg-background text-gray-500 border border-border'
+              }`}
+            >
+              {step.n}
+            </span>
+            <span className={`text-xs font-medium ${step.current ? 'text-accent' : 'text-gray-300'}`}>
+              {step.label}
+            </span>
+            <span className="text-[10px] text-gray-500 hidden md:inline">{step.caption}</span>
+          </span>
+        )
+        return (
+          <span key={step.n} className="flex items-center gap-2">
+            {i > 0 && <span className="text-gray-600 text-xs">→</span>}
+            {step.href === null ? (
+              inner
+            ) : step.href.startsWith('#') ? (
+              <a href={step.href} className="hover:opacity-80 transition-opacity">
+                {inner}
+              </a>
+            ) : (
+              <Link href={step.href} className="hover:opacity-80 transition-opacity">
+                {inner}
+              </Link>
+            )}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Promote to Official Record
+// ---------------------------------------------------------------------------
+
+function PromotePanel({ result, onPromoted }: { result: BacktestResult; onPromoted: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState(`${result.strategy} ${result.symbol}`)
+  const [notes, setNotes] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [promoted, setPromoted] = useState<{ id: string; file: string } | null>(null)
+  const [error, setError] = useState('')
+
+  const handlePromote = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      const res = await fetch(`${API}/api/backtest/results/${result.backtest_id}/promote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, notes }),
+      })
+      if (res.status === 409) {
+        setError('Cannot promote: backtest is not completed')
+      } else if (!res.ok) {
+        const errText = await res.text().catch(() => `Status ${res.status}`)
+        setError(`Promote failed: ${errText}`)
+      } else {
+        const data = await res.json()
+        setPromoted({ id: data.id, file: data.file })
+        setOpen(false)
+        onPromoted()
+      }
+    } catch (e: any) {
+      setError(`Promote failed: ${e.message}`)
+    }
+    setBusy(false)
+  }
+
+  if (promoted) {
+    return (
+      <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 space-y-1">
+        <p className="text-sm text-warning font-medium">
+          Promoted as <span className="font-mono">{promoted.id}</span>
+        </p>
+        <p className="text-[11px] text-gray-400 font-mono">{promoted.file}</p>
+        <p className="text-[11px] text-gray-500">
+          candidate — needs IS/OOS validation before the 1.5 gate
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      {!open ? (
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setOpen(true)}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-warning/40 text-warning hover:bg-warning/10 transition-colors"
+          >
+            Promote → Official Record
+          </button>
+          {error && <span className="text-[11px] text-danger">{error}</span>}
+        </div>
+      ) : (
+        <div className="flex items-end gap-3 flex-wrap p-3 rounded-lg border border-border bg-background">
+          <div>
+            <label className="block text-[11px] text-gray-500 mb-1">Record name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              className="w-56 bg-surface border border-border rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-accent"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] text-gray-500 mb-1">Notes (optional)</label>
+            <input
+              type="text"
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="e.g. params, data caveats"
+              className="w-64 bg-surface border border-border rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-accent"
+            />
+          </div>
+          <button
+            onClick={handlePromote}
+            disabled={busy || !name.trim()}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              busy || !name.trim()
+                ? 'bg-warning/30 text-white/50 cursor-not-allowed'
+                : 'bg-warning text-black hover:bg-warning/80'
+            }`}
+          >
+            {busy ? 'Promoting...' : 'Promote'}
+          </button>
+          <button
+            onClick={() => {
+              setOpen(false)
+              setError('')
+            }}
+            className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+          >
+            Cancel
+          </button>
+          {error && <span className="text-[11px] text-danger w-full">{error}</span>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Official Research Records
 // ---------------------------------------------------------------------------
 
@@ -769,7 +959,7 @@ function RerunPanel({
   )
 }
 
-function OfficialRecords() {
+function OfficialRecords({ refreshKey = 0 }: { refreshKey?: number }) {
   const [gateRule, setGateRule] = useState('')
   const [records, setRecords] = useState<ResearchRecord[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -795,8 +985,9 @@ function OfficialRecords() {
     })()
     return () => {
       Object.values(timers).forEach(t => clearInterval(t))
+      Object.keys(timers).forEach(k => delete timers[k])
     }
-  }, [])
+  }, [refreshKey])
 
   const pollRerun = useCallback((id: string) => {
     if (pollTimers.current[id]) return
@@ -844,13 +1035,12 @@ function OfficialRecords() {
 
   const toggleCurve = useCallback(
     async (rec: ResearchRecord) => {
-      if (!rec.has_curve) return
       if (expandedRec === rec.id) {
         setExpandedRec(null)
         return
       }
       setExpandedRec(rec.id)
-      if (!curves[rec.id]) {
+      if (rec.has_curve && !curves[rec.id]) {
         setCurveLoading(rec.id)
         try {
           const res = await fetch(`${API}/api/backtest/records/${rec.id}/curve`)
@@ -869,6 +1059,7 @@ function OfficialRecords() {
 
   const validated = records.filter(r => r.status !== 'rejected')
   const rejected = records.filter(r => r.status === 'rejected')
+  const nCandidates = validated.filter(r => r.status === 'candidate').length
 
   const renderHeadline = (rec: ResearchRecord) =>
     HEADLINE_DEFS.filter(d => rec.headline && typeof rec.headline[d.key] === 'number').map(d => (
@@ -887,20 +1078,23 @@ function OfficialRecords() {
   const renderCurveBlock = (rec: ResearchRecord) => {
     if (expandedRec !== rec.id) return null
     return (
-      <div className="mt-3 pt-3 border-t border-border/50">
-        {curveLoading === rec.id ? (
-          <div className="h-56 bg-background rounded-lg animate-pulse" />
-        ) : curves[rec.id] ? (
-          <MultiSeriesCurveSVG series={curves[rec.id]} />
-        ) : (
-          <p className="text-xs text-gray-500 py-4 text-center">Failed to load curve</p>
+      <div className="mt-3 pt-3 border-t border-border/50 space-y-4" onClick={e => e.stopPropagation()}>
+        {rec.has_curve && (
+          curveLoading === rec.id ? (
+            <div className="h-56 bg-background rounded-lg animate-pulse" />
+          ) : curves[rec.id] ? (
+            <MultiSeriesCurveSVG series={curves[rec.id]} />
+          ) : (
+            <p className="text-xs text-gray-500 py-4 text-center">Failed to load curve</p>
+          )
         )}
+        <TearSheet analyticsUrl={`/api/backtest/records/${rec.id}/analytics`} />
       </div>
     )
   }
 
   return (
-    <div className="bg-surface rounded-xl border border-border p-6 space-y-4">
+    <div id="records" className="bg-surface rounded-xl border border-border p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">Official Research Records</h3>
@@ -911,18 +1105,24 @@ function OfficialRecords() {
           )}
         </div>
         <span className="text-xs text-gray-500">
-          {loaded ? `${validated.length} validated · ${rejected.length} rejected` : 'Loading...'}
+          {loaded
+            ? `${validated.length - nCandidates} validated${nCandidates > 0 ? ` · ${nCandidates} candidate` : ''} · ${rejected.length} rejected`
+            : 'Loading...'}
         </span>
       </div>
 
       {!loaded && <div className="h-32 bg-background rounded-lg animate-pulse" />}
 
-      {/* Validated records — prominent cards */}
-      {validated.map(rec => (
+      {/* Validated + candidate records — prominent cards */}
+      {validated.map(rec => {
+        const isCandidate = rec.status === 'candidate'
+        return (
         <div
           key={rec.id}
-          className={`rounded-xl border border-success/30 bg-success/5 p-5 transition-colors ${
-            rec.has_curve ? 'cursor-pointer hover:border-success/60' : ''
+          className={`rounded-xl border p-5 transition-colors cursor-pointer ${
+            isCandidate
+              ? 'border-warning/30 bg-warning/5 hover:border-warning/60'
+              : 'border-success/30 bg-success/5 hover:border-success/60'
           }`}
           onClick={() => toggleCurve(rec)}
         >
@@ -930,16 +1130,16 @@ function OfficialRecords() {
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h4 className="font-semibold text-gray-100">{rec.name || rec.id}</h4>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-success/15 text-success">
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                  isCandidate ? 'bg-warning/15 text-warning' : 'bg-success/15 text-success'
+                }`}>
                   {rec.status}
                 </span>
-                {rec.has_curve && (
-                  <span className="text-[10px] text-gray-500">
-                    {expandedRec === rec.id ? '▾ hide curve' : '▸ click for equity curve'}
-                  </span>
-                )}
+                <span className="text-[10px] text-gray-500">
+                  {expandedRec === rec.id ? '▾ hide tear sheet' : '▸ click for tear sheet'}
+                </span>
               </div>
-              <p className="text-xs text-success/90 mt-1">{rec.verdict}</p>
+              <p className={`text-xs mt-1 ${isCandidate ? 'text-warning/90' : 'text-success/90'}`}>{rec.verdict}</p>
               {rec.period && (
                 <p className="text-[11px] text-gray-500 mt-1">
                   {rec.period.start} → {rec.period.end}
@@ -970,7 +1170,8 @@ function OfficialRecords() {
 
           {renderCurveBlock(rec)}
         </div>
-      ))}
+        )
+      })}
 
       {/* Rejected records — compact rows */}
       {rejected.length > 0 && (
@@ -979,9 +1180,7 @@ function OfficialRecords() {
           {rejected.map(rec => (
             <div
               key={rec.id}
-              className={`rounded-lg border-l-2 border-danger/50 bg-background px-4 py-2.5 ${
-                rec.has_curve ? 'cursor-pointer hover:bg-background/70' : ''
-              }`}
+              className="rounded-lg border-l-2 border-danger/50 bg-background px-4 py-2.5 cursor-pointer hover:bg-background/70"
               onClick={() => toggleCurve(rec)}
             >
               <div className="flex items-center justify-between gap-3 flex-wrap">

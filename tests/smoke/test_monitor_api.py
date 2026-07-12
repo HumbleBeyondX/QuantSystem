@@ -186,3 +186,32 @@ def test_btc_wheel_paper_endpoint(client):
     assert body["strategy_id"] == "btc_wheel"
     assert isinstance(body["equity_curve"], list)
     assert "position" in body
+
+
+# ── Backtest pro: tear sheet analytics + benchmarks ──
+
+def test_benchmarks_list(client):
+    r = client.get("/api/backtest/benchmarks")
+    assert r.status_code == 200
+    assert "SPY" in r.json()["benchmarks"]
+
+
+def test_record_tearsheet_vs_benchmark(client):
+    r = client.get("/api/backtest/records/combo_wheel_sniper/analytics",
+                   params={"benchmark": "BTC"})
+    assert r.status_code == 200
+    d = r.json()
+    assert {"equity", "drawdown", "rolling_sharpe", "monthly_returns",
+            "distribution", "stats"} <= set(d)
+    assert d["stats"]["strategy"]["sharpe"] == 2.81
+    assert "benchmark" in d["stats"] and "relative" in d["stats"]
+    assert abs(d["stats"]["relative"]["beta"]) < 0.2  # combo is market-neutral
+    assert len(d["monthly_returns"]) >= 5             # 2021..2026
+    # rebased base-100 comparison curve
+    assert d["equity"][0]["strategy"] == 100.0
+
+
+def test_tearsheet_no_benchmark(client):
+    r = client.get("/api/backtest/records/combo_wheel_sniper/analytics")
+    assert r.status_code == 200
+    assert "benchmark" not in r.json()["stats"]
