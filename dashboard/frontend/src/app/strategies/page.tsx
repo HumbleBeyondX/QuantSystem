@@ -22,10 +22,41 @@ interface GateInfo {
   note?: string | null
 }
 
+interface PromotionLink {
+  stage: string
+  promoted_at: string
+  forced: boolean
+  reason?: string | null
+  throttle: number
+}
+
 interface StrategyLinks {
   record?: string | null
   deployment?: string | null
   paper_log?: string | null
+  promotion?: PromotionLink | null
+}
+
+interface PromotionCheck {
+  id: string
+  name: string
+  passed: boolean | null
+  detail: string
+}
+
+interface PromotionReport {
+  strategy_id: string
+  ready: boolean
+  throttle: number
+  evaluated_at: string
+  checks: PromotionCheck[]
+}
+
+interface GoLiveResult {
+  stage: string
+  forced: boolean
+  throttle: number
+  next_steps: string[]
 }
 
 interface RegistryStrategy {
@@ -130,13 +161,273 @@ function GateChip({ gate }: { gate: GateInfo }) {
   )
 }
 
+function CheckIcon({ passed }: { passed: boolean | null }) {
+  if (passed === true) return <span className="text-emerald-400 font-bold">&#10003;</span>
+  if (passed === false) return <span className="text-rose-400 font-bold">&#10007;</span>
+  return <span className="text-gray-500 font-bold">&#9675;</span>
+}
+
+function PromotionPanel({
+  strategyId,
+  onPromoted,
+}: {
+  strategyId: string
+  onPromoted: () => void
+}) {
+  const [report, setReport] = useState<PromotionReport | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [result, setResult] = useState<GoLiveResult | null>(null)
+  const [forceOpen, setForceOpen] = useState(false)
+  const [forceReason, setForceReason] = useState('')
+
+  const fetchReport = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`${API}/api/strategies/${strategyId}/promotion`)
+      if (res.ok) setReport(await res.json())
+      else setError(`Failed to load promotion report (${res.status})`)
+    } catch (e: any) {
+      setError(`Cannot reach backend: ${e.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchReport()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [strategyId])
+
+  const promote = async (force: boolean) => {
+    setSubmitting(true)
+    setActionError(null)
+    try {
+      const body: Record<string, unknown> = { confirm: true }
+      if (force) {
+        body.force = true
+        body.reason = forceReason.trim()
+      }
+      const res = await fetch(`${API}/api/strategies/${strategyId}/go-live`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json().catch(() => null)
+      if (res.ok) {
+        setResult(data as GoLiveResult)
+        onPromoted()
+      } else {
+        setActionError(data?.detail ? String(data.detail) : `Promotion failed (${res.status})`)
+      }
+    } catch (e: any) {
+      setActionError(`Cannot reach backend: ${e.message}`)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (result) {
+    return (
+      <div className="mt-3 p-3 rounded-lg bg-background border border-border/50 space-y-3">
+        <div className="px-2 py-1.5 rounded bg-green-500/10 border border-green-500/30 text-green-400 text-xs font-bold">
+          PROMOTED — throttle {(result.throttle * 100).toFixed(0)}%{result.forced ? ' · FORCED' : ''}
+        </div>
+        {result.next_steps?.length > 0 && (
+          <ol className="list-decimal list-inside space-y-1 font-mono text-[11px] text-gray-400">
+            {result.next_steps.map((step, i) => (
+              <li key={i}>{step}</li>
+            ))}
+          </ol>
+        )}
+      </div>
+    )
+  }
+
+  const passedCount = report ? report.checks.filter(c => c.passed === true).length : 0
+
+  return (
+    <div className="mt-3 p-3 rounded-lg bg-background border border-border/50 space-y-3">
+      {loading && <p className="text-xs text-gray-500 animate-pulse">Evaluating promotion gates...</p>}
+      {error && <p className="text-xs text-rose-400">{error}</p>}
+
+      {!loading && report && (
+        <>
+          <div className="flex items-center justify-between gap-2">
+            <p className={`text-xs font-bold ${report.ready ? 'text-green-400' : 'text-gray-300'}`}>
+              {report.ready
+                ? 'READY FOR LIVE'
+                : `NOT READY — ${passedCount}/${report.checks.length} gates passed`}
+            </p>
+            <button
+              onClick={fetchReport}
+              className="text-[11px] text-gray-400 hover:text-gray-100 border border-border rounded px-2 py-0.5 transition-colors"
+            >
+              Re-check
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-500">
+            Evaluated {new Date(report.evaluated_at).toLocaleString()}
+          </p>
+
+          <div className="space-y-1.5">
+            {report.checks.map(check => (
+              <div key={check.id} className="flex items-start gap-2 text-xs">
+                <CheckIcon passed={check.passed} />
+                <div className="min-w-0">
+                  <span className="text-gray-200">{check.name}</span>
+                  <p className="text-[10px] text-gray-500">{check.detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={() => promote(false)}
+            disabled={!report.ready || submitting}
+            className={`w-full py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              report.ready && !submitting
+                ? 'bg-accent text-white hover:bg-accent/80'
+                : 'bg-surface border border-border text-gray-600 cursor-not-allowed'
+            }`}
+          >
+            {submitting ? 'Promoting...' : 'Promote to Live'}
+          </button>
+
+          {actionError && (
+            <p className="text-[11px] text-rose-400 break-words">{actionError}</p>
+          )}
+
+          <div className="pt-1 border-t border-border/50">
+            <button
+              onClick={() => setForceOpen(o => !o)}
+              className="text-[11px] text-gray-500 hover:text-gray-300 transition-colors"
+            >
+              {forceOpen ? '▾' : '▸'} Force promotion (override gates)
+            </button>
+            {forceOpen && (
+              <div className="mt-2 space-y-2">
+                <p className="text-[10px] text-rose-400">
+                  Recorded permanently as FORCED in the audit trail
+                </p>
+                <input
+                  type="text"
+                  value={forceReason}
+                  onChange={e => setForceReason(e.target.value)}
+                  placeholder="Reason (required)"
+                  className="w-full bg-surface border border-border rounded px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-rose-500/50"
+                />
+                <button
+                  onClick={() => promote(true)}
+                  disabled={forceReason.trim() === '' || submitting}
+                  className={`w-full py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                    forceReason.trim() !== '' && !submitting
+                      ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 hover:bg-rose-500/30'
+                      : 'bg-surface border border-border text-gray-600 cursor-not-allowed'
+                  }`}
+                >
+                  {submitting ? 'Promoting...' : 'Force Promote'}
+                </button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function DemoteControl({
+  strategyId,
+  onDemoted,
+}: {
+  strategyId: string
+  onDemoted: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [reason, setReason] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const demote = async () => {
+    setSubmitting(true)
+    setError(null)
+    try {
+      const res = await fetch(`${API}/api/strategies/${strategyId}/demote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason.trim() }),
+      })
+      const data = await res.json().catch(() => null)
+      if (res.ok) {
+        onDemoted()
+      } else {
+        setError(data?.detail ? String(data.detail) : `Demotion failed (${res.status})`)
+      }
+    } catch (e: any) {
+      setError(`Cannot reach backend: ${e.message}`)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="text-[10px] text-gray-500 hover:text-gray-300 underline decoration-dotted transition-colors"
+      >
+        Demote to paper
+      </button>
+    )
+  }
+
+  return (
+    <div className="mt-2 space-y-2 w-full">
+      <input
+        type="text"
+        value={reason}
+        onChange={e => setReason(e.target.value)}
+        placeholder="Demotion reason (required)"
+        className="w-full bg-surface border border-border rounded px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent/50"
+      />
+      <div className="flex items-center gap-2">
+        <button
+          onClick={demote}
+          disabled={reason.trim() === '' || submitting}
+          className={`text-[11px] px-2 py-1 rounded transition-colors ${
+            reason.trim() !== '' && !submitting
+              ? 'bg-warning/10 text-warning border border-warning/30 hover:bg-warning/20'
+              : 'bg-surface border border-border text-gray-600 cursor-not-allowed'
+          }`}
+        >
+          {submitting ? 'Demoting...' : 'Confirm demote'}
+        </button>
+        <button
+          onClick={() => setOpen(false)}
+          className="text-[11px] text-gray-500 hover:text-gray-300"
+        >
+          Cancel
+        </button>
+      </div>
+      {error && <p className="text-[11px] text-rose-400 break-words">{error}</p>}
+    </div>
+  )
+}
+
 function StrategyCard({
   strategy,
   deployed,
+  onRefresh,
 }: {
   strategy: RegistryStrategy
   deployed: DeployedStrategy | undefined
+  onRefresh: () => void
 }) {
+  const [promoOpen, setPromoOpen] = useState(false)
   const isRunning = deployed?.status === 'running'
   const pnl = deployed ? deployed.realized_pnl + deployed.unrealized_pnl : null
 
@@ -197,6 +488,22 @@ function StrategyCard({
         <GateChip gate={strategy.gate} />
       </div>
 
+      {/* Promotion provenance (live via promotion system) */}
+      {strategy.stage === 'live' && strategy.links?.promotion && (
+        <div className="mb-3 flex flex-col items-start gap-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-green-500/10 text-green-400 border border-green-500/30">
+              PROMOTED {new Date(strategy.links.promotion.promoted_at).toLocaleDateString()}
+              {strategy.links.promotion.forced && <span className="text-rose-400"> &middot; FORCED</span>}
+            </span>
+            <span className="text-[10px] text-gray-500">
+              throttle {(strategy.links.promotion.throttle * 100).toFixed(0)}%
+            </span>
+          </div>
+          <DemoteControl strategyId={strategy.id} onDemoted={onRefresh} />
+        </div>
+      )}
+
       {/* Live P&L for deployed strategies */}
       {deployed && pnl !== null && (
         <div className="grid grid-cols-3 gap-3 mb-3 p-2.5 rounded-lg bg-background border border-border/50">
@@ -251,6 +558,19 @@ function StrategyCard({
           )}
         </div>
       )}
+
+      {/* Paper → Live promotion */}
+      {strategy.stage === 'paper' && (
+        <div className="mt-auto pt-3">
+          <button
+            onClick={() => setPromoOpen(o => !o)}
+            className="px-3 py-1 rounded-lg text-xs font-semibold bg-accent text-white hover:bg-accent/80 transition-colors"
+          >
+            {promoOpen ? 'Hide promotion panel' : 'Go Live'}
+          </button>
+          {promoOpen && <PromotionPanel strategyId={strategy.id} onPromoted={onRefresh} />}
+        </div>
+      )}
     </div>
   )
 }
@@ -262,23 +582,25 @@ export default function StrategiesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const [regRes, depRes] = await Promise.all([
-          fetch(`${API}/api/strategies/registry`),
-          fetch(`${API}/api/strategies/`),
-        ])
-        if (regRes.ok) setRegistry(await regRes.json())
-        else setError('Failed to load strategy registry')
-        if (depRes.ok) setDeployed(await depRes.json())
-      } catch (e: any) {
-        setError(`Cannot connect to backend: ${e.message}`)
-      } finally {
-        setLoading(false)
-      }
+  const fetchData = async () => {
+    try {
+      const [regRes, depRes] = await Promise.all([
+        fetch(`${API}/api/strategies/registry`),
+        fetch(`${API}/api/strategies/`),
+      ])
+      if (regRes.ok) setRegistry(await regRes.json())
+      else setError('Failed to load strategy registry')
+      if (depRes.ok) setDeployed(await depRes.json())
+    } catch (e: any) {
+      setError(`Cannot connect to backend: ${e.message}`)
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const deployedMap = new Map(deployed.map(d => [d.strategy_id, d]))
@@ -385,6 +707,7 @@ export default function StrategiesPage() {
                     key={strategy.id}
                     strategy={strategy}
                     deployed={deployedMap.get(strategy.id)}
+                    onRefresh={fetchData}
                   />
                 ))}
               </div>

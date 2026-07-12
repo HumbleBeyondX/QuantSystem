@@ -189,8 +189,237 @@ def run_once() -> None:
           f"pos={pos['put'] + ' | ' + pos['call'] if pos else 'flat'}")
 
 
+
+
+# ===================================================================
+# LIVE MODE — real Deribit orders. Gated by the promotion system:
+# refuses to run unless data/stage_overrides.json says btc_wheel=live
+# (set via POST /api/strategies/btc_wheel/go-live after gates pass).
+#
+# Safety design:
+#   * DERIBIT_ENV=test (test.deribit.com) unless explicitly 'prod'.
+#   * Sizing = paper notional x promotion throttle (default 10%).
+#   * Separate state/logs (btc_wheel_live_*) — paper keeps running
+#     in parallel as the control group.
+#   * Sell limit at current bid (taker-equivalent, options spread ~1
+#     tick); one re-quote on miss, then give up (no chasing).
+#   * Settlement/marking stays risk-reducing: never blocked by SLA.
+# ===================================================================
+
+import os as _os
+
+LIVE_STATE = ROOT / "data" / "live_state" / "btc_wheel_live_state.json"
+LIVE_DAILY = ROOT / "logs" / "paper_trading" / "btc_wheel_live_daily.jsonl"
+LIVE_TRADES = ROOT / "logs" / "paper_trading" / "btc_wheel_live_trades.jsonl"
+LIVE_INITIAL_EQUITY = 10_000.0
+
+
+def _live_base() -> str:
+    env = _os.environ.get("DERIBIT_ENV", "test").lower()
+    return ("https://www.deribit.com/api/v2" if env == "prod"
+            else "https://test.deribit.com/api/v2")
+
+
+def _load_env_file() -> None:
+    envf = ROOT / ".env"
+    if envf.exists():
+        for line in envf.read_text().splitlines():
+            if "=" in line and not line.strip().startswith("#"):
+                k, v = line.split("=", 1)
+                _os.environ.setdefault(k.strip(), v.strip())
+
+
+class DeribitLive:
+    """Minimal authed Deribit client (client_credentials grant)."""
+
+    def __init__(self) -> None:
+        _load_env_file()
+        self.base = _live_base()
+        cid = _os.environ.get("DERIBIT_CLIENT_ID")
+        sec = _os.environ.get("DERIBIT_CLIENT_SECRET")
+        if not cid or not sec:
+            raise SystemExit(
+                "live mode needs DERIBIT_CLIENT_ID / DERIBIT_CLIENT_SECRET in .env "
+                f"(env={_os.environ.get('DERIBIT_ENV', 'test')} -> {self.base})")
+        r = self._get("public/auth?grant_type=client_credentials"
+                      f"&client_id={cid}&client_secret={sec}")
+        self.token = r["access_token"]
+
+    def _get(self, path: str, auth: bool = False) -> dict:
+        req = urllib.request.Request(f"{self.base}/{path}")
+        if auth:
+            req.add_header("Authorization", f"Bearer {self.token}")
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            out = json.loads(resp.read())
+        if "error" in out:
+            raise RuntimeError(f"deribit error: {out['error']}")
+        return out["result"]
+
+    def sell_limit(self, instrument: str, amount: float, price: float) -> dict:
+        q = (f"private/sell?instrument_name={instrument}&amount={amount}"
+             f"&type=limit&price={price}&time_in_force=good_til_cancelled")
+        return self._get(q, auth=True)
+
+    def order_state(self, order_id: str) -> dict:
+        return self._get(f"private/get_order_state?order_id={order_id}", auth=True)
+
+    def cancel(self, order_id: str) -> dict:
+        return self._get(f"private/cancel?order_id={order_id}", auth=True)
+
+    def account_summary(self) -> dict:
+        return self._get("private/get_account_summary?currency=BTC&extended=true",
+                         auth=True)
+
+
+def _promotion_allows_live():
+    ov_path = ROOT / "data" / "stage_overrides.json"
+    if not ov_path.exists():
+        return False, 0.10
+    try:
+        ov = json.loads(ov_path.read_text()).get("btc_wheel", {})
+        return ov.get("stage") == "live", float(ov.get("throttle", 0.10))
+    except Exception:
+        return False, 0.10
+
+
+def _fill_leg(client, instr: str, amount: float):
+    """Sell `amount` BTC of `instr` at bid; one re-quote; None if unfilled."""
+    import time as _t
+    for attempt in range(2):
+        t = ticker(instr)
+        bid = float(t.get("best_bid_price") or 0)
+        if bid <= 0:
+            return None
+        res = client.sell_limit(instr, amount, bid)
+        oid = res["order"]["order_id"]
+        for _ in range(6):                      # ~30s poll
+            _t.sleep(5)
+            st = client.order_state(oid)
+            if st["order_state"] == "filled":
+                return {"order_id": oid, "price": float(st["average_price"]),
+                        "amount": amount, "attempt": attempt + 1}
+        try:
+            client.cancel(oid)
+        except Exception:
+            pass
+    return None
+
+
+def run_live_once() -> None:
+    allowed, throttle = _promotion_allows_live()
+    if not allowed:
+        raise SystemExit(
+            "REFUSED: btc_wheel is not promoted to live. Pass the gates and "
+            "POST /api/strategies/btc_wheel/go-live first (data/stage_overrides.json).")
+    client = DeribitLive()
+    print(f"[live] env={_os.environ.get('DERIBIT_ENV', 'test')} throttle={throttle:.0%}")
+
+    st = (json.loads(LIVE_STATE.read_text()) if LIVE_STATE.exists()
+          else {"equity": LIVE_INITIAL_EQUITY, "realized": 0.0, "position": None,
+                "n_trades": 0, "wins": 0, "created": _now()})
+    idx = index_price()
+    now_ms = datetime.now(timezone.utc).timestamp() * 1000
+    action, unrealized = "HOLD", 0.0
+    pos = st["position"]
+
+    # settle (risk-reducing — never gated)
+    if pos and now_ms >= pos["expiry_ms"]:
+        kc = pos["kc"] if pos.get("call") else 0.0
+        intrinsic = (max(pos["kp"] - idx, 0)
+                     + (max(idx - kc, 0) if pos.get("call") else 0)) * pos["mult"]
+        pnl = pos["credit_total"] - intrinsic
+        st["equity"] += pnl
+        st["realized"] += pnl
+        st["n_trades"] += 1
+        st["wins"] += pnl > 0
+        append(LIVE_TRADES, {"ts": _now(), "action": "SETTLE", "pnl": round(pnl, 2),
+                             "settle_index": idx, "put": pos["put"],
+                             "call": pos.get("call")})
+        st["position"] = pos = None
+        action = "SETTLED"
+
+    if pos is None:
+        from data.quality.sla import preflight
+        ok, why = preflight(["deribit"], strategy="btc_wheel_live")
+        sel = pick_strangle(idx) if ok else None
+        if not ok:
+            action += "+OPEN_BLOCKED_SLA"
+        elif sel is None:
+            action += "+NO_LISTING"
+        else:
+            mult = st["equity"] * NOTIONAL_PCT * throttle / idx
+            amount = max(round(mult, 1), 0.1)   # Deribit 0.1 BTC steps
+            put_fill = _fill_leg(client, sel["put"]["name"], amount)
+            call_fill = (_fill_leg(client, sel["call"]["name"], amount)
+                         if put_fill else None)
+            if put_fill and call_fill:
+                credit = (put_fill["price"] + call_fill["price"]) * idx * amount
+                fees = (leg_fee_usd(put_fill["price"] * idx, idx)
+                        + leg_fee_usd(call_fill["price"] * idx, idx)) * amount
+                pos = {"put": sel["put"]["name"], "call": sel["call"]["name"],
+                       "kp": sel["put"]["k"], "kc": sel["call"]["k"],
+                       "expiry_ms": sel["expiry_ms"], "mult": amount,
+                       "entry_index": idx, "credit_total": credit - fees,
+                       "opened": _now(),
+                       "order_ids": [put_fill["order_id"], call_fill["order_id"]]}
+                st["position"] = pos
+                append(LIVE_TRADES, {"ts": _now(), "action": "OPEN", **{
+                    k: (round(v, 4) if isinstance(v, float) else v)
+                    for k, v in pos.items() if k != "order_ids"},
+                    "order_ids": pos["order_ids"]})
+                action = "OPENED" if action == "HOLD" else action + "+OPENED"
+            elif put_fill and not call_fill:
+                # one-legged: keep the short put (still short premium), flag loudly
+                pos = {"put": sel["put"]["name"], "call": None,
+                       "kp": sel["put"]["k"], "kc": 0.0,
+                       "expiry_ms": sel["expiry_ms"], "mult": amount,
+                       "entry_index": idx,
+                       "credit_total": put_fill["price"] * idx * amount,
+                       "opened": _now(), "order_ids": [put_fill["order_id"]]}
+                st["position"] = pos
+                append(LIVE_TRADES, {"ts": _now(), "action": "OPEN_PUT_ONLY",
+                                     "detail": "call leg unfilled after requote"})
+                action += "+CALL_LEG_UNFILLED"
+            else:
+                action += "+NO_FILL"
+
+    if pos:
+        try:
+            mp = float(ticker(pos["put"])["mark_price"]) * idx if pos["put"] else 0
+            mc = (float(ticker(pos["call"])["mark_price"]) * idx
+                  if pos.get("call") else 0)
+            unrealized = pos["credit_total"] - (mp + mc) * pos["mult"]
+        except Exception:
+            action += "+MARK_FAILED"
+
+    acct_equity = None
+    try:
+        acct_equity = float(client.account_summary().get("equity", 0)) * idx
+    except Exception:
+        pass
+
+    append(LIVE_DAILY, {
+        "date": _now()[:10], "logged_at": _now(), "index": idx, "action": action,
+        "position_open": pos is not None,
+        "put": pos["put"] if pos else None,
+        "call": (pos.get("call") if pos else None),
+        "realized": round(st["realized"], 2), "unrealized": round(unrealized, 2),
+        "total_equity": round(st["equity"] + unrealized, 2),
+        "account_equity_usd": round(acct_equity, 2) if acct_equity else None,
+        "n_trades": st["n_trades"], "wins": st["wins"],
+    })
+    LIVE_STATE.parent.mkdir(parents=True, exist_ok=True)
+    LIVE_STATE.write_text(json.dumps(st, indent=1))
+    print(f"[live {_now()}] idx={idx:.0f} action={action} "
+          f"equity={st['equity'] + unrealized:,.2f} "
+          f"pos={(pos['put'] + ' | ' + str(pos.get('call'))) if pos else 'flat'}")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mode", default="once", choices=["once"])
-    ap.parse_args()
-    run_once()
+    ap.add_argument("--mode", default="once", choices=["once", "live"])
+    args = ap.parse_args()
+    if args.mode == "live":
+        run_live_once()
+    else:
+        run_once()

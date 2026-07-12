@@ -132,6 +132,17 @@ def _load_registry() -> List[StrategyInfo]:
             notes=" ".join(str(s.get("notes", "")).split()),
             runnable=bool(s.get("runnable", False)),
         ))
+    # Promotion system: stage overrides (data/stage_overrides.json) win over
+    # the YAML — promotions/demotions never edit the hand-written registry.
+    try:
+        from core.promotion.gates import load_stage_overrides
+        ov = load_stage_overrides()
+        for si in out:
+            if si.id in ov:
+                si.stage = ov[si.id].get("stage", si.stage)
+                si.links = {**si.links, "promotion": ov[si.id]}
+    except Exception:
+        pass
     return out
 
 
@@ -486,3 +497,76 @@ async def get_deployed_equity_curve(deploy_id: str):
             "drawdown": round(dd * 100, 2),
         })
     return result
+
+
+# ── Paper -> Live promotion (decision system) ──────────────────────
+
+class GoLiveRequest(BaseModel):
+    confirm: bool = False
+    force: bool = False
+    reason: str = ""
+
+
+@router.get("/{strategy_id}/promotion")
+async def get_promotion_report(strategy_id: str):
+    """Gate checklist: is this paper strategy ready to go live?"""
+    if strategy_id not in CATALOG_MAP:
+        raise HTTPException(404, f"unknown strategy {strategy_id}")
+    import asyncio
+    from core.promotion.gates import evaluate_promotion
+    rep = await asyncio.to_thread(evaluate_promotion, strategy_id)
+    return rep.to_dict()
+
+
+@router.post("/{strategy_id}/go-live")
+async def go_live(strategy_id: str, req: GoLiveRequest):
+    """Promote paper -> live. All gates must pass unless force+reason."""
+    if strategy_id not in CATALOG_MAP:
+        raise HTTPException(404, f"unknown strategy {strategy_id}")
+    if CATALOG_MAP[strategy_id].stage not in ("paper",):
+        # stage may already be overridden to live
+        from core.promotion.gates import load_stage_overrides
+        cur = load_stage_overrides().get(strategy_id, {}).get(
+            "stage", CATALOG_MAP[strategy_id].stage)
+        if cur != "paper":
+            raise HTTPException(409, f"strategy stage is '{cur}', not paper")
+    if not req.confirm:
+        raise HTTPException(400, "confirm=true required")
+    import asyncio
+    from core.promotion.gates import promote_to_live
+    try:
+        result = await asyncio.to_thread(
+            promote_to_live, strategy_id, req.force, req.reason)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    # refresh in-process catalog stage
+    CATALOG_MAP[strategy_id].stage = "live"
+    result["next_steps"] = _live_next_steps(strategy_id, result.get("throttle", 0.1))
+    return result
+
+
+@router.post("/{strategy_id}/demote")
+async def demote(strategy_id: str, req: GoLiveRequest):
+    """Roll back to paper. Risk-reducing — always allowed, reason logged."""
+    if strategy_id not in CATALOG_MAP:
+        raise HTTPException(404, f"unknown strategy {strategy_id}")
+    import asyncio
+    from core.promotion.gates import demote_to_paper
+    result = await asyncio.to_thread(
+        demote_to_paper, strategy_id, req.reason or "manual demote")
+    CATALOG_MAP[strategy_id].stage = "paper"
+    return result
+
+
+def _live_next_steps(strategy_id: str, throttle: float) -> List[str]:
+    if strategy_id == "btc_wheel":
+        return [
+            f"Live sizing throttled to {throttle:.0%} of paper notional.",
+            "Add Deribit API keys to .env: DERIBIT_CLIENT_ID / DERIBIT_CLIENT_SECRET.",
+            "Default env is TESTNET (test.deribit.com). Set DERIBIT_ENV=prod only "
+            "after a full testnet cycle (open -> mark -> settle).",
+            "Run once manually: python scripts/wheel_paper_trade.py --mode live",
+            "Schedule: create QuantSystem_BTCWheelLive task at 16:45 daily "
+            "(paper task keeps running as control).",
+        ]
+    return ["Configure the live runner for this strategy."]

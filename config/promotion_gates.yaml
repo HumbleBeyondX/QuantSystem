@@ -1,0 +1,34 @@
+# ============================================================
+# Paper -> Live promotion gates
+# ============================================================
+# A paper strategy may go live ONLY when every gate passes.
+# Evaluated live by core/promotion/gates.py; shown as a checklist
+# in the Strategies UI. Force-promotion requires an explicit reason
+# and is permanently recorded in data/promotions.jsonl + the
+# corrections ledger.
+#
+# Doctrine: the OOS Sharpe >= 1.5 gate got the strategy INTO paper.
+# These gates decide whether paper behavior matches what was
+# promised — they are exit criteria, not entry criteria.
+# ============================================================
+
+default:
+  min_paper_days: 56          # 8 weeks of shadow trading
+  min_closed_trades: 6        # enough settlements to judge
+  min_expectancy: 0.03        # win_rate x PF - (1 - win_rate), thin-edge rule
+  max_paper_drawdown: 0.15    # paper equity max DD
+  require_sla_green: true     # declared critical sources healthy right now
+  require_backtest_gate: true # registry gate passed (or validated combo link)
+
+strategies:
+  btc_wheel:
+    sources: [deribit]
+    min_closed_trades: 6              # >= 6 weekly settlements
+    live_notional_throttle: 0.10      # first live sizing: 10% of paper notional
+    notes: >
+      Approved as the wheel leg of validated combo_wheel_sniper (70/30,
+      OOS 2.66). Paper runs on continue in parallel as control after
+      go-live.
+  spy_gamma_scalp:
+    sources: [alpaca, yahoo]
+    live_notional_throttle: 0.10

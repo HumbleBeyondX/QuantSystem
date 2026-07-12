@@ -215,3 +215,34 @@ def test_tearsheet_no_benchmark(client):
     r = client.get("/api/backtest/records/combo_wheel_sniper/analytics")
     assert r.status_code == 200
     assert "benchmark" not in r.json()["stats"]
+
+
+# ── Paper -> Live promotion system ──
+
+def test_promotion_report_btc_wheel(client):
+    r = client.get("/api/strategies/btc_wheel/promotion")
+    assert r.status_code == 200
+    d = r.json()
+    ids = {c["id"] for c in d["checks"]}
+    assert {"paper_days", "closed_trades", "expectancy",
+            "drawdown", "sla", "backtest_gate"} <= ids
+    # wheel is 3 days into an 8-week paper run — must NOT be ready yet
+    assert d["ready"] is False
+    # combo-leg approval logic: standalone gate failed but combo validated
+    bg = next(c for c in d["checks"] if c["id"] == "backtest_gate")
+    assert bg["passed"] is True
+
+
+def test_go_live_blocked_without_gates(client):
+    r = client.post("/api/strategies/btc_wheel/go-live",
+                    json={"confirm": True})
+    assert r.status_code == 409
+    assert "gates not passed" in r.json()["detail"]
+
+
+def test_go_live_requires_confirm_and_force_needs_reason(client):
+    r = client.post("/api/strategies/btc_wheel/go-live", json={})
+    assert r.status_code == 400
+    r2 = client.post("/api/strategies/btc_wheel/go-live",
+                     json={"confirm": True, "force": True, "reason": ""})
+    assert r2.status_code == 409  # force without reason rejected
