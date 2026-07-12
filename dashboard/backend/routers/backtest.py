@@ -878,6 +878,11 @@ RECORD_MAP: Dict[str, Dict[str, Optional[str]]] = {
         "script": "scripts/backtest_combo_wheel_sniper.py",
         "curves": "combo_wheel_sniper_curves.csv",
     },
+    "wheel_delta_strike": {
+        "json": "wheel_delta_strike_research.json",
+        "script": "scripts/backtest_wheel_delta_strike.py",
+        "curves": "wheel_delta_strike_curves.csv",
+    },
     "combo_wheel_sniper_v2": {
         "json": "combo_wheel_sniper_v2_research.json",
         "script": "scripts/backtest_combo_wheel_sniper_v2.py",
@@ -921,7 +926,12 @@ def _record_summary(rid: str) -> Optional[Dict[str, Any]]:
         return None
     # Normalize headline stats across heterogeneous research JSONs
     headline: Dict[str, Any] = {}
-    if rid in ("combo_wheel_sniper", "combo_wheel_sniper_v2"):
+    if rid == "wheel_delta_strike":
+        headline = dict(data.get("headline", {}))
+        status = data.get("status", "validated")
+        verdict = ("GATE PASS (full post-incident protocol: IS-only selection, "
+                   "blind OOS 2.07, fee/WF/LOO suite, beta check)")
+    elif rid in ("combo_wheel_sniper", "combo_wheel_sniper_v2"):
         rec = data.get("combos", {}).get(data.get("recommended", "70/30"), {})
         headline = {
             "sharpe": rec.get("full", {}).get("sharpe"),

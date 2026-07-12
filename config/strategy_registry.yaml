@@ -18,10 +18,10 @@
 # ============================================================
 
 strategies:
-  # ── LIVE ────────────────────────────────────────────────────
+  # ── (was LIVE — decommissioned 2026-07-12) ──────────────────
   - id: eth_sniper
     name: ETH Momentum Sniper
-    stage: live
+    stage: retired
     asset_class: crypto
     category: crypto
     symbols: ["ETH/USDT"]
@@ -119,6 +119,31 @@ strategies:
     notes: >
       Defect found by the NautilusTrader parity pilot — exactly what
       cross-engine validation is for. v1 record retained for audit.
+
+  # ── VALIDATED ───────────────────────────────────────────────
+  - id: btc_wheel_delta
+    name: BTC Wheel — delta-targeted strikes (0.40P/0.20C)
+    stage: validated
+    asset_class: crypto_options
+    category: options
+    symbols: ["BTC-DERIBIT-OPTIONS"]
+    description: >
+      Vol-adaptive wheel: weekly strangle strikes solved for target BS
+      delta (put 0.40 / call 0.20) instead of fixed % of spot — constant
+      statistical distance across DVOL regimes. Same validated machinery
+      as the fixed wheel (real DVOL x live-chain calibrated IV, 7-DTE,
+      50% notional). FIRST strategy validated under the full post-incident
+      protocol: IS-only selection, blind OOS, fee stress (breakeven >3x),
+      walk-forward (5/5 folds positive), leave-one-out (worst 1.62),
+      beta check (corr 0.47 but beta 0.13 vs BTC; B&H same window 0.34).
+    metrics: {backtest_sharpe: 1.74, is_sharpe: 1.64, oos_sharpe: 2.07, max_dd: -0.142, cagr: 0.299}
+    gate: {threshold: 1.5, oos_sharpe: 2.07, passed: true}
+    links: {record: wheel_delta_strike}
+    notes: >
+      BS pricing is a flagged approximation; Nautilus cross-check
+      infeasible for options (no historical chains) — real-chain paper
+      is the arbiter. Recommend: start paper alongside the fixed wheel
+      (do NOT replace it mid-window).
 
   # ── RESEARCH ────────────────────────────────────────────────
   - id: gamma_squeeze_scanner
