@@ -188,3 +188,49 @@ def test_watchdog_scheduler_check_live():
     from datetime import datetime
     if res is not None and datetime.now().weekday() in (5, 6, 0):
         assert res is True   # weekend/Monday-pre-run must be fresh
+
+
+# ── validation suite (fee stress / walk-forward / leave-one-out) ──
+
+def _mk_equity(daily_rets):
+    import pandas as pd
+    idx = pd.date_range("2021-01-01", periods=len(daily_rets), freq="D")
+    return pd.Series((1 + pd.Series(daily_rets, index=idx)).cumprod() * 100_000)
+
+
+def test_loo_catches_lottery_year():
+    """A curve whose edge lives in ONE year must fail leave-one-out."""
+    import numpy as np
+    from backtesting.validation import leave_one_out
+    rng = np.random.RandomState(7)
+    rets = list(rng.normal(0.0, 0.01, 365))          # 2021: pure noise
+    rets += list(rng.normal(0.004, 0.01, 365))       # 2022: the lottery year
+    rets += list(rng.normal(0.0, 0.01, 365))         # 2023: noise
+    rep = leave_one_out(_mk_equity(rets))
+    assert rep["passed"] is False                    # drops >50% ex-2022
+
+
+def test_wf_and_loo_pass_steady_edge():
+    import numpy as np
+    from backtesting.validation import leave_one_out, walk_forward
+    rng = np.random.RandomState(11)
+    eq = _mk_equity(rng.normal(0.0015, 0.01, 1200))  # steady modest edge
+    assert walk_forward(eq)["passed"] is True
+    assert leave_one_out(eq)["passed"] is True
+
+
+def test_fee_stress_breakeven():
+    import numpy as np, pandas as pd
+    from backtesting.validation import fee_stress
+    rng = np.random.RandomState(3)
+    noise = rng.normal(0, 0.01, 1000)
+    def run(mult):
+        # edge 15bp/day, cost 6bp/day * mult -> breakeven at 2.5x
+        rets = 0.0015 - 0.0006 * mult + noise
+        idx = pd.date_range("2022-01-01", periods=1000, freq="D")
+        return pd.Series((1 + pd.Series(rets, index=idx)).cumprod())
+    rep = fee_stress(run, multipliers=(0.5, 1, 2, 3))
+    assert rep["points"][0]["sharpe"] > rep["points"][-1]["sharpe"]
+    b = rep["breakeven_mult"]
+    assert isinstance(b, float) and 2.0 <= b <= 3.0
+    assert rep["passed"] is True
