@@ -230,6 +230,31 @@ strategies:
         catalyst-conditioned variant (~8 trades/yr, weak power).
     links: {record: test_1dte_calls}
 
+  - id: earnings_pead_calls
+    name: Earnings-Week PEAD Call Buying (NDX leaders)
+    stage: rejected
+    asset_class: options
+    category: options
+    symbols: ["NDX-18-leaders"]
+    description: >
+      Catalyst-conditioned follow-up to one_dte_single_name_calls: buy
+      same-week-Friday ATM call AFTER a >=1.5% earnings-reaction day,
+      18 NDX leaders, 170 real events 2024-02..2026-07
+      (scripts/test_earnings_1dte_calls.py). Pre-event variant dead
+      (IV crush, avg -2.2%, flips sign by year). PEAD variant is the
+      FIRST buying structure to survive ex-top-1 (+9.88) and ex-top-3
+      (+1.84) — but portfolio Sharpe 0.79, OOS(2025-07+) 0.38; best
+      threshold-mined config (>=5%) OOS 0.01 and collapses ex-PLTR
+      (0.61 full / -0.30 OOS). Edge = PLTR/TSLA momo regime 2024-25.
+    metrics: {backtest_sharpe: 0.79, oos_sharpe: 0.38, avg_ret_per_trade: 0.259, max_dd: -0.109}
+    gate: {threshold: 1.5, oos_sharpe: 0.38, passed: false}
+    links: {record: earnings_1dte_calls}
+    notes: >
+      Closest miss of the 6 long-options tests. Signal structure real
+      (monotonic in reaction strength; same-week only), but regime- and
+      name-concentrated. Revisit only if a cross-sectional version with
+      a hedged/spread structure is proposed.
+
   - id: thirteenf_calls
     name: 13F Disclosure-Day Calls
     stage: rejected
