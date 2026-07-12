@@ -421,10 +421,12 @@ function DemoteControl({
 function StrategyCard({
   strategy,
   deployed,
+  monitorStatus,
   onRefresh,
 }: {
   strategy: RegistryStrategy
   deployed: DeployedStrategy | undefined
+  monitorStatus: string | undefined
   onRefresh: () => void
 }) {
   const [promoOpen, setPromoOpen] = useState(false)
@@ -469,16 +471,21 @@ function StrategyCard({
             )}
           </div>
         </div>
-        {deployed && (
-          <span
-            className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full flex-shrink-0 ${
-              isRunning ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'
-            }`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-success animate-pulse' : 'bg-warning'}`} />
-            {isRunning ? 'Running' : deployed.status.charAt(0).toUpperCase() + deployed.status.slice(1)}
-          </span>
-        )}
+        {(deployed || monitorStatus) && (() => {
+          // deployment record wins; otherwise live telemetry from /api/monitor
+          const status = deployed ? deployed.status : (monitorStatus as string)
+          const good = status === 'running' || status === 'flat'
+          return (
+            <span
+              className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full flex-shrink-0 ${
+                good ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${good ? 'bg-success animate-pulse' : 'bg-warning'}`} />
+              {status.charAt(0).toUpperCase() + status.slice(1)}
+            </span>
+          )
+        })()}
       </div>
 
       <p className="text-xs text-gray-500 mb-3 line-clamp-2">{strategy.description}</p>
@@ -579,18 +586,30 @@ export default function StrategiesPage() {
   const [filter, setFilter] = useState<string>('All')
   const [registry, setRegistry] = useState<RegistryResponse | null>(null)
   const [deployed, setDeployed] = useState<DeployedStrategy[]>([])
+  const [monitorStatus, setMonitorStatus] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const fetchData = async () => {
     try {
-      const [regRes, depRes] = await Promise.all([
+      const [regRes, depRes, monRes] = await Promise.all([
         fetch(`${API}/api/strategies/registry`),
         fetch(`${API}/api/strategies/`),
+        fetch(`${API}/api/monitor/strategies`),
       ])
       if (regRes.ok) setRegistry(await regRes.json())
       else setError('Failed to load strategy registry')
       if (depRes.ok) setDeployed(await depRes.json())
+      if (monRes.ok) {
+        const snap = await monRes.json()
+        const map: Record<string, string> = {}
+        for (const card of snap.strategies ?? []) {
+          // monitor ids -> registry ids
+          const rid = card.id === 'gamma_scalp' ? 'spy_gamma_scalp' : card.id
+          if (card.status) map[rid] = card.status
+        }
+        setMonitorStatus(map)
+      }
     } catch (e: any) {
       setError(`Cannot connect to backend: ${e.message}`)
     } finally {
@@ -707,6 +726,7 @@ export default function StrategiesPage() {
                     key={strategy.id}
                     strategy={strategy}
                     deployed={deployedMap.get(strategy.id)}
+                    monitorStatus={monitorStatus[strategy.id]}
                     onRefresh={fetchData}
                   />
                 ))}
