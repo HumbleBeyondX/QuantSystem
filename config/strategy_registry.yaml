@@ -207,6 +207,29 @@ strategies:
     gate: {threshold: 1.5, oos_sharpe: 0.94, passed: false}
     links: {record: sp500_sector_neutral_qmom}
 
+  - id: one_dte_single_name_calls
+    name: 1DTE Single-Name Call Buying (META/NVDA)
+    stage: rejected
+    asset_class: options
+    category: options
+    symbols: ["META", "NVDA"]
+    description: >
+      Buy Thursday->Friday-expiry calls on high-beta single names.
+      Tested on real Alpaca OPRA 5-min bars 2024-02..2026-07
+      (scripts/test_1dte_calls.py). Unconditional: bleeds (META ATM avg
+      -21%/trade, median -98%). Momentum-filtered (+1% day): mean turns
+      positive ONLY via 1-3 lottery weeks — every variant negative
+      ex-top-1 trade. 5th confirmation of the long-options tax.
+    metrics: {avg_ret_atm_uncond: -0.207, win_rate_atm_uncond: 0.274, median_ret: -0.98}
+    gate:
+      threshold: 1.5
+      passed: false
+      note: >
+        P&L concentration: winners cluster on catalyst weeks (earnings
+        reactions +2-6% Friday moves). Only defensible follow-up is a
+        catalyst-conditioned variant (~8 trades/yr, weak power).
+    links: {record: test_1dte_calls}
+
   - id: thirteenf_calls
     name: 13F Disclosure-Day Calls
     stage: rejected
