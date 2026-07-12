@@ -1,0 +1,1734 @@
+{
+ "protocol": "IS-only selection, 1h bars, 50x clamped stops",
+ "oos_start": "2025-07-01",
+ "results": [
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 2,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.3,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -2.66,
+    "max_dd": -0.952,
+    "cagr": -0.731
+   },
+   "n_trades": 508,
+   "win_rate": 0.5
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 2,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.31,
+    "max_dd": -0.951,
+    "cagr": -0.865
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -2.66,
+    "max_dd": -0.951,
+    "cagr": -0.73
+   },
+   "n_trades": 501,
+   "win_rate": 0.497
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 3,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.38,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -2.72,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 498,
+   "win_rate": 0.492
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 2,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.39,
+    "max_dd": -0.953,
+    "cagr": -0.868
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -2.73,
+    "max_dd": -0.953,
+    "cagr": -0.733
+   },
+   "n_trades": 294,
+   "win_rate": 0.347
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 2,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.39,
+    "max_dd": -0.953,
+    "cagr": -0.868
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -2.73,
+    "max_dd": -0.953,
+    "cagr": -0.733
+   },
+   "n_trades": 294,
+   "win_rate": 0.347
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 3,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.39,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -2.72,
+    "max_dd": -0.952,
+    "cagr": -0.731
+   },
+   "n_trades": 492,
+   "win_rate": 0.49
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 2,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.42,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -2.75,
+    "max_dd": -0.952,
+    "cagr": -0.731
+   },
+   "n_trades": 191,
+   "win_rate": 0.236
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 2,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.42,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -2.75,
+    "max_dd": -0.952,
+    "cagr": -0.731
+   },
+   "n_trades": 191,
+   "win_rate": 0.236
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 2,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.46,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -2.78,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 192,
+   "win_rate": 0.24
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 2,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.46,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -2.78,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 192,
+   "win_rate": 0.24
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 3,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.5,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -2.81,
+    "max_dd": -0.952,
+    "cagr": -0.73
+   },
+   "n_trades": 195,
+   "win_rate": 0.241
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 3,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.5,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -2.81,
+    "max_dd": -0.952,
+    "cagr": -0.73
+   },
+   "n_trades": 195,
+   "win_rate": 0.241
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 3,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.52,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -2.83,
+    "max_dd": -0.952,
+    "cagr": -0.731
+   },
+   "n_trades": 200,
+   "win_rate": 0.25
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 3,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.52,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -2.83,
+    "max_dd": -0.952,
+    "cagr": -0.731
+   },
+   "n_trades": 200,
+   "win_rate": 0.25
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 1.0,
+    "min_score": 2,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.59,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -2.88,
+    "max_dd": -0.952,
+    "cagr": -0.73
+   },
+   "n_trades": 349,
+   "win_rate": 0.421
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 3,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.6,
+    "max_dd": -0.952,
+    "cagr": -0.865
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -2.89,
+    "max_dd": -0.952,
+    "cagr": -0.73
+   },
+   "n_trades": 270,
+   "win_rate": 0.337
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 3,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.6,
+    "max_dd": -0.952,
+    "cagr": -0.865
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -2.89,
+    "max_dd": -0.952,
+    "cagr": -0.73
+   },
+   "n_trades": 270,
+   "win_rate": 0.337
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 1.0,
+    "min_score": 3,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.61,
+    "max_dd": -0.951,
+    "cagr": -0.865
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -2.9,
+    "max_dd": -0.951,
+    "cagr": -0.73
+   },
+   "n_trades": 345,
+   "win_rate": 0.423
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 2,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.73,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.0,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 336,
+   "win_rate": 0.402
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 2,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.73,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.0,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 336,
+   "win_rate": 0.402
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 2,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.75,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.01,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 270,
+   "win_rate": 0.33
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 2,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.75,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.01,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 270,
+   "win_rate": 0.33
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 3,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.77,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.03,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 221,
+   "win_rate": 0.262
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 3,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.77,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.03,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 221,
+   "win_rate": 0.262
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 3,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.83,
+    "max_dd": -0.952,
+    "cagr": -0.865
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.08,
+    "max_dd": -0.952,
+    "cagr": -0.73
+   },
+   "n_trades": 333,
+   "win_rate": 0.396
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 3,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.83,
+    "max_dd": -0.952,
+    "cagr": -0.865
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.08,
+    "max_dd": -0.952,
+    "cagr": -0.73
+   },
+   "n_trades": 333,
+   "win_rate": 0.396
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 3,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.95,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.17,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 287,
+   "win_rate": 0.345
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 3,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.95,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.17,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 287,
+   "win_rate": 0.345
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 1.0,
+    "min_score": 2,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.96,
+    "max_dd": -0.953,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.18,
+    "max_dd": -0.953,
+    "cagr": -0.733
+   },
+   "n_trades": 199,
+   "win_rate": 0.271
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 1.0,
+    "min_score": 2,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.96,
+    "max_dd": -0.953,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.18,
+    "max_dd": -0.953,
+    "cagr": -0.733
+   },
+   "n_trades": 199,
+   "win_rate": 0.271
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 1.0,
+    "min_score": 2,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.96,
+    "max_dd": -0.951,
+    "cagr": -0.865
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.18,
+    "max_dd": -0.951,
+    "cagr": -0.73
+   },
+   "n_trades": 311,
+   "win_rate": 0.408
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 2,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.96,
+    "max_dd": -0.952,
+    "cagr": -0.865
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.18,
+    "max_dd": -0.952,
+    "cagr": -0.73
+   },
+   "n_trades": 270,
+   "win_rate": 0.322
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 2,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.96,
+    "max_dd": -0.952,
+    "cagr": -0.865
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.18,
+    "max_dd": -0.952,
+    "cagr": -0.73
+   },
+   "n_trades": 270,
+   "win_rate": 0.322
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 3,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.97,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.18,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 267,
+   "win_rate": 0.341
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 3,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -3.97,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.18,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 267,
+   "win_rate": 0.341
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 1.0,
+    "min_score": 3,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.01,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.22,
+    "max_dd": -0.952,
+    "cagr": -0.731
+   },
+   "n_trades": 309,
+   "win_rate": 0.414
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 3,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.02,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.23,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 223,
+   "win_rate": 0.278
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 3,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.02,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.23,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 223,
+   "win_rate": 0.278
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 2,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.03,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.23,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 193,
+   "win_rate": 0.238
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 2,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.03,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.23,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 193,
+   "win_rate": 0.238
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 2,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.06,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.26,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 218,
+   "win_rate": 0.275
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 2.0,
+    "atr_trail_activate": 1.0,
+    "min_score": 2,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.06,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.26,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 218,
+   "win_rate": 0.275
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 0.5,
+    "min_score": 2,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.25,
+    "max_dd": -0.953,
+    "cagr": -0.868
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.4,
+    "max_dd": -0.953,
+    "cagr": -0.733
+   },
+   "n_trades": 191,
+   "win_rate": 0.283
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 0.5,
+    "min_score": 2,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.25,
+    "max_dd": -0.953,
+    "cagr": -0.868
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.4,
+    "max_dd": -0.953,
+    "cagr": -0.733
+   },
+   "n_trades": 191,
+   "win_rate": 0.283
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 2,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.43,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.55,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 341,
+   "win_rate": 0.434
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 2,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.43,
+    "max_dd": -0.952,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.55,
+    "max_dd": -0.952,
+    "cagr": -0.732
+   },
+   "n_trades": 341,
+   "win_rate": 0.434
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 0.5,
+    "min_score": 3,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.47,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.58,
+    "max_dd": -0.952,
+    "cagr": -0.731
+   },
+   "n_trades": 188,
+   "win_rate": 0.282
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 0.5,
+    "min_score": 3,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.47,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.58,
+    "max_dd": -0.952,
+    "cagr": -0.731
+   },
+   "n_trades": 188,
+   "win_rate": 0.282
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 2,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.53,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.62,
+    "max_dd": -0.952,
+    "cagr": -0.731
+   },
+   "n_trades": 438,
+   "win_rate": 0.489
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 2,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.53,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.62,
+    "max_dd": -0.952,
+    "cagr": -0.731
+   },
+   "n_trades": 438,
+   "win_rate": 0.489
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 1.0,
+    "min_score": 3,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.54,
+    "max_dd": -0.953,
+    "cagr": -0.868
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.64,
+    "max_dd": -0.953,
+    "cagr": -0.733
+   },
+   "n_trades": 185,
+   "win_rate": 0.265
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 1.0,
+    "min_score": 3,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.54,
+    "max_dd": -0.953,
+    "cagr": -0.868
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.64,
+    "max_dd": -0.953,
+    "cagr": -0.733
+   },
+   "n_trades": 185,
+   "win_rate": 0.265
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 1.0,
+    "min_score": 2,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.54,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.63,
+    "max_dd": -0.952,
+    "cagr": -0.73
+   },
+   "n_trades": 219,
+   "win_rate": 0.32
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 1.0,
+    "min_score": 2,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.54,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.63,
+    "max_dd": -0.952,
+    "cagr": -0.73
+   },
+   "n_trades": 219,
+   "win_rate": 0.32
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 1.0,
+    "min_score": 3,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.65,
+    "max_dd": -0.953,
+    "cagr": -0.868
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.72,
+    "max_dd": -0.953,
+    "cagr": -0.733
+   },
+   "n_trades": 196,
+   "win_rate": 0.296
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 1.0,
+    "min_score": 3,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.65,
+    "max_dd": -0.953,
+    "cagr": -0.868
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.72,
+    "max_dd": -0.953,
+    "cagr": -0.733
+   },
+   "n_trades": 196,
+   "win_rate": 0.296
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 2,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.71,
+    "max_dd": -0.953,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.77,
+    "max_dd": -0.953,
+    "cagr": -0.733
+   },
+   "n_trades": 239,
+   "win_rate": 0.385
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 2,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.71,
+    "max_dd": -0.953,
+    "cagr": -0.867
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.77,
+    "max_dd": -0.953,
+    "cagr": -0.733
+   },
+   "n_trades": 239,
+   "win_rate": 0.385
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 0.5,
+    "min_score": 2,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.71,
+    "max_dd": -0.953,
+    "cagr": -0.868
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.77,
+    "max_dd": -0.953,
+    "cagr": -0.733
+   },
+   "n_trades": 202,
+   "win_rate": 0.297
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 0.5,
+    "min_score": 2,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.71,
+    "max_dd": -0.953,
+    "cagr": -0.868
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.77,
+    "max_dd": -0.953,
+    "cagr": -0.733
+   },
+   "n_trades": 202,
+   "win_rate": 0.297
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 3,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.83,
+    "max_dd": -0.952,
+    "cagr": -0.865
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.86,
+    "max_dd": -0.952,
+    "cagr": -0.73
+   },
+   "n_trades": 281,
+   "win_rate": 0.413
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 3,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.83,
+    "max_dd": -0.952,
+    "cagr": -0.865
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.86,
+    "max_dd": -0.952,
+    "cagr": -0.73
+   },
+   "n_trades": 281,
+   "win_rate": 0.413
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 3,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.84,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.87,
+    "max_dd": -0.952,
+    "cagr": -0.731
+   },
+   "n_trades": 213,
+   "win_rate": 0.347
+  },
+  {
+   "params": {
+    "atr_stop": 0.75,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 3,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.84,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.87,
+    "max_dd": -0.952,
+    "cagr": -0.731
+   },
+   "n_trades": 213,
+   "win_rate": 0.347
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 3,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.93,
+    "max_dd": -0.951,
+    "cagr": -0.865
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.94,
+    "max_dd": -0.951,
+    "cagr": -0.73
+   },
+   "n_trades": 345,
+   "win_rate": 0.446
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 1.0,
+    "atr_trail_activate": 0.5,
+    "min_score": 3,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -4.93,
+    "max_dd": -0.951,
+    "cagr": -0.865
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -3.94,
+    "max_dd": -0.951,
+    "cagr": -0.73
+   },
+   "n_trades": 345,
+   "win_rate": 0.446
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 0.5,
+    "min_score": 2,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -5.01,
+    "max_dd": -0.953,
+    "cagr": -0.868
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -4.01,
+    "max_dd": -0.953,
+    "cagr": -0.733
+   },
+   "n_trades": 265,
+   "win_rate": 0.358
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 0.5,
+    "min_score": 2,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -5.01,
+    "max_dd": -0.953,
+    "cagr": -0.868
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -4.01,
+    "max_dd": -0.953,
+    "cagr": -0.733
+   },
+   "n_trades": 265,
+   "win_rate": 0.358
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 0.5,
+    "min_score": 3,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -5.08,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -4.06,
+    "max_dd": -0.952,
+    "cagr": -0.731
+   },
+   "n_trades": 180,
+   "win_rate": 0.289
+  },
+  {
+   "params": {
+    "atr_stop": 1.0,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 0.5,
+    "min_score": 3,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -5.08,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -4.06,
+    "max_dd": -0.952,
+    "cagr": -0.731
+   },
+   "n_trades": 180,
+   "win_rate": 0.289
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 0.5,
+    "min_score": 3,
+    "max_hold": 72,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -5.09,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -4.06,
+    "max_dd": -0.952,
+    "cagr": -0.731
+   },
+   "n_trades": 256,
+   "win_rate": 0.367
+  },
+  {
+   "params": {
+    "atr_stop": 1.5,
+    "atr_trail": 1.5,
+    "atr_trail_activate": 0.5,
+    "min_score": 3,
+    "max_hold": 240,
+    "risk_per_trade": 0.03,
+    "vol_min": 1.2
+   },
+   "is": {
+    "sharpe": -5.09,
+    "max_dd": -0.952,
+    "cagr": -0.866
+   },
+   "oos": {},
+   "full": {
+    "sharpe": -4.06,
+    "max_dd": -0.952,
+    "cagr": -0.731
+   },
+   "n_trades": 256,
+   "win_rate": 0.367
+  }
+ ]
+}

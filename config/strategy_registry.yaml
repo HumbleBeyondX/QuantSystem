@@ -42,7 +42,15 @@ strategies:
         -56%. Found by the NautilusTrader parity pilot. Strategy is
         LIVE on tiny capital; decision on pausing pending user.
     links: {deployment: tokyo-eth-sniper, record: combo_wheel_sniper_v2}
-    notes: Validation basis void — see gate note. Live stage reflects reality, not approval.
+    notes: >
+      Validation basis void — see gate note. 2026-07-12 redesign attempt
+      at fixed 50x with honest physics (scripts/redesign_sniper_v3.py):
+      4h impossible (bar noise > liquidation budget, 36/36 configs
+      negative); 1h stops fit but signal has NO edge — IS Sharpe -2.85
+      even at ZERO fees (fee diagnostic). The Donchian/EMA momentum
+      family is dead at 50x, full stop. Viable 50x research directions
+      are different trade shapes (funding-rate, event-ignition scalps,
+      maker-rebate MM) — new research, not parameter tweaks.
 
   # ── PAPER ───────────────────────────────────────────────────
   - id: spy_gamma_scalp
