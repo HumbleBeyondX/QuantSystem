@@ -244,6 +244,35 @@ def test_go_live_blocked_without_gates(client):
     assert "gates not passed" in r.json()["detail"]
 
 
+# ── Portfolio-level risk budgets (cross-strategy) ──
+
+def test_portfolio_risk_report(client):
+    """GET /api/risk/portfolio: budgets + exposures + breaches, finite
+    utilization, and it must degrade (not 500) if Deribit is unreachable."""
+    import math as _m
+    r = client.get("/api/risk/portfolio")
+    assert r.status_code == 200
+    body = r.json()
+    for key in ("budgets", "exposures", "breaches", "utilization",
+                "stress", "flags", "generated_at"):
+        assert key in body, f"missing key {key}"
+    assert body["advisory"] is True
+    # all three books are reported (possibly with an 'error' field)
+    strategies = body["exposures"].get("strategies", {})
+    assert {"spy_gamma_scalp", "btc_wheel", "btc_wheel_delta"} <= set(strategies)
+    # utilization numbers are finite floats with sane fields
+    assert isinstance(body["utilization"], list) and body["utilization"]
+    for u in body["utilization"]:
+        assert {"id", "used", "limit", "utilization", "breached"} <= set(u)
+        for f in ("used", "limit", "utilization"):
+            assert _m.isfinite(u[f]), f"{u['id']}.{f} not finite: {u[f]}"
+        assert isinstance(u["breached"], bool)
+    # breaches reference declared budgets; flags only carry REDUCE_ONLY
+    util_ids = {u["id"] for u in body["utilization"]}
+    assert set(body["breaches"]) <= util_ids
+    assert all(v == "REDUCE_ONLY" for v in body["flags"].values())
+
+
 def test_go_live_requires_confirm_and_force_needs_reason(client):
     r = client.post("/api/strategies/btc_wheel/go-live", json={})
     assert r.status_code == 400

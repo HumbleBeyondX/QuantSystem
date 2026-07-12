@@ -90,3 +90,4 @@ deploy/dist/
 deploy/build/
 desktop/dist/
 *.spec.bak
+data/catalog/

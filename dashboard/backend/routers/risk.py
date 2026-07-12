@@ -3,6 +3,7 @@
 Provides:
   GET /summary?strategy_id=...         → risk metrics for a single strategy
   GET /strategies                      → list of strategies with risk overview
+  GET /portfolio                       → cross-strategy budgets/exposures/stress
   GET /alerts/history                  → recent alert history
   POST /alerts/test-email              → send a test alert email
   POST /alerts/configure               → configure alert thresholds
@@ -582,6 +583,19 @@ async def _check_and_send_alerts(summary: RiskSummary) -> List[Dict[str, Any]]:
 
 
 # ── Endpoints ────────────────────────────────────────────────────
+
+@router.get("/portfolio")
+async def get_portfolio_risk():
+    """Cross-strategy portfolio risk: budgets, exposures, stress, flags.
+
+    Aggregates the SPY gamma scalp + both BTC wheel paper books against
+    config/risk_budgets.yaml. Fetches live Deribit greeks, so it runs in
+    a thread; the report itself never raises (books degrade with an
+    'error' field).
+    """
+    from core.risk.portfolio import portfolio_risk_report
+    return await asyncio.to_thread(portfolio_risk_report)
+
 
 @router.get("/strategies", response_model=List[StrategyRiskOverview])
 async def list_risk_strategies():
