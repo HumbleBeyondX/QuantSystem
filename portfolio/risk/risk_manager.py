@@ -30,15 +30,24 @@ class RiskManager:
         self.circuit_breaker = CircuitBreaker(self.config.get("circuit_breaker", {}))
         self._is_halted = False
 
-    def check_order(self, order: Order, portfolio: PortfolioSnapshot) -> tuple[bool, str]:
+    def check_order(
+        self,
+        order: Order,
+        portfolio: PortfolioSnapshot,
+        ref_price: Optional[float] = None,
+    ) -> tuple[bool, str]:
         """Pre-trade risk check for a single order.
+
+        Args:
+            ref_price: current market price for valuing MARKET orders
+                (required for notional checks — live orders carry no limit_price).
 
         Returns: (approved, reason)
         """
         if self._is_halted:
             return False, "System halted by circuit breaker"
 
-        return self.pre_trade.check(order, portfolio)
+        return self.pre_trade.check(order, portfolio, ref_price=ref_price)
 
     def update(self, portfolio: PortfolioSnapshot) -> List[Dict[str, Any]]:
         """Real-time risk update. Returns list of risk alerts."""

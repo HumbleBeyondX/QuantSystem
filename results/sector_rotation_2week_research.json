@@ -1,0 +1,111 @@
+{
+  "A": {
+    "variant": "A",
+    "n_days": 2850,
+    "years": 11.31,
+    "start_date": "2014-12-31",
+    "end_date": "2026-05-01",
+    "total_return": 1.8646736862636497,
+    "cagr": 0.09752663016306928,
+    "sharpe": 0.6140810727869608,
+    "sortino": 0.7747245778632343,
+    "max_drawdown": 0.29614630112855694,
+    "calmar": 0.32931908921845027,
+    "win_rate": 0.5845070422535211,
+    "n_rebalances": 284,
+    "annual_turnover": 9.461052631578964,
+    "final_equity": 2.861809012577386,
+    "peak_date": "2025-10-28",
+    "trough_date": "2020-03-23",
+    "max_drawdown_value": -0.29614630112855694,
+    "variant_name": "Top-3 Equal-Weight (Long)"
+  },
+  "B": {
+    "variant": "B",
+    "n_days": 2850,
+    "years": 11.31,
+    "start_date": "2014-12-31",
+    "end_date": "2026-05-01",
+    "total_return": -0.3158822110518167,
+    "cagr": -0.033009741140195836,
+    "sharpe": -0.07391305437798108,
+    "sortino": -0.10127292464030593,
+    "max_drawdown": 0.4376057686095556,
+    "calmar": -0.07543260054610494,
+    "win_rate": 0.4788732394366197,
+    "n_rebalances": 284,
+    "annual_turnover": 22.370526315789473,
+    "final_equity": 0.682749553370287,
+    "peak_date": "2016-01-25",
+    "trough_date": "2026-04-20",
+    "max_drawdown_value": -0.4376057686095556,
+    "variant_name": "Long-Short Top-2 / Bottom-2"
+  },
+  "C": {
+    "variant": "C",
+    "n_days": 2850,
+    "years": 11.31,
+    "start_date": "2014-12-31",
+    "end_date": "2026-05-01",
+    "total_return": 1.79482499994538,
+    "cagr": 0.09513370454084402,
+    "sharpe": 0.6122783923510086,
+    "sortino": 0.7716795711885621,
+    "max_drawdown": 0.28939400691299855,
+    "calmar": 0.32873419030216605,
+    "win_rate": 0.5809859154929577,
+    "n_rebalances": 284,
+    "annual_turnover": 10.732272817197677,
+    "final_equity": 2.7920301749454346,
+    "peak_date": "2025-10-28",
+    "trough_date": "2020-03-23",
+    "max_drawdown_value": -0.28939400691299855,
+    "variant_name": "Top-3 Risk Parity (Inverse Vol)"
+  },
+  "bench_equal_weight_sectors": {
+    "name": "Equal-weight ALL sectors (bench)",
+    "sharpe": 0.7365971373113304,
+    "cagr": 0.11515484511879759,
+    "max_drawdown": 0.36344041795059256,
+    "total_return": 2.428865563905792
+  },
+  "bench_spy": {
+    "name": "SPY buy-hold",
+    "sharpe": 0.8104099719221008,
+    "cagr": 0.13614833876388355,
+    "max_drawdown": 0.3371727297052125,
+    "total_return": 3.233737228804406
+  },
+  "regimes_best_variant": {
+    "vix_bucket": {
+      "high_vix": {
+        "n_days": 940,
+        "ann_return": -0.22983869776901303,
+        "sharpe": -0.8842835324245405
+      },
+      "low_vix": {
+        "n_days": 938,
+        "ann_return": 0.3154567799572909,
+        "sharpe": 3.261908240456796
+      },
+      "mid_vix": {
+        "n_days": 971,
+        "ann_return": 0.23713835757758545,
+        "sharpe": 1.8108736890286676
+      }
+    },
+    "trend_bucket": {
+      "downtrend": {
+        "n_days": 608,
+        "ann_return": -0.15292263262188335,
+        "sharpe": -0.5645267173869394
+      },
+      "uptrend": {
+        "n_days": 2241,
+        "ann_return": 0.1798698748500701,
+        "sharpe": 1.2728497091991064
+      }
+    }
+  },
+  "best_variant_id": "A"
+}

@@ -285,7 +285,49 @@ class CCXTExecutionEngine(ExecutionEngine):
                 margin_type=mt,
             )
         except Exception as e:
-            logger.warning("set_leverage_failed", symbol=symbol, error=str(e))
+            # If leverage was NEVER successfully configured for this symbol,
+            # refuse to trade — an order at exchange-default leverage (often 1x)
+            # makes every margin/liquidation assumption wrong. If a previous
+            # config succeeded (any cache entry for the symbol), proceed on it.
+            previously_configured = any(
+                k.startswith(f"{symbol}_") for k in self._leverage_set
+            )
+            if previously_configured:
+                logger.warning("set_leverage_failed_using_previous",
+                               symbol=symbol, error=str(e))
+            else:
+                logger.error("set_leverage_failed_blocking_order",
+                             symbol=symbol, leverage=lev, error=str(e))
+                raise RuntimeError(
+                    f"Cannot confirm leverage {lev}x on {symbol}: {e}"
+                ) from e
+
+    # ------------------------------------------------------------------
+    # Unit conversion: base currency <-> exchange contracts
+    #
+    # UNIT CONTRACT (2026-06 audit fix): every public method on this engine
+    # speaks BASE CURRENCY (e.g. ETH). Contracts exist only at the exchange
+    # boundary. OKX swaps take create_order amount in CONTRACTS
+    # (ETH-USDT-SWAP: 1 contract = ctVal 0.1 ETH); passing base qty raw made
+    # every live position 10x smaller than intended and poisoned all
+    # qty×price notional math downstream.
+    # ------------------------------------------------------------------
+
+    def _contract_size(self, symbol: str) -> float:
+        """Contract multiplier in base currency (1.0 for spot/linear-1x)."""
+        try:
+            if self._exchange and symbol in self._exchange.markets:
+                return float(self._exchange.market(symbol).get("contractSize") or 1.0)
+        except Exception:
+            pass
+        return 1.0
+
+    def _base_to_contracts(self, symbol: str, base_qty: float) -> float:
+        cs = self._contract_size(symbol)
+        return base_qty / cs if cs > 0 else base_qty
+
+    def _contracts_to_base(self, symbol: str, contracts: float) -> float:
+        return contracts * self._contract_size(symbol)
 
     # ------------------------------------------------------------------
     # Order submission
@@ -296,6 +338,9 @@ class CCXTExecutionEngine(ExecutionEngine):
 
         Handles market, limit, stop orders with exchange-specific param mapping.
         Automatically configures leverage before first order on a symbol.
+
+        `order.quantity` is in BASE CURRENCY; conversion to exchange contracts
+        happens here.
 
         Returns:
             Broker order ID (exchange order ID as string)
@@ -338,37 +383,69 @@ class CCXTExecutionEngine(ExecutionEngine):
             reduce_only=reduce_only,
         )
 
+        # Convert base-currency qty to exchange contracts, then apply the
+        # exchange's native precision (which operates on contract units).
+        amount_contracts = self._base_to_contracts(symbol, amount)
+        try:
+            amount_contracts = float(
+                self._exchange.amount_to_precision(symbol, amount_contracts)
+            )
+        except Exception as e:
+            logger.warning("amount_precision_fallback", symbol=symbol, error=str(e))
+        if amount_contracts <= 0:
+            raise ValueError(
+                f"Order qty {amount} {symbol} rounds to 0 contracts "
+                f"(contract_size={self._contract_size(symbol)})"
+            )
+
+        our_id = str(order.order_id)
+
+        # Pre-register BEFORE hitting the exchange so a timeout/late fill can
+        # still be matched instead of silently dropped (ghost-position source).
+        self._pending_orders[our_id] = {
+            "broker_id": None,
+            "symbol": symbol,
+            "side": side,
+            "amount": amount,                       # base currency
+            "amount_contracts": amount_contracts,   # exchange units
+            "strategy_id": order.strategy_id,
+            "status": "pending_submission",
+            "submitted_at": datetime.now(timezone.utc),
+        }
+
         try:
             result = await self._exchange.create_order(
                 symbol=symbol,
                 type=ccxt_type,
                 side=side,
-                amount=amount,
+                amount=amount_contracts,
                 price=price,
                 params=params,
             )
         except Exception as e:
+            # Keep the entry (status=failed) — if the exchange actually
+            # accepted the order despite the client-side error, the WS update
+            # can still be reconciled by symbol/side/amount instead of vanishing.
+            self._pending_orders[our_id]["status"] = "submission_failed"
+            self._pending_orders[our_id]["error"] = str(e)
             logger.error(
                 "ccxt_order_failed",
                 exchange=self._exchange_id,
                 symbol=symbol,
                 side=side,
                 amount=amount,
+                amount_contracts=amount_contracts,
                 error=str(e),
             )
             raise
 
         broker_id = str(result.get("id", ""))
-        our_id = str(order.order_id)
 
-        self._pending_orders[our_id] = {
+        self._pending_orders[our_id].update({
             "broker_id": broker_id,
-            "symbol": symbol,
-            "side": side,
-            "amount": amount,
             "result": result,
-            "strategy_id": order.strategy_id,
-        }
+            "status": "submitted",
+        })
 
         logger.info(
             "ccxt_order_submitted",
@@ -378,6 +455,8 @@ class CCXTExecutionEngine(ExecutionEngine):
             symbol=symbol,
             side=side,
             amount=amount,
+            amount_contracts=amount_contracts,
+            contract_size=self._contract_size(symbol),
             type=ccxt_type,
             leverage=leverage,
         )
@@ -390,19 +469,28 @@ class CCXTExecutionEngine(ExecutionEngine):
         return broker_id
 
     def _process_filled_order(self, our_id: str, result: Dict[str, Any]) -> None:
-        """Extract fill from a completed order result."""
+        """Extract fill from a completed order result.
+
+        Exchange reports `filled` in CONTRACTS — converted to base currency
+        here so every downstream consumer (PositionManager, risk, PnL) stays
+        in base units.
+        """
         fill_key = f"{our_id}_{result.get('id', '')}"
         if fill_key in self._processed_fills:
             return
         self._processed_fills.add(fill_key)
 
+        symbol = result.get("symbol", "")
+        filled_contracts = float(result.get("filled", 0) or result.get("amount", 0))
+        filled_base = self._contracts_to_base(symbol, filled_contracts)
+
         fill = Fill(
             fill_id=uuid4(),
             order_id=our_id,
-            symbol=result.get("symbol", ""),
+            symbol=symbol,
             side=OrderSide.BUY if result.get("side") == "buy" else OrderSide.SELL,
             price=float(result.get("average", 0) or result.get("price", 0) or 0),
-            quantity=float(result.get("filled", 0) or result.get("amount", 0)),
+            quantity=filled_base,
             commission=float(result.get("fee", {}).get("cost", 0) if result.get("fee") else 0),
             timestamp=datetime.now(timezone.utc),
             strategy_id=self._pending_orders.get(our_id, {}).get("strategy_id", ""),
@@ -467,33 +555,44 @@ class CCXTExecutionEngine(ExecutionEngine):
             contracts = float(pos.get("contracts", 0) or 0)
             if contracts == 0:
                 continue
-            side = pos.get("side", "")
-            qty = contracts if side == "long" else -contracts
             symbol = pos.get("symbol", "")
+            base_qty = self._contracts_to_base(symbol, contracts)
+            side = pos.get("side", "")
+            qty = base_qty if side == "long" else -base_qty
             result[symbol] = qty
 
         return result
 
     async def get_positions_detailed(self) -> List[Dict[str, Any]]:
-        """Get detailed position info including PnL, leverage, liquidation price."""
+        """Get detailed position info including PnL, leverage, liquidation price.
+
+        Raises on fetch failure — callers MUST be able to distinguish
+        "confirmed no positions" (empty list) from "could not fetch"
+        (exception). Treating a failed fetch as flat caused duplicate
+        positions on restart (audit P0-4).
+        """
         if not self._connected:
-            return []
+            raise ConnectionError(f"Not connected to {self._exchange_id}")
 
         try:
             positions = await self._exchange.fetch_positions()
         except Exception as e:
             logger.error("ccxt_fetch_positions_detail_failed", error=str(e))
-            return []
+            raise
 
         result = []
         for pos in positions:
             contracts = float(pos.get("contracts", 0) or 0)
             if contracts == 0:
                 continue
+            symbol = pos.get("symbol", "")
             result.append({
-                "symbol": pos.get("symbol", ""),
+                "symbol": symbol,
                 "side": pos.get("side", ""),
-                "contracts": contracts,
+                # "contracts" key kept for backward compat but the VALUE is in
+                # base currency (all engine outputs are base units).
+                "contracts": self._contracts_to_base(symbol, contracts),
+                "contracts_raw": contracts,
                 "entry_price": float(pos.get("entryPrice", 0) or 0),
                 "mark_price": float(pos.get("markPrice", 0) or 0),
                 "liquidation_price": float(pos.get("liquidationPrice", 0) or 0),
@@ -548,18 +647,40 @@ class CCXTExecutionEngine(ExecutionEngine):
         logger.info("ccxt_ws_monitor_started", exchange=self._exchange_id)
 
     async def _ws_monitor_loop(self, symbols: List[str]) -> None:
-        """Background loop watching order updates via WebSocket."""
+        """Background loop watching order updates via WebSocket.
+
+        On WS errors, backfills missed order updates via REST before resuming —
+        fills executed during a disconnect are otherwise lost forever (the WS
+        stream only delivers events from reconnect onwards).
+        """
+        last_event_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
         while self._connected:
             try:
                 # Watch for order updates (supported by all 3 exchanges)
                 orders = await self._exchange.watch_orders()
                 for order_update in orders:
                     self._handle_order_update(order_update)
+                    ts = order_update.get("timestamp")
+                    if ts:
+                        last_event_ms = max(last_event_ms, int(ts))
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.warning("ccxt_ws_error", error=str(e))
                 await asyncio.sleep(1)
+                # REST backfill: replay any order updates missed while down.
+                for sym in symbols:
+                    try:
+                        missed = await self._exchange.fetch_orders(
+                            sym, since=last_event_ms, limit=50,
+                        )
+                        for order_update in missed:
+                            self._handle_order_update(order_update)
+                    except Exception as backfill_err:
+                        logger.warning(
+                            "ccxt_ws_backfill_failed",
+                            symbol=sym, error=str(backfill_err),
+                        )
 
     def _handle_order_update(self, order_data: Dict[str, Any]) -> None:
         """Process an order update from WebSocket."""
@@ -574,6 +695,19 @@ class CCXTExecutionEngine(ExecutionEngine):
                 break
 
         if not our_id:
+            # Never drop silently — an unmatched fill means internal state is
+            # about to diverge from the exchange (ghost-position precursor).
+            if status in ("closed", "filled"):
+                logger.warning(
+                    "unmatched_order_update",
+                    broker_id=broker_id,
+                    symbol=order_data.get("symbol", ""),
+                    side=order_data.get("side", ""),
+                    status=status,
+                    filled=order_data.get("filled"),
+                    hint="fill for an order this engine did not submit or lost "
+                         "track of — reconciliation will surface the drift",
+                )
             return
 
         if status in ("closed", "filled"):
@@ -627,27 +761,32 @@ class CCXTExecutionEngine(ExecutionEngine):
 
         limits = market.get("limits", {})
         precision = market.get("precision", {})
+        cs = float(market.get("contractSize", 1) or 1)
 
+        # limits.amount.* are in CONTRACTS on derivative markets — convert to
+        # base currency so callers can compare against base-unit quantities.
         return {
-            "min_amount": float(limits.get("amount", {}).get("min", 0) or 0),
-            "max_amount": float(limits.get("amount", {}).get("max", 0) or 0),
+            "min_amount": float(limits.get("amount", {}).get("min", 0) or 0) * cs,
+            "max_amount": float(limits.get("amount", {}).get("max", 0) or 0) * cs,
             "min_cost": float(limits.get("cost", {}).get("min", 0) or 0),
             "min_price": float(limits.get("price", {}).get("min", 0) or 0),
             "amount_precision": precision.get("amount"),
             "price_precision": precision.get("price"),
-            "contract_size": float(market.get("contractSize", 1) or 1),
+            "contract_size": cs,
         }
 
     def amount_to_precision(self, symbol: str, amount: float) -> float:
-        """Round an order amount to the exchange's required precision.
+        """Round a BASE-CURRENCY amount to the exchange's tradable precision.
 
-        Uses CCXT's built-in precision handling which accounts for
-        step sizes, decimal places, and significant figures.
+        Converts to contracts, applies CCXT precision (step size operates on
+        contract units), converts back to base currency.
         """
         if not self._exchange:
             return amount
         try:
-            return float(self._exchange.amount_to_precision(symbol, amount))
+            contracts = self._base_to_contracts(symbol, amount)
+            contracts = float(self._exchange.amount_to_precision(symbol, contracts))
+            return self._contracts_to_base(symbol, contracts)
         except Exception as e:
             logger.warning("amount_precision_fallback", symbol=symbol, error=str(e))
             return amount

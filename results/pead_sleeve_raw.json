@@ -1,0 +1,936 @@
+{
+ "put_spreads": [
+  {
+   "sym": "AAPL",
+   "reaction_day": "2024-05-03",
+   "k_short": 180.0,
+   "width": 5.0,
+   "credit": 0.61,
+   "pnl": 0.61,
+   "ret_on_risk": 0.139,
+   "reaction_ret": 0.0598
+  },
+  {
+   "sym": "AAPL",
+   "reaction_day": "2026-05-01",
+   "k_short": 277.5,
+   "width": 5.0,
+   "credit": 1.3,
+   "pnl": 1.3,
+   "ret_on_risk": 0.3514,
+   "reaction_ret": 0.0324
+  },
+  {
+   "sym": "MSFT",
+   "reaction_day": "2025-05-01",
+   "k_short": 417.5,
+   "width": 5.0,
+   "credit": 0.21,
+   "pnl": 0.21,
+   "ret_on_risk": 0.0438,
+   "reaction_ret": 0.0763
+  },
+  {
+   "sym": "MSFT",
+   "reaction_day": "2025-07-31",
+   "k_short": 525.0,
+   "width": 5.0,
+   "credit": 0.44,
+   "pnl": -4.56,
+   "ret_on_risk": -1.0,
+   "reaction_ret": 0.0395
+  },
+  {
+   "sym": "NVDA",
+   "reaction_day": "2025-05-29",
+   "k_short": 138.0,
+   "width": 2.0,
+   "credit": 0.48,
+   "pnl": -1.52,
+   "ret_on_risk": -1.0,
+   "reaction_ret": 0.0325
+  },
+  {
+   "sym": "AMZN",
+   "reaction_day": "2024-11-01",
+   "k_short": 195.0,
+   "width": 5.0,
+   "credit": 1.22,
+   "pnl": 1.22,
+   "ret_on_risk": 0.3228,
+   "reaction_ret": 0.0619
+  },
+  {
+   "sym": "AMZN",
+   "reaction_day": "2025-05-01",
+   "k_short": 187.5,
+   "width": 5.0,
+   "credit": 1.92,
+   "pnl": 1.92,
+   "ret_on_risk": 0.6234,
+   "reaction_ret": 0.0313
+  },
+  {
+   "sym": "AMZN",
+   "reaction_day": "2025-10-31",
+   "k_short": 242.5,
+   "width": 5.0,
+   "credit": 1.61,
+   "pnl": 1.61,
+   "ret_on_risk": 0.4749,
+   "reaction_ret": 0.0958
+  },
+  {
+   "sym": "GOOGL",
+   "reaction_day": "2024-04-26",
+   "k_short": 167.5,
+   "width": 5.0,
+   "credit": 0.48,
+   "pnl": -1.25,
+   "ret_on_risk": -0.2765,
+   "reaction_ret": 0.1022
+  },
+  {
+   "sym": "GOOGL",
+   "reaction_day": "2024-10-30",
+   "k_short": 170.0,
+   "width": 5.0,
+   "credit": 0.29,
+   "pnl": 0.29,
+   "ret_on_risk": 0.0616,
+   "reaction_ret": 0.0282
+  },
+  {
+   "sym": "GOOGL",
+   "reaction_day": "2025-04-24",
+   "k_short": 157.5,
+   "width": 5.0,
+   "credit": 1.84,
+   "pnl": 1.84,
+   "ret_on_risk": 0.5823,
+   "reaction_ret": 0.0253
+  },
+  {
+   "sym": "GOOGL",
+   "reaction_day": "2025-10-29",
+   "k_short": 272.5,
+   "width": 5.0,
+   "credit": 2.31,
+   "pnl": 2.31,
+   "ret_on_risk": 0.8587,
+   "reaction_ret": 0.0265
+  },
+  {
+   "sym": "GOOGL",
+   "reaction_day": "2026-04-30",
+   "k_short": 382.5,
+   "width": 5.0,
+   "credit": 1.24,
+   "pnl": 1.24,
+   "ret_on_risk": 0.3298,
+   "reaction_ret": 0.0996
+  },
+  {
+   "sym": "META",
+   "reaction_day": "2024-08-01",
+   "k_short": 490.0,
+   "width": 5.0,
+   "credit": 1.21,
+   "pnl": -3.79,
+   "ret_on_risk": -1.0,
+   "reaction_ret": 0.0482
+  },
+  {
+   "sym": "META",
+   "reaction_day": "2025-01-30",
+   "k_short": 680.0,
+   "width": 5.0,
+   "credit": 1.16,
+   "pnl": 1.16,
+   "ret_on_risk": 0.3021,
+   "reaction_ret": 0.0155
+  },
+  {
+   "sym": "META",
+   "reaction_day": "2025-05-01",
+   "k_short": 565.0,
+   "width": 5.0,
+   "credit": 1.18,
+   "pnl": 1.18,
+   "ret_on_risk": 0.3089,
+   "reaction_ret": 0.0423
+  },
+  {
+   "sym": "META",
+   "reaction_day": "2025-07-31",
+   "k_short": 765.0,
+   "width": 5.0,
+   "credit": 1.02,
+   "pnl": -3.98,
+   "ret_on_risk": -1.0,
+   "reaction_ret": 0.1125
+  },
+  {
+   "sym": "META",
+   "reaction_day": "2026-01-29",
+   "k_short": 732.5,
+   "width": 5.0,
+   "credit": 1.42,
+   "pnl": -3.58,
+   "ret_on_risk": -1.0,
+   "reaction_ret": 0.104
+  },
+  {
+   "sym": "AVGO",
+   "reaction_day": "2024-12-13",
+   "k_short": 220.0,
+   "width": 5.0,
+   "credit": 1.51,
+   "pnl": -1.06,
+   "ret_on_risk": -0.3046,
+   "reaction_ret": 0.2443
+  },
+  {
+   "sym": "AVGO",
+   "reaction_day": "2025-03-07",
+   "k_short": 190.0,
+   "width": 5.0,
+   "credit": 1.4,
+   "pnl": 1.4,
+   "ret_on_risk": 0.3889,
+   "reaction_ret": 0.0864
+  },
+  {
+   "sym": "AVGO",
+   "reaction_day": "2025-09-05",
+   "k_short": 330.0,
+   "width": 5.0,
+   "credit": 1.56,
+   "pnl": 1.56,
+   "ret_on_risk": 0.4535,
+   "reaction_ret": 0.0941
+  },
+  {
+   "sym": "AVGO",
+   "reaction_day": "2026-03-05",
+   "k_short": 327.5,
+   "width": 5.0,
+   "credit": 0.88,
+   "pnl": 0.88,
+   "ret_on_risk": 0.2136,
+   "reaction_ret": 0.048
+  },
+  {
+   "sym": "TSLA",
+   "reaction_day": "2024-04-24",
+   "k_short": 160.0,
+   "width": 5.0,
+   "credit": 1.08,
+   "pnl": 1.08,
+   "ret_on_risk": 0.2755,
+   "reaction_ret": 0.1206
+  },
+  {
+   "sym": "TSLA",
+   "reaction_day": "2024-10-24",
+   "k_short": 257.5,
+   "width": 5.0,
+   "credit": 1.37,
+   "pnl": 1.37,
+   "ret_on_risk": 0.3774,
+   "reaction_ret": 0.2192
+  },
+  {
+   "sym": "TSLA",
+   "reaction_day": "2025-01-30",
+   "k_short": 397.5,
+   "width": 5.0,
+   "credit": 1.76,
+   "pnl": 1.76,
+   "ret_on_risk": 0.5432,
+   "reaction_ret": 0.0287
+  },
+  {
+   "sym": "TSLA",
+   "reaction_day": "2025-04-23",
+   "k_short": 247.5,
+   "width": 5.0,
+   "credit": 1.71,
+   "pnl": 1.71,
+   "ret_on_risk": 0.5198,
+   "reaction_ret": 0.0537
+  },
+  {
+   "sym": "TSLA",
+   "reaction_day": "2025-10-23",
+   "k_short": 445.0,
+   "width": 5.0,
+   "credit": 1.64,
+   "pnl": -3.36,
+   "ret_on_risk": -1.0,
+   "reaction_ret": 0.0228
+  },
+  {
+   "sym": "AMD",
+   "reaction_day": "2024-07-31",
+   "k_short": 143.0,
+   "width": 2.0,
+   "credit": 0.67,
+   "pnl": -1.33,
+   "ret_on_risk": -1.0,
+   "reaction_ret": 0.0436
+  },
+  {
+   "sym": "AMD",
+   "reaction_day": "2026-05-06",
+   "k_short": 417.5,
+   "width": 5.0,
+   "credit": 2.36,
+   "pnl": 2.36,
+   "ret_on_risk": 0.8939,
+   "reaction_ret": 0.1861
+  },
+  {
+   "sym": "COST",
+   "reaction_day": "2025-05-30",
+   "k_short": 1027.5,
+   "width": 5.0,
+   "credit": 1.41,
+   "pnl": -3.59,
+   "ret_on_risk": -1.0,
+   "reaction_ret": 0.0312
+  },
+  {
+   "sym": "ADBE",
+   "reaction_day": "2024-06-14",
+   "k_short": 520.0,
+   "width": 10.0,
+   "credit": 2.6,
+   "pnl": 2.6,
+   "ret_on_risk": 0.3514,
+   "reaction_ret": 0.1451
+  },
+  {
+   "sym": "ADBE",
+   "reaction_day": "2025-12-11",
+   "k_short": 347.5,
+   "width": 5.0,
+   "credit": 1.18,
+   "pnl": 1.18,
+   "ret_on_risk": 0.3089,
+   "reaction_ret": 0.0213
+  },
+  {
+   "sym": "QCOM",
+   "reaction_day": "2024-11-06",
+   "k_short": 165.0,
+   "width": 5.0,
+   "credit": 1.46,
+   "pnl": 1.09,
+   "ret_on_risk": 0.3077,
+   "reaction_ret": 0.0427
+  },
+  {
+   "sym": "QCOM",
+   "reaction_day": "2025-11-05",
+   "k_short": 175.0,
+   "width": 5.0,
+   "credit": 1.65,
+   "pnl": -3.35,
+   "ret_on_risk": -1.0,
+   "reaction_ret": 0.0398
+  },
+  {
+   "sym": "QCOM",
+   "reaction_day": "2026-04-30",
+   "k_short": 177.5,
+   "width": 5.0,
+   "credit": 1.13,
+   "pnl": -0.01,
+   "ret_on_risk": -0.0029,
+   "reaction_ret": 0.1512
+  },
+  {
+   "sym": "AMAT",
+   "reaction_day": "2024-02-16",
+   "k_short": 192.5,
+   "width": 5.0,
+   "credit": 1.05,
+   "pnl": 1.05,
+   "ret_on_risk": 0.2658,
+   "reaction_ret": 0.0635
+  },
+  {
+   "sym": "AMAT",
+   "reaction_day": "2024-08-15",
+   "k_short": 205.0,
+   "width": 5.0,
+   "credit": 1.24,
+   "pnl": 0.69,
+   "ret_on_risk": 0.1847,
+   "reaction_ret": 0.0506
+  },
+  {
+   "sym": "AMAT",
+   "reaction_day": "2026-02-13",
+   "k_short": 350.0,
+   "width": 5.0,
+   "credit": 2.26,
+   "pnl": 2.26,
+   "ret_on_risk": 0.8248,
+   "reaction_ret": 0.0808
+  },
+  {
+   "sym": "MU",
+   "reaction_day": "2024-03-21",
+   "k_short": 108.0,
+   "width": 2.0,
+   "credit": 0.31,
+   "pnl": 0.31,
+   "ret_on_risk": 0.1834,
+   "reaction_ret": 0.1413
+  },
+  {
+   "sym": "MU",
+   "reaction_day": "2024-09-26",
+   "k_short": 108.0,
+   "width": 2.0,
+   "credit": 0.37,
+   "pnl": -0.8,
+   "ret_on_risk": -0.4919,
+   "reaction_ret": 0.1473
+  },
+  {
+   "sym": "MU",
+   "reaction_day": "2025-12-18",
+   "k_short": 245.0,
+   "width": 5.0,
+   "credit": 1.19,
+   "pnl": 1.19,
+   "ret_on_risk": 0.3123,
+   "reaction_ret": 0.1021
+  },
+  {
+   "sym": "MU",
+   "reaction_day": "2026-06-25",
+   "k_short": 1205.0,
+   "width": 5.0,
+   "credit": 1.82,
+   "pnl": -3.18,
+   "ret_on_risk": -1.0,
+   "reaction_ret": 0.1574
+  },
+  {
+   "sym": "CRM",
+   "reaction_day": "2024-02-29",
+   "k_short": 300.0,
+   "width": 5.0,
+   "credit": 0.18,
+   "pnl": 0.18,
+   "ret_on_risk": 0.0373,
+   "reaction_ret": 0.0302
+  },
+  {
+   "sym": "CRM",
+   "reaction_day": "2024-12-04",
+   "k_short": 360.0,
+   "width": 5.0,
+   "credit": 0.68,
+   "pnl": -1.91,
+   "ret_on_risk": -0.4413,
+   "reaction_ret": 0.1099
+  },
+  {
+   "sym": "CRM",
+   "reaction_day": "2025-12-04",
+   "k_short": 242.5,
+   "width": 5.0,
+   "credit": 0.27,
+   "pnl": 0.27,
+   "ret_on_risk": 0.0571,
+   "reaction_ret": 0.0366
+  },
+  {
+   "sym": "CRM",
+   "reaction_day": "2026-02-26",
+   "k_short": 195.0,
+   "width": 5.0,
+   "credit": 0.63,
+   "pnl": -0.57,
+   "ret_on_risk": -0.1296,
+   "reaction_ret": 0.0403
+  },
+  {
+   "sym": "ORCL",
+   "reaction_day": "2024-03-12",
+   "k_short": 123.0,
+   "width": 2.0,
+   "credit": 0.14,
+   "pnl": -0.76,
+   "ret_on_risk": -0.4086,
+   "reaction_ret": 0.1175
+  },
+  {
+   "sym": "ORCL",
+   "reaction_day": "2024-06-12",
+   "k_short": 136.0,
+   "width": 2.0,
+   "credit": 0.09,
+   "pnl": -1.13,
+   "ret_on_risk": -0.5924,
+   "reaction_ret": 0.1332
+  },
+  {
+   "sym": "ORCL",
+   "reaction_day": "2024-09-10",
+   "k_short": 150.0,
+   "width": 5.0,
+   "credit": 0.28,
+   "pnl": 0.28,
+   "ret_on_risk": 0.0593,
+   "reaction_ret": 0.1144
+  },
+  {
+   "sym": "ORCL",
+   "reaction_day": "2025-06-12",
+   "k_short": 195.0,
+   "width": 5.0,
+   "credit": 0.41,
+   "pnl": 0.41,
+   "ret_on_risk": 0.0893,
+   "reaction_ret": 0.1331
+  },
+  {
+   "sym": "ORCL",
+   "reaction_day": "2025-09-10",
+   "k_short": 320.0,
+   "width": 10.0,
+   "credit": 2.65,
+   "pnl": -7.35,
+   "ret_on_risk": -1.0,
+   "reaction_ret": 0.3595
+  },
+  {
+   "sym": "ORCL",
+   "reaction_day": "2026-03-11",
+   "k_short": 160.0,
+   "width": 5.0,
+   "credit": 0.99,
+   "pnl": -4.01,
+   "ret_on_risk": -1.0,
+   "reaction_ret": 0.0918
+  },
+  {
+   "sym": "PLTR",
+   "reaction_day": "2024-08-06",
+   "k_short": 26.0,
+   "width": 2.0,
+   "credit": 0.29,
+   "pnl": 0.29,
+   "ret_on_risk": 0.1696,
+   "reaction_ret": 0.1038
+  },
+  {
+   "sym": "PLTR",
+   "reaction_day": "2024-11-05",
+   "k_short": 50.0,
+   "width": 2.0,
+   "credit": 0.52,
+   "pnl": 0.52,
+   "ret_on_risk": 0.3514,
+   "reaction_ret": 0.2347
+  },
+  {
+   "sym": "PLTR",
+   "reaction_day": "2025-02-04",
+   "k_short": 103.0,
+   "width": 2.0,
+   "credit": 0.78,
+   "pnl": 0.78,
+   "ret_on_risk": 0.6393,
+   "reaction_ret": 0.2399
+  },
+  {
+   "sym": "PLTR",
+   "reaction_day": "2025-08-05",
+   "k_short": 170.0,
+   "width": 5.0,
+   "credit": 1.14,
+   "pnl": 1.14,
+   "ret_on_risk": 0.2953,
+   "reaction_ret": 0.0785
+  },
+  {
+   "sym": "PLTR",
+   "reaction_day": "2026-02-03",
+   "k_short": 155.0,
+   "width": 5.0,
+   "credit": 1.29,
+   "pnl": -3.71,
+   "ret_on_risk": -1.0,
+   "reaction_ret": 0.0685
+  }
+ ],
+ "sleeve": [
+  {
+   "sym": "AIG",
+   "reaction_day": "2025-05-02",
+   "contract": "AIG250509C00081000",
+   "entry": 2.97,
+   "exit": 2.08,
+   "ret": -0.2997,
+   "reaction_ret": 0.0349,
+   "mom6_rank": 13
+  },
+  {
+   "sym": "BLK",
+   "reaction_day": "2025-01-15",
+   "contract": "BLK250117C00980000",
+   "entry": 31.82,
+   "exit": 24.69,
+   "ret": -0.2241,
+   "reaction_ret": 0.0519,
+   "mom6_rank": 10
+  },
+  {
+   "sym": "BMY",
+   "reaction_day": "2026-04-30",
+   "contract": "BMY260501C00060000",
+   "entry": 0.77,
+   "exit": 0.0,
+   "ret": -1.0,
+   "reaction_ret": 0.0521,
+   "mom6_rank": 13
+  },
+  {
+   "sym": "BSX",
+   "reaction_day": "2025-04-23",
+   "contract": "BSX250425C00099000",
+   "entry": 1.37,
+   "exit": 2.9,
+   "ret": 1.1168,
+   "reaction_ret": 0.0407,
+   "mom6_rank": 10
+  },
+  {
+   "sym": "C",
+   "reaction_day": "2026-01-15",
+   "contract": "C260116C00116000",
+   "entry": 1.5,
+   "exit": 1.62,
+   "ret": 0.08,
+   "reaction_ret": 0.0449,
+   "mom6_rank": 14
+  },
+  {
+   "sym": "CAT",
+   "reaction_day": "2026-01-29",
+   "contract": "CAT260130C00665000",
+   "entry": 4.43,
+   "exit": 0.0,
+   "ret": -1.0,
+   "reaction_ret": 0.0341,
+   "mom6_rank": 10
+  },
+  {
+   "sym": "CAT",
+   "reaction_day": "2026-04-30",
+   "contract": "CAT260501C00890000",
+   "entry": 8.02,
+   "exit": 1.98,
+   "ret": -0.7531,
+   "reaction_ret": 0.0988,
+   "mom6_rank": 5
+  },
+  {
+   "sym": "COF",
+   "reaction_day": "2025-01-22",
+   "contract": "COF250124C00197500",
+   "entry": 4.82,
+   "exit": 6.38,
+   "ret": 0.3237,
+   "reaction_ret": 0.04,
+   "mom6_rank": 15
+  },
+  {
+   "sym": "COF",
+   "reaction_day": "2025-04-23",
+   "contract": "COF250425C00172500",
+   "entry": 5.42,
+   "exit": 10.34,
+   "ret": 0.9077,
+   "reaction_ret": 0.0368,
+   "mom6_rank": 12
+  },
+  {
+   "sym": "GE",
+   "reaction_day": "2024-04-23",
+   "contract": "GE240426C00160000",
+   "entry": 3.89,
+   "exit": 2.33,
+   "ret": -0.401,
+   "reaction_ret": 0.0828,
+   "mom6_rank": 13
+  },
+  {
+   "sym": "GE",
+   "reaction_day": "2024-07-23",
+   "contract": "GE240726C00170000",
+   "entry": 3.4,
+   "exit": 0.0,
+   "ret": -1.0,
+   "reaction_ret": 0.0568,
+   "mom6_rank": 3
+  },
+  {
+   "sym": "GILD",
+   "reaction_day": "2025-02-12",
+   "contract": "GILD250214C00099000",
+   "entry": 4.27,
+   "exit": 5.39,
+   "ret": 0.2623,
+   "reaction_ret": 0.0746,
+   "mom6_rank": 7
+  },
+  {
+   "sym": "GM",
+   "reaction_day": "2026-01-27",
+   "contract": "GM260130C00086000",
+   "entry": 1.69,
+   "exit": 0.0,
+   "ret": -1.0,
+   "reaction_ret": 0.0875,
+   "mom6_rank": 8
+  },
+  {
+   "sym": "GOOG",
+   "reaction_day": "2025-10-29",
+   "contract": "GOOG251031C00275000",
+   "entry": 9.32,
+   "exit": 6.98,
+   "ret": -0.2511,
+   "reaction_ret": 0.0251,
+   "mom6_rank": 13
+  },
+  {
+   "sym": "INTC",
+   "reaction_day": "2025-10-23",
+   "contract": "INTC251024C00038000",
+   "entry": 1.86,
+   "exit": 0.28,
+   "ret": -0.8495,
+   "reaction_ret": 0.0336,
+   "mom6_rank": 10
+  },
+  {
+   "sym": "INTC",
+   "reaction_day": "2026-04-24",
+   "contract": "INTC260501C00083000",
+   "entry": 3.61,
+   "exit": 16.66,
+   "ret": 3.615,
+   "reaction_ret": 0.236,
+   "mom6_rank": 11
+  },
+  {
+   "sym": "KKR",
+   "reaction_day": "2024-05-01",
+   "contract": "KKR240503C00094000",
+   "entry": 2.07,
+   "exit": 1.93,
+   "ret": -0.0676,
+   "reaction_ret": 0.022,
+   "mom6_rank": 8
+  },
+  {
+   "sym": "KKR",
+   "reaction_day": "2024-10-24",
+   "contract": "KKR241025C00142000",
+   "entry": 2.07,
+   "exit": 0.01,
+   "ret": -0.9952,
+   "reaction_ret": 0.0341,
+   "mom6_rank": 12
+  },
+  {
+   "sym": "LLY",
+   "reaction_day": "2024-08-08",
+   "contract": "LLY240809C00832500",
+   "entry": 15.47,
+   "exit": 58.18,
+   "ret": 2.7608,
+   "reaction_ret": 0.0948,
+   "mom6_rank": 2
+  },
+  {
+   "sym": "LLY",
+   "reaction_day": "2026-02-04",
+   "contract": "LLY260206C01105000",
+   "entry": 18.42,
+   "exit": 0.09,
+   "ret": -0.9951,
+   "reaction_ret": 0.1033,
+   "mom6_rank": 13
+  },
+  {
+   "sym": "LRCX",
+   "reaction_day": "2025-10-23",
+   "contract": "LRCX251024C00147000",
+   "entry": 2.27,
+   "exit": 5.59,
+   "ret": 1.4626,
+   "reaction_ret": 0.0445,
+   "mom6_rank": 4
+  },
+  {
+   "sym": "LRCX",
+   "reaction_day": "2026-01-29",
+   "contract": "LRCX260130C00247500",
+   "entry": 4.25,
+   "exit": 0.01,
+   "ret": -0.9976,
+   "reaction_ret": 0.0359,
+   "mom6_rank": 5
+  },
+  {
+   "sym": "LRCX",
+   "reaction_day": "2026-04-22",
+   "contract": "LRCX260424C00265000",
+   "entry": 9.67,
+   "exit": 2.98,
+   "ret": -0.6918,
+   "reaction_ret": 0.0278,
+   "mom6_rank": 3
+  },
+  {
+   "sym": "MDB",
+   "reaction_day": "2025-12-02",
+   "contract": "MDB251205C00402500",
+   "entry": 8.32,
+   "exit": 7.12,
+   "ret": -0.1442,
+   "reaction_ret": 0.2223,
+   "mom6_rank": 5
+  },
+  {
+   "sym": "MMM",
+   "reaction_day": "2025-01-21",
+   "contract": "MMM250124C00143000",
+   "entry": 4.72,
+   "exit": 6.93,
+   "ret": 0.4682,
+   "reaction_ret": 0.0416,
+   "mom6_rank": 13
+  },
+  {
+   "sym": "MRK",
+   "reaction_day": "2026-05-01",
+   "contract": "MRK260508C00111000",
+   "entry": 2.65,
+   "exit": 0.45,
+   "ret": -0.8302,
+   "reaction_ret": 0.0273,
+   "mom6_rank": 8
+  },
+  {
+   "sym": "MS",
+   "reaction_day": "2025-01-16",
+   "contract": "MS250117C00131000",
+   "entry": 4.82,
+   "exit": 6.41,
+   "ret": 0.3299,
+   "reaction_ret": 0.0403,
+   "mom6_rank": 14
+  },
+  {
+   "sym": "NEM",
+   "reaction_day": "2025-07-25",
+   "contract": "NEM250801C00065000",
+   "entry": 1.6,
+   "exit": 0.0,
+   "ret": -1.0,
+   "reaction_ret": 0.0689,
+   "mom6_rank": 2
+  },
+  {
+   "sym": "PGR",
+   "reaction_day": "2024-07-17",
+   "contract": "PGR240719C00205000",
+   "entry": 16.12,
+   "exit": 0.0,
+   "ret": -1.0,
+   "reaction_ret": 0.054,
+   "mom6_rank": 15
+  },
+  {
+   "sym": "PM",
+   "reaction_day": "2024-10-22",
+   "contract": "PM241025C00123000",
+   "entry": 8.62,
+   "exit": 7.68,
+   "ret": -0.109,
+   "reaction_ret": 0.1047,
+   "mom6_rank": 10
+  },
+  {
+   "sym": "PM",
+   "reaction_day": "2025-04-23",
+   "contract": "PM250425C00160000",
+   "entry": 8.12,
+   "exit": 10.08,
+   "ret": 0.2414,
+   "reaction_ret": 0.0244,
+   "mom6_rank": 2
+  },
+  {
+   "sym": "REGN",
+   "reaction_day": "2026-02-02",
+   "contract": "REGN260206C00755000",
+   "entry": 10.96,
+   "exit": 29.7,
+   "ret": 1.7099,
+   "reaction_ret": 0.0183,
+   "mom6_rank": 12
+  },
+  {
+   "sym": "RTX",
+   "reaction_day": "2025-07-23",
+   "contract": "RTX250725C00155000",
+   "entry": 2.02,
+   "exit": 2.07,
+   "ret": 0.0248,
+   "reaction_ret": 0.0491,
+   "mom6_rank": 14
+  },
+  {
+   "sym": "SLB",
+   "reaction_day": "2026-04-24",
+   "contract": "SLB260501C00056000",
+   "entry": 1.43,
+   "exit": 0.74,
+   "ret": -0.4825,
+   "reaction_ret": 0.0258,
+   "mom6_rank": 7
+  },
+  {
+   "sym": "T",
+   "reaction_day": "2024-10-23",
+   "contract": "T241025C00021000",
+   "entry": 1.5,
+   "exit": 0.85,
+   "ret": -0.4333,
+   "reaction_ret": 0.046,
+   "mom6_rank": 14
+  },
+  {
+   "sym": "WMT",
+   "reaction_day": "2024-11-19",
+   "contract": "WMT241122C00085000",
+   "entry": 1.92,
+   "exit": 5.48,
+   "ret": 1.8542,
+   "reaction_ret": 0.03,
+   "mom6_rank": 5
+  }
+ ]
+}

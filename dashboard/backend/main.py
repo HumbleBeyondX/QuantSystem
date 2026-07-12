@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from core.logging import get_logger, setup_logging
 from core.paths import ensure_user_dir_scaffolded, get_env_path
-from dashboard.backend.routers import backtest, data_layer, deployments, live_trading, logs as logs_router, market_data, paper_trading, portfolio, reports, risk, strategies, system, workshop
+from dashboard.backend.routers import backtest, data_health, data_layer, deployments, live_trading, logs as logs_router, market_data, monitor, paper_trading, reports, risk, strategies, system, workshop
 
 logger = get_logger(__name__)
 
@@ -96,6 +96,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("daily_report_scheduler_start_failed", error=str(e))
 
+    # Start uptime watchdog (emails on deployment/scheduler silence)
+    from core.services.uptime_watchdog import get_watchdog
+    watchdog = get_watchdog()
+    try:
+        await watchdog.start()
+        logger.info("uptime_watchdog_started_status", status=watchdog.status())
+    except Exception as e:
+        logger.error("uptime_watchdog_start_failed", error=str(e))
+
+    # Start cloud sync scheduler (no-op if Supabase not configured)
+    from core.services.cloud_sync_scheduler import get_cloud_sync_scheduler
+    cloud_scheduler = get_cloud_sync_scheduler()
+    try:
+        await cloud_scheduler.start()
+        logger.info("cloud_sync_scheduler_started", status=cloud_scheduler.status())
+    except Exception as e:
+        logger.error("cloud_sync_scheduler_start_failed", error=str(e))
+
     logger.info("dashboard_backend_ready")
 
     yield
@@ -106,6 +124,19 @@ async def lifespan(app: FastAPI):
         await scheduler.stop()
     except Exception as e:
         logger.warning("daily_report_scheduler_stop_failed", error=str(e))
+    try:
+        await cloud_scheduler.stop()
+    except Exception as e:
+        logger.warning("cloud_sync_scheduler_stop_failed", error=str(e))
+    try:
+        await watchdog.stop()
+    except Exception as e:
+        logger.warning("uptime_watchdog_stop_failed", error=str(e))
+    try:
+        from core.cloud import close_supabase_client
+        await close_supabase_client()
+    except Exception:
+        pass
     if runner:
         logger.info("live_runner_shutting_down")
         await runner.shutdown(close_positions=False)
@@ -134,7 +165,6 @@ app.add_middleware(
 )
 
 # Register routers
-app.include_router(portfolio.router, prefix="/api/portfolio", tags=["Portfolio"])
 app.include_router(strategies.router, prefix="/api/strategies", tags=["Strategies"])
 app.include_router(backtest.router, prefix="/api/backtest", tags=["Backtest"])
 app.include_router(market_data.router, prefix="/api/market", tags=["Market Data"])
@@ -147,6 +177,8 @@ app.include_router(data_layer.router, prefix="/api/data", tags=["Data Layer"])
 app.include_router(deployments.router, tags=["Cloud Deployments"])
 app.include_router(reports.router, tags=["Reports"])
 app.include_router(logs_router.router, tags=["Logs"])
+app.include_router(monitor.router, prefix="/api/monitor", tags=["Monitor"])
+app.include_router(data_health.router, prefix="/api/data-health", tags=["Data Health"])
 
 
 @app.get("/")

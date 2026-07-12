@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
+from core.enums import OrderSide, PositionSide
 from core.logging import get_logger
 from core.models import Order, PortfolioSnapshot
 
@@ -24,14 +25,59 @@ class PreTradeRiskCheck:
         self._daily_order_count = 0
         self._daily_pnl = 0.0
 
-    def check(self, order: Order, portfolio: PortfolioSnapshot) -> Tuple[bool, str]:
+    @staticmethod
+    def _is_risk_reducing(order: Order, portfolio: PortfolioSnapshot) -> bool:
+        """True if the order reduces (or closes) an existing position.
+
+        A SELL against a LONG, or a BUY against a SHORT, lowers exposure and
+        must NEVER be blocked by concentration / leverage / daily-loss limits —
+        those limits exist to stop INCREASING risk, not to trap a position.
+        """
+        existing = next(
+            (p for p in portfolio.positions if p.symbol == order.symbol), None
+        )
+        if existing is None or abs(existing.quantity) < 1e-12:
+            return False  # opening a new position — not risk-reducing
+        if existing.side == PositionSide.LONG and order.side == OrderSide.SELL:
+            return True
+        if existing.side == PositionSide.SHORT and order.side == OrderSide.BUY:
+            return True
+        return False
+
+    def check(
+        self,
+        order: Order,
+        portfolio: PortfolioSnapshot,
+        ref_price: Optional[float] = None,
+    ) -> Tuple[bool, str]:
         """Run all pre-trade checks.
+
+        Args:
+            ref_price: current market price for valuing MARKET orders.
+                Live orders are all MARKET (limit_price=None) — without a
+                reference price the value/concentration checks silently
+                evaluated to $0 and passed everything (2026-06 audit).
 
         Returns: (approved, reason)
         """
+        # ── Risk-reducing orders always pass ──
+        # Closing / trimming a position lowers exposure; blocking it would
+        # trap a losing position past its stop-loss. Only opening / adding
+        # orders are subject to the limits below.
+        if self._is_risk_reducing(order, portfolio):
+            self._daily_order_count += 1
+            return True, "approved (risk-reducing)"
+
+        # Resolve a price for notional-based checks: limit price if present,
+        # else caller-provided market price. A risk-increasing order with NO
+        # resolvable price cannot be valued — reject rather than wave through.
+        price = order.limit_price or ref_price
+        if not price or price <= 0:
+            return False, "Cannot value order: no limit_price and no ref_price"
+
         # Check 1: Order size limit
-        estimated_value = order.quantity * (order.limit_price or 0)
-        if estimated_value > self.max_order_value and order.limit_price:
+        estimated_value = order.quantity * price
+        if estimated_value > self.max_order_value:
             return False, f"Order value ${estimated_value:.0f} exceeds max ${self.max_order_value}"
 
         # Check 2: Position concentration

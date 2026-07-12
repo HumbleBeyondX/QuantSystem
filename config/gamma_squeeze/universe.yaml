@@ -1,0 +1,127 @@
+# ============================================================
+# Gamma Squeeze Candidate Universe
+# ============================================================
+# Curated watchlist of tickers historically prone to gamma /
+# short squeezes. Mix of three buckets:
+#
+#   1. PRIOR_SQUEEZE   — names that have already had a major squeeze
+#                        (GME Jan-21, AMC May-21, etc.) and remain
+#                        retail-favorite tape.
+#   2. HIGH_SI         — perennial high-short-interest names
+#                        (FINRA-reported SI% > 15% lately).
+#   3. RETAIL_FAVORITE — heavy WSB/r-stocks/StockTwits chatter,
+#                        small float, low borrow availability.
+#
+# Refresh quarterly. If a ticker dies (delisted, acquired), remove.
+# To dynamically expand: pull TOP-50 short-interest list from
+# https://www.shortvolumes.com/ or FINRA RegSHO daily files.
+# ============================================================
+
+categories:
+
+  prior_squeeze:
+    description: "Names that already executed a textbook squeeze, plus 2024-26 redo candidates"
+    tickers:
+      - GME     # Jan 2021 — the original
+      - AMC     # May 2021
+      - BBBY    # 2022, now delisted but lookalike CHWY
+      - KOSS    # Jan 2021
+      - EXPR    # Jan 2021, struggling
+      - NOK     # Jan 2021
+      - BB      # Jan 2021
+      - HOOD    # post-IPO 2024
+      - RDDT    # 2024 IPO with retail buzz
+      - DJT     # 2024 meme cycle
+
+  high_short_interest:
+    description: "Persistent high SI% — squeeze fuel always loaded"
+    tickers:
+      - BYND    # plant-based meat, declining narrative
+      - UPST    # AI lending, rate-sensitive
+      - CVNA    # online used cars
+      - W       # Wayfair
+      - PLUG    # hydrogen
+      - FCEL    # fuel cell
+      - FUBO    # streaming
+      - MARA    # BTC mining
+      - RIOT    # BTC mining
+      - CLSK    # BTC mining
+      - HUT     # BTC mining
+      - SMCI    # AI hardware (squeezed Mar-24)
+      - SAVA    # biotech high SI
+      - BIIB    # Alzheimer, post-Aduhelm
+      - SHOP    # Shopify (cyclical SI)
+
+  retail_favorite:
+    description: "Heavy WSB/retail chatter, small float, option-heavy"
+    tickers:
+      - PLTR    # Palantir
+      - RIVN    # Rivian
+      - LCID    # Lucid Motors
+      - NIO     # Chinese EV
+      - SOFI    # SoFi
+      - SNAP    # Snap
+      - DKNG    # DraftKings
+      - WOLF    # Wolfspeed (SiC)
+      - GRAB    # Grab Holdings
+      - ROKU    # Roku
+      - COIN    # Coinbase
+      - HOOD    # Robinhood
+      - MSTR    # MicroStrategy (BTC proxy)
+      - U       # Unity
+      - LYFT    # Lyft
+
+  low_float_high_vol:
+    description: "Sub-$10 / sub-$5 small floats — 'penny squeeze' candidates"
+    tickers:
+      - MULN    # Mullen Automotive
+      - FFIE    # Faraday Future
+      - PROG    # Progenity (legacy squeeze)
+      - ATER    # Aterian
+      - CLOV    # Clover Health
+      - WISH    # ContextLogic
+      - WKHS    # Workhorse
+      - BLNK    # Blink Charging
+      - NKLA    # Nikola
+      - LAZR    # Luminar
+
+  ai_speculation:
+    description: "2024-26 AI hype, IV expansion, option flow heavy"
+    tickers:
+      - NVDA    # the king
+      - AMD     # alt AI play
+      - PLTR    # mentioned above, also AI
+      - SMCI
+      - ARM
+      - AI      # C3.ai literally
+      - SOUN    # SoundHound AI
+      - BBAI    # BigBear.ai
+      - PATH    # UiPath
+      - MDB     # MongoDB
+
+# ============================================================
+# Filter parameters used by the scanner
+# ============================================================
+filters:
+  # Tickers below this minimum daily $ volume are dropped (illiquid options)
+  min_dollar_volume: 5_000_000
+
+  # Drop names whose option chains have fewer than this many strikes
+  min_option_strikes: 20
+
+  # Only consider option expirations < this many days out (gamma squeezes
+  # are driven by near-dated calls)
+  max_dte: 60
+
+# ============================================================
+# Scoring weights (composite gamma squeeze setup score)
+# ============================================================
+scoring:
+  weights:
+    gex_proxy:               0.25  # estimated dealer gamma exposure
+    cp_oi_ratio:             0.15  # call/put OI imbalance
+    otm_call_concentration:  0.15  # % OI in 5-15% OTM calls
+    volume_surge:            0.15  # vol today vs 30d avg
+    short_interest:          0.10  # SI% of float (yfinance)
+    iv_rank:                 0.10  # IV rank low (room to expand)
+    spot_near_max_oi:        0.10  # spot distance to max-OI strike

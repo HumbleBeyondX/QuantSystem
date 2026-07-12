@@ -1,0 +1,73 @@
+{
+ "id": "combo_wheel_sniper",
+ "name": "BTC Wheel (real-chain calibrated) + ETH Sniper combo",
+ "created": "2026-07-02",
+ "status": "validated",
+ "gate": {
+  "rule": "OOS Sharpe >= 1.5",
+  "passed": true
+ },
+ "data": "REAL Deribit DVOL x live-chain calibration (wheel leg) + OKX ETH_USDT 4h (sniper leg)",
+ "script": "scripts/backtest_combo_wheel_sniper.py",
+ "curves_csv": "results/combo_wheel_sniper_curves.csv",
+ "period": {
+  "start": "2021-03-24",
+  "end": "2026-03-28",
+  "oos_start": "2024-09-01"
+ },
+ "correlation": {
+  "full": -0.262,
+  "oos": -0.22
+ },
+ "legs": {
+  "wheel": {
+   "sharpe": 1.35,
+   "max_dd": -0.1241,
+   "cagr": 0.1701
+  },
+  "sniper": {
+   "sharpe": 2.03,
+   "max_dd": -0.1209,
+   "cagr": 0.8266
+  }
+ },
+ "combos": {
+  "30/70": {
+   "full": {
+    "sharpe": 2.32,
+    "max_dd": -0.0823,
+    "cagr": 0.6214
+   },
+   "oos": {
+    "sharpe": 2.13,
+    "max_dd": -0.0782,
+    "cagr": 0.5701
+   }
+  },
+  "50/50": {
+   "full": {
+    "sharpe": 2.62,
+    "max_dd": -0.0609,
+    "cagr": 0.4874
+   },
+   "oos": {
+    "sharpe": 2.35,
+    "max_dd": -0.0539,
+    "cagr": 0.4337
+   }
+  },
+  "70/30": {
+   "full": {
+    "sharpe": 2.81,
+    "max_dd": -0.0614,
+    "cagr": 0.3569
+   },
+   "oos": {
+    "sharpe": 2.66,
+    "max_dd": -0.0586,
+    "cagr": 0.3027
+   }
+  }
+ },
+ "recommended": "70/30"
+}

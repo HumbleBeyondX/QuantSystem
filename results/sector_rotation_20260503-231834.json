@@ -1,0 +1,5913 @@
+{
+  "config": {
+    "strategy_id": "sector_rotation_v1",
+    "name": "Sector Rotation v1 (GMM + Factor Tilt + MV)",
+    "asset_class": "equity",
+    "enabled": true,
+    "mode": "backtest",
+    "universe": [
+      "XLK",
+      "XLF",
+      "XLV",
+      "XLY",
+      "XLP",
+      "XLE",
+      "XLI",
+      "XLU",
+      "XLB",
+      "XLRE",
+      "XLC",
+      "MTUM",
+      "QUAL",
+      "USMV",
+      "VLUE"
+    ],
+    "hedge_ticker": "SPY",
+    "backtest": {
+      "start_date": "2010-01-01",
+      "end_date": "2026-05-03",
+      "warmup_end": "2014-12-31",
+      "oos_start": "2015-01-01",
+      "initial_capital": 10000,
+      "fee_bps": 5,
+      "slippage_bps": 5,
+      "data_file": "data/sample/sector_rotation_2010-01-01_2026-05-03.parquet"
+    },
+    "rebalance": {
+      "frequency": "biweekly",
+      "cadence_bars": 10
+    },
+    "regime": {
+      "n_components": 4,
+      "train_window_days": 756,
+      "refit_every_days": 21,
+      "random_state": 42
+    },
+    "regime_factor_weights": {
+      "bull": {
+        "mom_12_1": 0.3,
+        "mom_6_1": 0.2,
+        "trend_sma200": 0.2,
+        "st_reversal": -0.1,
+        "vol_60d": -0.1,
+        "beta_spy": -0.1,
+        "div_yield": 0.0
+      },
+      "bear": {
+        "mom_12_1": -0.2,
+        "mom_6_1": -0.15,
+        "trend_sma200": -0.15,
+        "st_reversal": 0.2,
+        "vol_60d": 0.3,
+        "beta_spy": 0.2,
+        "div_yield": 0.1
+      },
+      "crisis": {
+        "mom_12_1": -0.1,
+        "mom_6_1": -0.05,
+        "trend_sma200": -0.1,
+        "st_reversal": 0.1,
+        "vol_60d": 0.4,
+        "beta_spy": 0.3,
+        "div_yield": 0.2
+      },
+      "neutral": {
+        "mom_12_1": 0.15,
+        "mom_6_1": 0.1,
+        "trend_sma200": 0.1,
+        "st_reversal": 0.05,
+        "vol_60d": 0.05,
+        "beta_spy": 0.0,
+        "div_yield": 0.0
+      }
+    },
+    "mv": {
+      "cov_lookback_days": 252,
+      "cov_method": "ledoit_wolf",
+      "weight_min": 0.0,
+      "weight_max": 0.3,
+      "target_volatility": 0.08,
+      "tilt_strength": 0.1,
+      "base_return_lookback_days": 60
+    },
+    "hedge": {
+      "enabled": true,
+      "method": "spy_beta",
+      "max_short_pct": 1.5
+    },
+    "acceptance": {
+      "min_sharpe": 2.0,
+      "max_drawdown_pct": 0.15,
+      "min_info_ratio_vs_spy": 0.5,
+      "max_annual_turnover": 3.0
+    }
+  },
+  "passed": false,
+  "rejection_reasons": [
+    "Sharpe 0.14 < 2.0",
+    "MaxDD 30.97% > 15%"
+  ],
+  "metrics": {
+    "total_return": 1.4407936161684383,
+    "total_return_pct": 144.0793616168438,
+    "annual_return": 0.056292451013533196,
+    "annual_return_pct": 5.62924510135332,
+    "annual_volatility": 0.5191931698380501,
+    "sharpe_ratio": 0.1383129287458444,
+    "sortino_ratio": 0.05297544241792314,
+    "calmar_ratio": 0.1817728517456213,
+    "max_drawdown": 0.30968568998582163,
+    "max_drawdown_pct": 30.968568998582164,
+    "win_rate": 0.5231288981288982,
+    "profit_factor": 1.175765673201575,
+    "avg_win": 0.006595508869542898,
+    "avg_loss": -0.006153684672219498,
+    "win_loss_ratio": 1.0717983161077447,
+    "n_periods": 4106,
+    "start_value": 10000.0,
+    "end_value": 24407.93616168438
+  },
+  "n_trades": 5491,
+  "final_value": 24407.93616168438,
+  "last_diagnostic": {
+    "rebalance_bar": 4100,
+    "rebalance_ts": "2026-04-22 00:00:00",
+    "regime": "neutral",
+    "n_long_positions": 15,
+    "long_gross": 1.0,
+    "spy_hedge_dollars": -0.7441908595117908,
+    "scores": {
+      "MTUM": -0.105,
+      "QUAL": -0.021,
+      "USMV": -0.168,
+      "VLUE": 0.483,
+      "XLB": 0.052,
+      "XLC": -0.014,
+      "XLE": 0.793,
+      "XLF": -0.337,
+      "XLI": 0.147,
+      "XLK": 0.037,
+      "XLP": -0.201,
+      "XLRE": -0.233,
+      "XLU": -0.044,
+      "XLV": -0.167,
+      "XLY": -0.225
+    }
+  },
+  "equity_curve_sample": [
+    {
+      "timestamp": "2010-01-04 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-01-11 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-01-19 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-01-26 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-02-02 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-02-09 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-02-17 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-02-24 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-03-03 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-03-10 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-03-17 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-03-24 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-03-31 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-04-08 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-04-15 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-04-22 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-04-29 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-05-06 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-05-13 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-05-20 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-05-27 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-06-04 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-06-11 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-06-18 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-06-25 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-07-02 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-07-12 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-07-19 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-07-26 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-08-02 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-08-09 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-08-16 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-08-23 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-08-30 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-09-07 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-09-14 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-09-21 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-09-28 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-10-05 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-10-12 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-10-19 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-10-26 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-11-02 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-11-09 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-11-16 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-11-23 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-12-01 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-12-08 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-12-15 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-12-22 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2010-12-30 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2011-01-06 00:00:00",
+      "total_value": 10000.0,
+      "cash": 10000.0,
+      "unrealized_pnl": 0.0,
+      "n_positions": 0
+    },
+    {
+      "timestamp": "2011-01-13 00:00:00",
+      "total_value": 29964.38739886935,
+      "cash": 9999.398770901467,
+      "unrealized_pnl": -15.855119005519645,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-01-21 00:00:00",
+      "total_value": 29938.83961555465,
+      "cash": 9999.398770901467,
+      "unrealized_pnl": -28.62901066286466,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-01-28 00:00:00",
+      "total_value": 29618.88736801613,
+      "cash": 9975.281765416752,
+      "unrealized_pnl": -36.13236102310437,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-02-04 00:00:00",
+      "total_value": 30142.399561729148,
+      "cash": 9975.281765416752,
+      "unrealized_pnl": -38.91340394565532,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-02-11 00:00:00",
+      "total_value": 30011.085928634977,
+      "cash": 9947.61442422203,
+      "unrealized_pnl": -50.64780989787454,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-02-18 00:00:00",
+      "total_value": 30217.835690154538,
+      "cash": 9947.61442422203,
+      "unrealized_pnl": -54.60202707645186,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-02-28 00:00:00",
+      "total_value": 30013.865797732677,
+      "cash": 9929.27395910408,
+      "unrealized_pnl": -43.46421144227941,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-03-07 00:00:00",
+      "total_value": 29767.375251555462,
+      "cash": 9929.27395910408,
+      "unrealized_pnl": -36.85778760219833,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-03-14 00:00:00",
+      "total_value": 29810.97146814831,
+      "cash": 9967.953942276734,
+      "unrealized_pnl": -25.49340021508401,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-03-21 00:00:00",
+      "total_value": 29879.62127670492,
+      "cash": 9967.953942276734,
+      "unrealized_pnl": -10.539132853959373,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-03-28 00:00:00",
+      "total_value": 29863.668735674295,
+      "cash": 9963.060792035736,
+      "unrealized_pnl": -18.519115637422402,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-04-04 00:00:00",
+      "total_value": 30284.37359092685,
+      "cash": 9963.060792035736,
+      "unrealized_pnl": 18.633852659042248,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-04-11 00:00:00",
+      "total_value": 29872.811783713158,
+      "cash": 9976.288800438608,
+      "unrealized_pnl": -7.8393300699616475,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-04-18 00:00:00",
+      "total_value": 29639.145916562196,
+      "cash": 9976.288800438608,
+      "unrealized_pnl": 17.958190417116214,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-04-26 00:00:00",
+      "total_value": 30173.965185970155,
+      "cash": 9997.014548398776,
+      "unrealized_pnl": 10.934324182583737,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-05-03 00:00:00",
+      "total_value": 30329.185376140107,
+      "cash": 9997.014548398776,
+      "unrealized_pnl": 18.292429804803874,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-05-10 00:00:00",
+      "total_value": 30320.625725631293,
+      "cash": 10078.467621040974,
+      "unrealized_pnl": 28.286682929792846,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-05-17 00:00:00",
+      "total_value": 29927.682670571266,
+      "cash": 10078.467621040974,
+      "unrealized_pnl": 33.01559412585516,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-05-24 00:00:00",
+      "total_value": 30180.509225916892,
+      "cash": 10098.821739874604,
+      "unrealized_pnl": 45.111650328571045,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-06-01 00:00:00",
+      "total_value": 30167.586792667444,
+      "cash": 10098.821739874604,
+      "unrealized_pnl": 44.73518161728475,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-06-08 00:00:00",
+      "total_value": 30092.583389264943,
+      "cash": 10094.360965254073,
+      "unrealized_pnl": 58.186118717883375,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-06-15 00:00:00",
+      "total_value": 29895.371060449295,
+      "cash": 10094.360965254073,
+      "unrealized_pnl": 68.37455650554423,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-06-22 00:00:00",
+      "total_value": 30028.108301934823,
+      "cash": 10081.275699687068,
+      "unrealized_pnl": 73.09351982036003,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-06-29 00:00:00",
+      "total_value": 30359.582636692114,
+      "cash": 10081.275699687068,
+      "unrealized_pnl": 80.59418772798924,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-07-07 00:00:00",
+      "total_value": 30306.859806538745,
+      "cash": 10058.287458837505,
+      "unrealized_pnl": 64.026612790184,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-07-14 00:00:00",
+      "total_value": 29669.306269828758,
+      "cash": 10058.287458837505,
+      "unrealized_pnl": 75.16550397588469,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-07-21 00:00:00",
+      "total_value": 30307.19948460851,
+      "cash": 10024.19554852049,
+      "unrealized_pnl": 59.516317392879046,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-07-28 00:00:00",
+      "total_value": 29657.405969693984,
+      "cash": 10024.19554852049,
+      "unrealized_pnl": 54.79451353784384,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-08-04 00:00:00",
+      "total_value": 28987.096197403167,
+      "cash": 9984.52860886915,
+      "unrealized_pnl": 20.916274131514456,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-08-11 00:00:00",
+      "total_value": 28608.622095926305,
+      "cash": 9984.52860886915,
+      "unrealized_pnl": 62.24246324693104,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-08-18 00:00:00",
+      "total_value": 29225.661838452896,
+      "cash": 10045.191338021023,
+      "unrealized_pnl": 86.32161171608107,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-08-25 00:00:00",
+      "total_value": 29548.297666605653,
+      "cash": 10045.191338021023,
+      "unrealized_pnl": 100.53552523810242,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-09-01 00:00:00",
+      "total_value": 29838.396156340972,
+      "cash": 10041.046646292285,
+      "unrealized_pnl": 101.71068037971378,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-09-09 00:00:00",
+      "total_value": 29015.01316471942,
+      "cash": 10041.046646292285,
+      "unrealized_pnl": 97.07568941319448,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-09-16 00:00:00",
+      "total_value": 30147.00225741039,
+      "cash": 10022.918506434653,
+      "unrealized_pnl": 82.75011297872368,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-09-23 00:00:00",
+      "total_value": 28746.421208548483,
+      "cash": 10022.918506434653,
+      "unrealized_pnl": 37.83721204880294,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-09-30 00:00:00",
+      "total_value": 29516.478791917965,
+      "cash": 10016.81931420187,
+      "unrealized_pnl": 19.169226124374973,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-10-07 00:00:00",
+      "total_value": 30003.151280943668,
+      "cash": 10016.81931420187,
+      "unrealized_pnl": 42.41018753912647,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-10-14 00:00:00",
+      "total_value": 30355.731930831542,
+      "cash": 10010.750939237263,
+      "unrealized_pnl": 18.223025058150768,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-10-21 00:00:00",
+      "total_value": 30659.96558383725,
+      "cash": 10010.750939237263,
+      "unrealized_pnl": 54.38076298659222,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-10-28 00:00:00",
+      "total_value": 30135.86729769897,
+      "cash": 10069.707209054783,
+      "unrealized_pnl": 78.03350649945119,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-11-04 00:00:00",
+      "total_value": 29674.94984706455,
+      "cash": 10069.707209054783,
+      "unrealized_pnl": 89.89115185528345,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-11-11 00:00:00",
+      "total_value": 30571.54226427841,
+      "cash": 10088.332545042034,
+      "unrealized_pnl": 104.18372518074113,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-11-18 00:00:00",
+      "total_value": 29793.27957950568,
+      "cash": 10088.332545042034,
+      "unrealized_pnl": 91.18567991543625,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-11-28 00:00:00",
+      "total_value": 30755.016660869765,
+      "cash": 10093.455975461136,
+      "unrealized_pnl": 93.80220990195448,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-12-05 00:00:00",
+      "total_value": 31851.56800751359,
+      "cash": 10093.455975461136,
+      "unrealized_pnl": 82.92304784848756,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-12-12 00:00:00",
+      "total_value": 29858.793464740957,
+      "cash": 10075.744439990951,
+      "unrealized_pnl": 70.63997487261707,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-12-19 00:00:00",
+      "total_value": 29396.477312309853,
+      "cash": 10075.744439990951,
+      "unrealized_pnl": 90.13673235667835,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2011-12-27 00:00:00",
+      "total_value": 30218.885875772587,
+      "cash": 10096.131567054177,
+      "unrealized_pnl": 92.81252212998373,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-01-04 00:00:00",
+      "total_value": 30367.45938595307,
+      "cash": 10096.131567054177,
+      "unrealized_pnl": 71.29734394092787,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-01-11 00:00:00",
+      "total_value": 30187.092110160786,
+      "cash": 10083.478861296691,
+      "unrealized_pnl": 88.36957292991809,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-01-19 00:00:00",
+      "total_value": 30493.70194736376,
+      "cash": 10083.478861296691,
+      "unrealized_pnl": 66.63117609294613,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-01-26 00:00:00",
+      "total_value": 30048.528166168166,
+      "cash": 10061.690798055693,
+      "unrealized_pnl": 85.00463966696077,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-02-02 00:00:00",
+      "total_value": 30127.05125018078,
+      "cash": 10061.690798055693,
+      "unrealized_pnl": 63.94796994306432,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-02-09 00:00:00",
+      "total_value": 30074.580254667162,
+      "cash": 10020.647169787951,
+      "unrealized_pnl": 40.22690798943836,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-02-16 00:00:00",
+      "total_value": 30152.179985222727,
+      "cash": 10020.647169787951,
+      "unrealized_pnl": 28.028110326514934,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-02-24 00:00:00",
+      "total_value": 30041.82407812834,
+      "cash": 9995.11289200666,
+      "unrealized_pnl": 15.476976097655324,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-03-02 00:00:00",
+      "total_value": 30057.108255292038,
+      "cash": 9995.11289200666,
+      "unrealized_pnl": -4.661167807829997,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-03-09 00:00:00",
+      "total_value": 30003.948182656524,
+      "cash": 9963.37517075531,
+      "unrealized_pnl": -22.862771825161303,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-03-16 00:00:00",
+      "total_value": 30405.597696723493,
+      "cash": 9963.37517075531,
+      "unrealized_pnl": -65.87033754667323,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-03-23 00:00:00",
+      "total_value": 29881.699270940746,
+      "cash": 9892.36764755552,
+      "unrealized_pnl": -77.90972139252494,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-03-30 00:00:00",
+      "total_value": 30039.201078955808,
+      "cash": 9892.36764755552,
+      "unrealized_pnl": -82.4264467231526,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-04-09 00:00:00",
+      "total_value": 29560.591935421515,
+      "cash": 9890.060406539775,
+      "unrealized_pnl": -92.28438029609322,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-04-16 00:00:00",
+      "total_value": 29442.594434959858,
+      "cash": 9890.060406539775,
+      "unrealized_pnl": -67.69027795882562,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-04-23 00:00:00",
+      "total_value": 29674.00899520774,
+      "cash": 9921.206190442446,
+      "unrealized_pnl": -55.784908965491354,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-04-30 00:00:00",
+      "total_value": 30116.262385178477,
+      "cash": 9921.206190442446,
+      "unrealized_pnl": -57.456627258102344,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-05-07 00:00:00",
+      "total_value": 29841.828623273323,
+      "cash": 9920.855041378087,
+      "unrealized_pnl": -53.1034752945385,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-05-14 00:00:00",
+      "total_value": 29444.956550236773,
+      "cash": 9920.855041378087,
+      "unrealized_pnl": -34.00679111259433,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-05-21 00:00:00",
+      "total_value": 30175.681751245633,
+      "cash": 9930.30761177027,
+      "unrealized_pnl": -40.54763003913547,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-05-29 00:00:00",
+      "total_value": 30479.576742064706,
+      "cash": 9930.30761177027,
+      "unrealized_pnl": -21.381095146107214,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-06-05 00:00:00",
+      "total_value": 30022.166286783206,
+      "cash": 9946.882257344385,
+      "unrealized_pnl": -10.142601846086052,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-06-12 00:00:00",
+      "total_value": 30625.3967098914,
+      "cash": 9946.882257344385,
+      "unrealized_pnl": -7.458321408617508,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-06-19 00:00:00",
+      "total_value": 30043.395423965892,
+      "cash": 9920.431863970809,
+      "unrealized_pnl": -9.761204152498749,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-06-26 00:00:00",
+      "total_value": 29461.060783528166,
+      "cash": 9920.431863970809,
+      "unrealized_pnl": -25.798867002977545,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-07-03 00:00:00",
+      "total_value": 29963.901376011305,
+      "cash": 9904.337179946906,
+      "unrealized_pnl": -10.26213570152413,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-07-11 00:00:00",
+      "total_value": 29500.28249450934,
+      "cash": 9904.337179946906,
+      "unrealized_pnl": -5.560044016715324,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-07-18 00:00:00",
+      "total_value": 29987.988414796062,
+      "cash": 9926.953983925207,
+      "unrealized_pnl": -7.180407566633448,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-07-25 00:00:00",
+      "total_value": 29514.266180230996,
+      "cash": 9926.953983925207,
+      "unrealized_pnl": 4.340268235641361,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-08-01 00:00:00",
+      "total_value": 29804.16371520057,
+      "cash": 9927.78212080496,
+      "unrealized_pnl": -22.035258280360722,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-08-08 00:00:00",
+      "total_value": 30182.407474514483,
+      "cash": 9927.78212080496,
+      "unrealized_pnl": -42.15295928938235,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-08-15 00:00:00",
+      "total_value": 29762.671009484886,
+      "cash": 9862.533211639415,
+      "unrealized_pnl": -41.96322323660297,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-08-22 00:00:00",
+      "total_value": 29864.468500603034,
+      "cash": 9862.533211639415,
+      "unrealized_pnl": -52.372184069442255,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-08-29 00:00:00",
+      "total_value": 29721.29320537357,
+      "cash": 9848.764380618639,
+      "unrealized_pnl": -80.15446703086559,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-09-06 00:00:00",
+      "total_value": 30014.789894123445,
+      "cash": 9848.764380618639,
+      "unrealized_pnl": -92.29584105610684,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-09-13 00:00:00",
+      "total_value": 30013.27889964606,
+      "cash": 9832.152022109378,
+      "unrealized_pnl": -64.42343379242129,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-09-20 00:00:00",
+      "total_value": 29990.570481141796,
+      "cash": 9832.152022109378,
+      "unrealized_pnl": -84.03491436365516,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-09-27 00:00:00",
+      "total_value": 29783.659091782574,
+      "cash": 9804.192734707754,
+      "unrealized_pnl": -83.53678237197346,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-10-04 00:00:00",
+      "total_value": 29998.027753681843,
+      "cash": 9804.192734707754,
+      "unrealized_pnl": -79.18433965182771,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-10-11 00:00:00",
+      "total_value": 29556.100766349737,
+      "cash": 9756.94247480863,
+      "unrealized_pnl": -44.80165178787706,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-10-18 00:00:00",
+      "total_value": 29978.953280792473,
+      "cash": 9756.94247480863,
+      "unrealized_pnl": -2.076191687777282,
+      "n_positions": 10
+    },
+    {
+      "timestamp": "2012-10-25 00:00:00",
+      "total_value": 28589.778932850106,
+      "cash": 9282.589525673075,
+      "unrealized_pnl": -79.31070672280028,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2012-11-05 00:00:00",
+      "total_value": 28613.830285798536,
+      "cash": 9282.589525673075,
+      "unrealized_pnl": -95.05943045535444,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2012-11-12 00:00:00",
+      "total_value": 28492.108173877154,
+      "cash": 9265.660344118856,
+      "unrealized_pnl": -101.26620400417883,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2012-11-19 00:00:00",
+      "total_value": 28603.352380164568,
+      "cash": 9265.660344118856,
+      "unrealized_pnl": -103.64199526125917,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2012-11-27 00:00:00",
+      "total_value": 28261.84578446577,
+      "cash": 9187.202461631825,
+      "unrealized_pnl": -85.47248954843492,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2012-12-04 00:00:00",
+      "total_value": 28377.710369125754,
+      "cash": 9187.202461631825,
+      "unrealized_pnl": -87.85827732720253,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2012-12-11 00:00:00",
+      "total_value": 28371.642401158515,
+      "cash": 9145.75439313214,
+      "unrealized_pnl": -72.05596394875818,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2012-12-18 00:00:00",
+      "total_value": 28645.909945282277,
+      "cash": 9145.75439313214,
+      "unrealized_pnl": -59.29400173869928,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2012-12-26 00:00:00",
+      "total_value": 28201.40579465864,
+      "cash": 9160.478247136505,
+      "unrealized_pnl": -62.28872892268684,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-01-03 00:00:00",
+      "total_value": 28730.705688151465,
+      "cash": 9160.478247136505,
+      "unrealized_pnl": -54.48111716623575,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-01-10 00:00:00",
+      "total_value": 28558.48480271335,
+      "cash": 9233.854267705425,
+      "unrealized_pnl": -53.7443082898198,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-01-17 00:00:00",
+      "total_value": 28696.95513919715,
+      "cash": 9233.854267705425,
+      "unrealized_pnl": -42.76898744222581,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-01-25 00:00:00",
+      "total_value": 28632.465483232412,
+      "cash": 9288.149798984323,
+      "unrealized_pnl": -19.353181620667662,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-02-01 00:00:00",
+      "total_value": 28760.684520768376,
+      "cash": 9288.149798984323,
+      "unrealized_pnl": -16.60284197565109,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-02-08 00:00:00",
+      "total_value": 28614.45473193068,
+      "cash": 9280.848644088353,
+      "unrealized_pnl": -14.09324754275255,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-02-15 00:00:00",
+      "total_value": 28655.579910339227,
+      "cash": 9280.848644088353,
+      "unrealized_pnl": -12.517833371041768,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-02-25 00:00:00",
+      "total_value": 28165.427536131956,
+      "cash": 9279.01736540779,
+      "unrealized_pnl": -19.5977930153218,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-03-04 00:00:00",
+      "total_value": 28687.61047967993,
+      "cash": 9279.01736540779,
+      "unrealized_pnl": 2.6913814575713815,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-03-11 00:00:00",
+      "total_value": 28610.073161807883,
+      "cash": 9299.399143909704,
+      "unrealized_pnl": 2.4664418674150994,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-03-18 00:00:00",
+      "total_value": 28585.00267648663,
+      "cash": 9299.399143909704,
+      "unrealized_pnl": 11.967352795027793,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-03-25 00:00:00",
+      "total_value": 28526.504237545127,
+      "cash": 9330.324315641512,
+      "unrealized_pnl": 9.467744271703424,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-04-02 00:00:00",
+      "total_value": 28780.670067394687,
+      "cash": 9330.324315641512,
+      "unrealized_pnl": 25.247584010105825,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-04-09 00:00:00",
+      "total_value": 28725.406421158248,
+      "cash": 9373.82733381566,
+      "unrealized_pnl": 26.306732472728214,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-04-16 00:00:00",
+      "total_value": 28770.768366615255,
+      "cash": 9373.82733381566,
+      "unrealized_pnl": 9.863388394713354,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-04-23 00:00:00",
+      "total_value": 28936.563164222087,
+      "cash": 9434.950097780938,
+      "unrealized_pnl": 18.193589201322567,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-04-30 00:00:00",
+      "total_value": 29175.85959491009,
+      "cash": 9434.950097780938,
+      "unrealized_pnl": 24.73349903525832,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-05-07 00:00:00",
+      "total_value": 28851.913252138755,
+      "cash": 9410.297603508216,
+      "unrealized_pnl": 18.282091366835118,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-05-14 00:00:00",
+      "total_value": 29107.733257525182,
+      "cash": 9410.297603508216,
+      "unrealized_pnl": -5.166811966189357,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-05-21 00:00:00",
+      "total_value": 28779.84367771965,
+      "cash": 9421.199583813945,
+      "unrealized_pnl": -10.940287814281703,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-05-29 00:00:00",
+      "total_value": 28435.733614249155,
+      "cash": 9421.199583813945,
+      "unrealized_pnl": -73.91311623312762,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-06-05 00:00:00",
+      "total_value": 28415.47852734771,
+      "cash": 9398.46892824836,
+      "unrealized_pnl": -96.50186020677882,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-06-12 00:00:00",
+      "total_value": 28486.590402124242,
+      "cash": 9398.46892824836,
+      "unrealized_pnl": -88.4954101276965,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-06-19 00:00:00",
+      "total_value": 28505.912367908204,
+      "cash": 9452.454423414798,
+      "unrealized_pnl": -96.84569143629211,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-06-26 00:00:00",
+      "total_value": 28231.114644975827,
+      "cash": 9452.454423414798,
+      "unrealized_pnl": -94.2053219021683,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-07-03 00:00:00",
+      "total_value": 28863.067454873235,
+      "cash": 9487.325709030993,
+      "unrealized_pnl": -116.12341645991069,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-07-11 00:00:00",
+      "total_value": 29641.191518503023,
+      "cash": 9487.325709030993,
+      "unrealized_pnl": -89.62672971043185,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-07-18 00:00:00",
+      "total_value": 29099.797404257297,
+      "cash": 9553.96222135279,
+      "unrealized_pnl": -94.44833650258687,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-07-25 00:00:00",
+      "total_value": 29130.77501768223,
+      "cash": 9553.96222135279,
+      "unrealized_pnl": -82.36692730341787,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-08-01 00:00:00",
+      "total_value": 29242.739613052167,
+      "cash": 9571.76454751972,
+      "unrealized_pnl": -92.37054215458099,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-08-08 00:00:00",
+      "total_value": 29169.718274496732,
+      "cash": 9571.76454751972,
+      "unrealized_pnl": -80.24672383425917,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-08-15 00:00:00",
+      "total_value": 28778.927201806735,
+      "cash": 9588.630428841529,
+      "unrealized_pnl": -108.09978045536842,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-08-22 00:00:00",
+      "total_value": 28702.56552637153,
+      "cash": 9588.630428841529,
+      "unrealized_pnl": -128.13728673954847,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-08-29 00:00:00",
+      "total_value": 29044.459111999702,
+      "cash": 9578.805116163758,
+      "unrealized_pnl": -113.10823724631733,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-09-06 00:00:00",
+      "total_value": 29231.459404603553,
+      "cash": 9578.805116163758,
+      "unrealized_pnl": -128.57824582967783,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-09-13 00:00:00",
+      "total_value": 29060.822251518402,
+      "cash": 9559.2593511297,
+      "unrealized_pnl": -113.39591463399717,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-09-20 00:00:00",
+      "total_value": 29342.749791355276,
+      "cash": 9559.2593511297,
+      "unrealized_pnl": -98.11814943191936,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-09-27 00:00:00",
+      "total_value": 29023.570819749762,
+      "cash": 9634.45937539611,
+      "unrealized_pnl": -107.71708232316985,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-10-04 00:00:00",
+      "total_value": 29005.576480097254,
+      "cash": 9634.45937539611,
+      "unrealized_pnl": -115.58398674008492,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-10-11 00:00:00",
+      "total_value": 29267.704418570498,
+      "cash": 9648.504581246378,
+      "unrealized_pnl": -106.55377175955499,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-10-18 00:00:00",
+      "total_value": 29729.963689393117,
+      "cash": 9648.504581246378,
+      "unrealized_pnl": -109.83437697618388,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-10-25 00:00:00",
+      "total_value": 29299.357068504167,
+      "cash": 9678.325239701811,
+      "unrealized_pnl": -89.75104085772108,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-11-01 00:00:00",
+      "total_value": 29300.89504492764,
+      "cash": 9678.325239701811,
+      "unrealized_pnl": -103.26133982014181,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-11-08 00:00:00",
+      "total_value": 29494.394962243663,
+      "cash": 9710.180086441585,
+      "unrealized_pnl": -127.78495104620205,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-11-15 00:00:00",
+      "total_value": 29811.97832166883,
+      "cash": 9710.180086441585,
+      "unrealized_pnl": -121.44286590948937,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-11-22 00:00:00",
+      "total_value": 29340.1567860116,
+      "cash": 9702.987009863016,
+      "unrealized_pnl": -149.3058080840732,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-12-02 00:00:00",
+      "total_value": 29233.846597360578,
+      "cash": 9702.987009863016,
+      "unrealized_pnl": -187.38023223948335,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-12-09 00:00:00",
+      "total_value": 29245.1293542713,
+      "cash": 9694.168225500383,
+      "unrealized_pnl": -200.7088424068755,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-12-16 00:00:00",
+      "total_value": 29004.174719533203,
+      "cash": 9694.168225500383,
+      "unrealized_pnl": -204.1638147796001,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-12-23 00:00:00",
+      "total_value": 29276.419004570773,
+      "cash": 9691.039963223957,
+      "unrealized_pnl": -219.36911250179193,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2013-12-31 00:00:00",
+      "total_value": 29526.567252279747,
+      "cash": 9691.039963223957,
+      "unrealized_pnl": -209.92475688322025,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2014-01-08 00:00:00",
+      "total_value": 29189.79312954804,
+      "cash": 9687.453887980615,
+      "unrealized_pnl": -228.7878533535505,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2014-01-15 00:00:00",
+      "total_value": 29297.548485590454,
+      "cash": 9687.453887980615,
+      "unrealized_pnl": -235.40003829827435,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2014-01-23 00:00:00",
+      "total_value": 29009.698479245963,
+      "cash": 9683.593065416031,
+      "unrealized_pnl": -223.4031067201224,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2014-01-30 00:00:00",
+      "total_value": 28705.51259390566,
+      "cash": 9683.593065416031,
+      "unrealized_pnl": -187.77465732639575,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2014-02-06 00:00:00",
+      "total_value": 29473.030021993043,
+      "cash": 9702.495064907034,
+      "unrealized_pnl": -195.57600269408033,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2014-02-13 00:00:00",
+      "total_value": 30118.017192464784,
+      "cash": 9702.495064907034,
+      "unrealized_pnl": -179.770341471041,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2014-02-21 00:00:00",
+      "total_value": 29300.230677100997,
+      "cash": 9754.034530898187,
+      "unrealized_pnl": -158.58201489583595,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2014-02-28 00:00:00",
+      "total_value": 29556.723191536523,
+      "cash": 9754.034530898187,
+      "unrealized_pnl": -157.16687207336042,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2014-03-07 00:00:00",
+      "total_value": 29350.651238157145,
+      "cash": 9762.400669715717,
+      "unrealized_pnl": -185.43899081462624,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2014-03-14 00:00:00",
+      "total_value": 29063.43516556226,
+      "cash": 9762.400669715717,
+      "unrealized_pnl": -142.27693340615085,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2014-03-21 00:00:00",
+      "total_value": 29238.339481037503,
+      "cash": 9743.879195285186,
+      "unrealized_pnl": -180.16245025321075,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2014-03-28 00:00:00",
+      "total_value": 29199.5641731378,
+      "cash": 9743.879195285186,
+      "unrealized_pnl": -162.55773548401237,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2014-04-04 00:00:00",
+      "total_value": 29143.741141639217,
+      "cash": 9768.346498199116,
+      "unrealized_pnl": -144.9050276574995,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2014-04-11 00:00:00",
+      "total_value": 28687.074101485538,
+      "cash": 9768.346498199116,
+      "unrealized_pnl": -120.9601032819902,
+      "n_positions": 11
+    },
+    {
+      "timestamp": "2014-04-21 00:00:00",
+      "total_value": 28575.54284998918,
+      "cash": 9574.135554524948,
+      "unrealized_pnl": -549.0142687880294,
+      "n_positions": 13
+    },
+    {
+      "timestamp": "2014-04-28 00:00:00",
+      "total_value": 28554.94875508336,
+      "cash": 9574.135554524948,
+      "unrealized_pnl": -551.1705229387235,
+      "n_positions": 13
+    },
+    {
+      "timestamp": "2014-05-05 00:00:00",
+      "total_value": 28526.374573469002,
+      "cash": 9548.50046426846,
+      "unrealized_pnl": -536.5195453346381,
+      "n_positions": 13
+    },
+    {
+      "timestamp": "2014-05-12 00:00:00",
+      "total_value": 28639.80069820475,
+      "cash": 9548.50046426846,
+      "unrealized_pnl": -548.7960379299235,
+      "n_positions": 13
+    },
+    {
+      "timestamp": "2014-05-19 00:00:00",
+      "total_value": 28506.26121820979,
+      "cash": 9540.544713761255,
+      "unrealized_pnl": -563.928596960914,
+      "n_positions": 13
+    },
+    {
+      "timestamp": "2014-05-27 00:00:00",
+      "total_value": 28776.27789613639,
+      "cash": 9540.544713761255,
+      "unrealized_pnl": -568.8675909681168,
+      "n_positions": 13
+    },
+    {
+      "timestamp": "2014-06-03 00:00:00",
+      "total_value": 28439.84599023344,
+      "cash": 9524.652827017733,
+      "unrealized_pnl": -522.0344910807216,
+      "n_positions": 13
+    },
+    {
+      "timestamp": "2014-06-10 00:00:00",
+      "total_value": 28669.249997134193,
+      "cash": 9524.652827017733,
+      "unrealized_pnl": -544.4213199977418,
+      "n_positions": 13
+    },
+    {
+      "timestamp": "2014-06-17 00:00:00",
+      "total_value": 28487.07789088804,
+      "cash": 9522.636049091034,
+      "unrealized_pnl": -540.79075401915,
+      "n_positions": 13
+    },
+    {
+      "timestamp": "2014-06-24 00:00:00",
+      "total_value": 28620.55221012984,
+      "cash": 9522.636049091034,
+      "unrealized_pnl": -513.1365544514296,
+      "n_positions": 13
+    },
+    {
+      "timestamp": "2014-07-01 00:00:00",
+      "total_value": 28565.293321411355,
+      "cash": 9529.431006045708,
+      "unrealized_pnl": -509.532492411574,
+      "n_positions": 13
+    },
+    {
+      "timestamp": "2014-07-09 00:00:00",
+      "total_value": 28535.62062215171,
+      "cash": 9529.431006045708,
+      "unrealized_pnl": -528.7048930897321,
+      "n_positions": 13
+    },
+    {
+      "timestamp": "2014-07-16 00:00:00",
+      "total_value": 28418.201787243554,
+      "cash": 9465.415873351192,
+      "unrealized_pnl": -536.2017749467179,
+      "n_positions": 13
+    },
+    {
+      "timestamp": "2014-07-23 00:00:00",
+      "total_value": 28475.512260114385,
+      "cash": 9465.415873351192,
+      "unrealized_pnl": -540.0146105462962,
+      "n_positions": 13
+    },
+    {
+      "timestamp": "2014-07-30 00:00:00",
+      "total_value": 28081.86962651099,
+      "cash": 9461.915353511515,
+      "unrealized_pnl": -773.6979941953498,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-08-06 00:00:00",
+      "total_value": 27597.64548371502,
+      "cash": 9461.915353511515,
+      "unrealized_pnl": -781.1339430392269,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-08-13 00:00:00",
+      "total_value": 28254.637449106445,
+      "cash": 9466.944886221945,
+      "unrealized_pnl": -766.9698916988389,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-08-20 00:00:00",
+      "total_value": 28697.5909414378,
+      "cash": 9466.944886221945,
+      "unrealized_pnl": -744.3102725727099,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-08-27 00:00:00",
+      "total_value": 28175.79251097152,
+      "cash": 9468.885401267024,
+      "unrealized_pnl": -719.3343657597451,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-09-04 00:00:00",
+      "total_value": 28184.492348627347,
+      "cash": 9468.885401267024,
+      "unrealized_pnl": -713.1047549947193,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-09-11 00:00:00",
+      "total_value": 28258.79207206387,
+      "cash": 9512.6350407825,
+      "unrealized_pnl": -738.7272519933515,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-09-18 00:00:00",
+      "total_value": 28374.933375270688,
+      "cash": 9512.6350407825,
+      "unrealized_pnl": -752.5925645282103,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-09-25 00:00:00",
+      "total_value": 27898.249602802327,
+      "cash": 9485.255484539213,
+      "unrealized_pnl": -739.2536439826021,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-10-02 00:00:00",
+      "total_value": 27689.026357572857,
+      "cash": 9485.255484539213,
+      "unrealized_pnl": -751.0409821650564,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-10-09 00:00:00",
+      "total_value": 27840.01083816934,
+      "cash": 9523.533090562656,
+      "unrealized_pnl": -763.1958050221339,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-10-16 00:00:00",
+      "total_value": 27263.911876308266,
+      "cash": 9523.533090562656,
+      "unrealized_pnl": -739.4648389418667,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-10-23 00:00:00",
+      "total_value": 28612.713757390007,
+      "cash": 9596.767120521305,
+      "unrealized_pnl": -721.9179468575323,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-10-30 00:00:00",
+      "total_value": 29036.5530863968,
+      "cash": 9596.767120521305,
+      "unrealized_pnl": -729.8715844447127,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-11-06 00:00:00",
+      "total_value": 28489.68994064607,
+      "cash": 9589.652556224504,
+      "unrealized_pnl": -702.2130448278627,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-11-13 00:00:00",
+      "total_value": 28558.07832961342,
+      "cash": 9589.652556224504,
+      "unrealized_pnl": -717.0013281269406,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-11-20 00:00:00",
+      "total_value": 28497.959896180106,
+      "cash": 9611.851527167719,
+      "unrealized_pnl": -704.5381209006392,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-11-28 00:00:00",
+      "total_value": 28597.455781175697,
+      "cash": 9611.851527167719,
+      "unrealized_pnl": -730.2297065068548,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-12-05 00:00:00",
+      "total_value": 28451.945251138415,
+      "cash": 9601.680450737356,
+      "unrealized_pnl": -732.6222857338959,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-12-12 00:00:00",
+      "total_value": 27808.12840309053,
+      "cash": 9601.680450737356,
+      "unrealized_pnl": -727.1960469173254,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-12-19 00:00:00",
+      "total_value": 28573.50831000103,
+      "cash": 9617.86747305051,
+      "unrealized_pnl": -721.125671464156,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2014-12-29 00:00:00",
+      "total_value": 28807.674486539257,
+      "cash": 9617.86747305051,
+      "unrealized_pnl": -706.5138484118332,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-01-06 00:00:00",
+      "total_value": 28323.922514595946,
+      "cash": 9641.30972224889,
+      "unrealized_pnl": -712.4204202097333,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-01-13 00:00:00",
+      "total_value": 28545.956127589496,
+      "cash": 9641.30972224889,
+      "unrealized_pnl": -708.688244521161,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-01-21 00:00:00",
+      "total_value": 28706.744852628675,
+      "cash": 9700.89854519259,
+      "unrealized_pnl": -695.5135609200883,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-01-28 00:00:00",
+      "total_value": 28428.740709252983,
+      "cash": 9700.89854519259,
+      "unrealized_pnl": -694.9655876631446,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-02-04 00:00:00",
+      "total_value": 28528.87706143039,
+      "cash": 9710.260434942042,
+      "unrealized_pnl": -681.4110316347554,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-02-11 00:00:00",
+      "total_value": 28721.86253847352,
+      "cash": 9710.260434942042,
+      "unrealized_pnl": -719.1486645607589,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-02-19 00:00:00",
+      "total_value": 28540.409751090527,
+      "cash": 9674.285269147013,
+      "unrealized_pnl": -700.2264439312718,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-02-26 00:00:00",
+      "total_value": 28626.95538187474,
+      "cash": 9674.285269147013,
+      "unrealized_pnl": -720.8118953050914,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-03-05 00:00:00",
+      "total_value": 28465.20814977825,
+      "cash": 9611.930768353861,
+      "unrealized_pnl": -727.4201681905563,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-03-12 00:00:00",
+      "total_value": 28121.614371928375,
+      "cash": 9611.930768353861,
+      "unrealized_pnl": -746.4961773898689,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-03-19 00:00:00",
+      "total_value": 28441.500745192337,
+      "cash": 9679.062189930939,
+      "unrealized_pnl": -765.4798767106564,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-03-26 00:00:00",
+      "total_value": 28168.579317384683,
+      "cash": 9679.062189930939,
+      "unrealized_pnl": -750.392482380195,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-04-02 00:00:00",
+      "total_value": 28640.318278646824,
+      "cash": 9698.16685253157,
+      "unrealized_pnl": -743.3948709418925,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-04-10 00:00:00",
+      "total_value": 28955.67706856118,
+      "cash": 9698.16685253157,
+      "unrealized_pnl": -754.1286382364871,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-04-17 00:00:00",
+      "total_value": 28387.00786781421,
+      "cash": 9693.481735890264,
+      "unrealized_pnl": -727.2924054722446,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-04-24 00:00:00",
+      "total_value": 28719.745597517347,
+      "cash": 9693.481735890264,
+      "unrealized_pnl": -730.4255119965696,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-05-01 00:00:00",
+      "total_value": 28795.69286142848,
+      "cash": 9688.243008397325,
+      "unrealized_pnl": -741.2467403532028,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-05-08 00:00:00",
+      "total_value": 28868.31182330263,
+      "cash": 9688.243008397325,
+      "unrealized_pnl": -746.5486561117107,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-05-15 00:00:00",
+      "total_value": 28655.845493187186,
+      "cash": 9699.631797444992,
+      "unrealized_pnl": -744.9416346509391,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-05-22 00:00:00",
+      "total_value": 28680.06622489449,
+      "cash": 9699.631797444992,
+      "unrealized_pnl": -757.8767782983106,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-06-01 00:00:00",
+      "total_value": 28599.235215660035,
+      "cash": 9687.445431127126,
+      "unrealized_pnl": -781.2427163581076,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-06-08 00:00:00",
+      "total_value": 28257.992144332053,
+      "cash": 9687.445431127126,
+      "unrealized_pnl": -810.5252203966235,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-06-15 00:00:00",
+      "total_value": 28402.27138930475,
+      "cash": 9650.910763244996,
+      "unrealized_pnl": -820.1253552669244,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-06-22 00:00:00",
+      "total_value": 28780.805986515683,
+      "cash": 9650.910763244996,
+      "unrealized_pnl": -806.069449180668,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-06-29 00:00:00",
+      "total_value": 28098.792280449434,
+      "cash": 9652.835169600517,
+      "unrealized_pnl": -822.051939083127,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-07-07 00:00:00",
+      "total_value": 28374.646647492908,
+      "cash": 9652.835169600517,
+      "unrealized_pnl": -803.8341942311129,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-07-14 00:00:00",
+      "total_value": 28555.000130943874,
+      "cash": 9660.015041022127,
+      "unrealized_pnl": -829.6831623952908,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-07-21 00:00:00",
+      "total_value": 28516.828061452477,
+      "cash": 9660.015041022127,
+      "unrealized_pnl": -897.9622281604159,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-07-28 00:00:00",
+      "total_value": 28614.030858769544,
+      "cash": 9595.694885187579,
+      "unrealized_pnl": -882.4457707159091,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-08-04 00:00:00",
+      "total_value": 28641.8286848748,
+      "cash": 9595.694885187579,
+      "unrealized_pnl": -870.8825491730133,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-08-11 00:00:00",
+      "total_value": 28286.970566637716,
+      "cash": 9635.066130511843,
+      "unrealized_pnl": -844.3640019000408,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-08-18 00:00:00",
+      "total_value": 28450.923029418875,
+      "cash": 9635.066130511843,
+      "unrealized_pnl": -822.4639425466665,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-08-25 00:00:00",
+      "total_value": 28254.71739086097,
+      "cash": 9655.350341959882,
+      "unrealized_pnl": -814.8944756143386,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-09-01 00:00:00",
+      "total_value": 28682.807258466848,
+      "cash": 9655.350341959882,
+      "unrealized_pnl": -829.7209876049328,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-09-09 00:00:00",
+      "total_value": 28043.046737034903,
+      "cash": 9531.1502007364,
+      "unrealized_pnl": -769.1837981045844,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-09-16 00:00:00",
+      "total_value": 28559.710679855834,
+      "cash": 9531.1502007364,
+      "unrealized_pnl": -771.2630425086046,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-09-23 00:00:00",
+      "total_value": 28274.871327933302,
+      "cash": 9547.235254295425,
+      "unrealized_pnl": -777.5906660116524,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-09-30 00:00:00",
+      "total_value": 28122.406592421914,
+      "cash": 9547.235254295425,
+      "unrealized_pnl": -756.8022363849856,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-10-07 00:00:00",
+      "total_value": 28661.250044218465,
+      "cash": 9629.570451734333,
+      "unrealized_pnl": -722.1477154448075,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-10-14 00:00:00",
+      "total_value": 28669.604553123543,
+      "cash": 9629.570451734333,
+      "unrealized_pnl": -712.150600422313,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-10-21 00:00:00",
+      "total_value": 28354.007053051584,
+      "cash": 9601.666641987676,
+      "unrealized_pnl": -699.6584504770043,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-10-28 00:00:00",
+      "total_value": 28887.783718540788,
+      "cash": 9601.666641987676,
+      "unrealized_pnl": -767.2532699112811,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-11-04 00:00:00",
+      "total_value": 28286.51287683055,
+      "cash": 9515.684359977362,
+      "unrealized_pnl": -711.7204654848969,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-11-11 00:00:00",
+      "total_value": 28007.08695889505,
+      "cash": 9515.684359977362,
+      "unrealized_pnl": -732.9372522334301,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-11-18 00:00:00",
+      "total_value": 28610.33252771969,
+      "cash": 9492.785084583466,
+      "unrealized_pnl": -726.7676259957738,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-11-25 00:00:00",
+      "total_value": 28675.913361718034,
+      "cash": 9492.785084583466,
+      "unrealized_pnl": -721.3696768504133,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-12-03 00:00:00",
+      "total_value": 28022.9849954616,
+      "cash": 9488.231036594783,
+      "unrealized_pnl": -743.2035837307561,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-12-10 00:00:00",
+      "total_value": 28051.59510188952,
+      "cash": 9488.231036594783,
+      "unrealized_pnl": -740.803647943619,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-12-17 00:00:00",
+      "total_value": 27969.13087404167,
+      "cash": 9473.826054293271,
+      "unrealized_pnl": -769.0740734404185,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2015-12-24 00:00:00",
+      "total_value": 28208.98021759249,
+      "cash": 9473.826054293271,
+      "unrealized_pnl": -742.9818661459117,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-01-04 00:00:00",
+      "total_value": 28011.179503733125,
+      "cash": 9491.243657248579,
+      "unrealized_pnl": -749.3535887708431,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-01-11 00:00:00",
+      "total_value": 27174.34891264759,
+      "cash": 9491.243657248579,
+      "unrealized_pnl": -750.9109811928103,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-01-19 00:00:00",
+      "total_value": 28249.39986547008,
+      "cash": 9472.068176873536,
+      "unrealized_pnl": -759.6697725336448,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-01-26 00:00:00",
+      "total_value": 28468.33230684947,
+      "cash": 9472.068176873536,
+      "unrealized_pnl": -758.6990212935757,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-02-02 00:00:00",
+      "total_value": 28059.02050951893,
+      "cash": 9544.904809708863,
+      "unrealized_pnl": -692.546764142759,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-02-09 00:00:00",
+      "total_value": 27690.191876323974,
+      "cash": 9544.904809708863,
+      "unrealized_pnl": -643.7512769544626,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-02-17 00:00:00",
+      "total_value": 28732.839035994726,
+      "cash": 9558.958158731075,
+      "unrealized_pnl": -658.0194858141454,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-02-24 00:00:00",
+      "total_value": 28813.198992464822,
+      "cash": 9558.958158731075,
+      "unrealized_pnl": -633.8901599822885,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-03-02 00:00:00",
+      "total_value": 28545.17016780019,
+      "cash": 9560.762833777637,
+      "unrealized_pnl": -616.1942308926517,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-03-09 00:00:00",
+      "total_value": 28658.423069506447,
+      "cash": 9560.762833777637,
+      "unrealized_pnl": -577.8221186227032,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-03-16 00:00:00",
+      "total_value": 28679.984431150726,
+      "cash": 9596.73643302225,
+      "unrealized_pnl": -543.6358888187156,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-03-23 00:00:00",
+      "total_value": 28727.1531862306,
+      "cash": 9596.73643302225,
+      "unrealized_pnl": -563.2236300066126,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-03-31 00:00:00",
+      "total_value": 28486.98409401157,
+      "cash": 9579.460916586788,
+      "unrealized_pnl": -545.5318372048982,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-04-07 00:00:00",
+      "total_value": 28316.704151113758,
+      "cash": 9579.460916586788,
+      "unrealized_pnl": -558.2957300888737,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-04-14 00:00:00",
+      "total_value": 28505.964609617626,
+      "cash": 9562.667894720033,
+      "unrealized_pnl": -549.4480228515193,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-04-21 00:00:00",
+      "total_value": 28584.828790746313,
+      "cash": 9562.667894720033,
+      "unrealized_pnl": -553.8368503403204,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-04-28 00:00:00",
+      "total_value": 28473.51106265105,
+      "cash": 9628.06487342188,
+      "unrealized_pnl": -490.84926034658474,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-05-05 00:00:00",
+      "total_value": 28250.858788173213,
+      "cash": 9628.06487342188,
+      "unrealized_pnl": -489.628604643231,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-05-12 00:00:00",
+      "total_value": 28626.31257069538,
+      "cash": 9623.960062618728,
+      "unrealized_pnl": -496.19454674379074,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-05-19 00:00:00",
+      "total_value": 28360.87158282734,
+      "cash": 9623.960062618728,
+      "unrealized_pnl": -520.5094237913738,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-05-26 00:00:00",
+      "total_value": 28557.06099874721,
+      "cash": 9591.321212696035,
+      "unrealized_pnl": -520.7483236414392,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-06-03 00:00:00",
+      "total_value": 28693.173659851782,
+      "cash": 9591.321212696035,
+      "unrealized_pnl": -495.2840318815728,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-06-10 00:00:00",
+      "total_value": 28462.21299243541,
+      "cash": 9634.183708254512,
+      "unrealized_pnl": -478.52565956006424,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-06-17 00:00:00",
+      "total_value": 28291.63908830416,
+      "cash": 9634.183708254512,
+      "unrealized_pnl": -453.1162244327731,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-06-24 00:00:00",
+      "total_value": 27999.18438787892,
+      "cash": 9632.245374088887,
+      "unrealized_pnl": -444.02651441588597,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-07-01 00:00:00",
+      "total_value": 28618.561077077957,
+      "cash": 9632.245374088887,
+      "unrealized_pnl": -434.2317320100077,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-07-11 00:00:00",
+      "total_value": 28662.809625583493,
+      "cash": 9630.560013762826,
+      "unrealized_pnl": -461.8584589609793,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-07-18 00:00:00",
+      "total_value": 28918.006592424328,
+      "cash": 9630.560013762826,
+      "unrealized_pnl": -467.77154749916093,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-07-25 00:00:00",
+      "total_value": 28515.572182202297,
+      "cash": 9605.262374605962,
+      "unrealized_pnl": -460.4572771625044,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-08-01 00:00:00",
+      "total_value": 28464.808449473177,
+      "cash": 9605.262374605962,
+      "unrealized_pnl": -498.42148890658086,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-08-08 00:00:00",
+      "total_value": 28431.23369985774,
+      "cash": 9529.51475358085,
+      "unrealized_pnl": -508.2516291091425,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-08-15 00:00:00",
+      "total_value": 28519.90812058947,
+      "cash": 9529.51475358085,
+      "unrealized_pnl": -508.8020675758293,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-08-22 00:00:00",
+      "total_value": 28458.752287006115,
+      "cash": 9551.533369064762,
+      "unrealized_pnl": -512.6298653898689,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-08-29 00:00:00",
+      "total_value": 28430.04470976982,
+      "cash": 9551.533369064762,
+      "unrealized_pnl": -519.6496949648565,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-09-06 00:00:00",
+      "total_value": 28576.515200330152,
+      "cash": 9574.087493773015,
+      "unrealized_pnl": -525.621826175484,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-09-13 00:00:00",
+      "total_value": 28004.39930215097,
+      "cash": 9574.087493773015,
+      "unrealized_pnl": -560.2736560440319,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-09-20 00:00:00",
+      "total_value": 28539.751308460607,
+      "cash": 9593.095021999632,
+      "unrealized_pnl": -554.5959000764362,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-09-27 00:00:00",
+      "total_value": 28725.69403216661,
+      "cash": 9593.095021999632,
+      "unrealized_pnl": -557.3601967927102,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-10-04 00:00:00",
+      "total_value": 28352.66172351088,
+      "cash": 9562.242076250017,
+      "unrealized_pnl": -566.6432758763481,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-10-11 00:00:00",
+      "total_value": 28240.9621651856,
+      "cash": 9562.242076250017,
+      "unrealized_pnl": -567.5846490776308,
+      "n_positions": 14
+    },
+    {
+      "timestamp": "2016-10-18 00:00:00",
+      "total_value": 28136.65032648769,
+      "cash": 9385.840952221877,
+      "unrealized_pnl": -680.1894860211308,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2016-10-25 00:00:00",
+      "total_value": 28141.940536482816,
+      "cash": 9385.840952221877,
+      "unrealized_pnl": -697.714724956143,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2016-11-01 00:00:00",
+      "total_value": 27922.90191745156,
+      "cash": 9429.005541232847,
+      "unrealized_pnl": -708.905957177612,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2016-11-08 00:00:00",
+      "total_value": 28212.39675350267,
+      "cash": 9429.005541232847,
+      "unrealized_pnl": -700.5737518911336,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2016-11-15 00:00:00",
+      "total_value": 28114.801761959938,
+      "cash": 9380.032579324017,
+      "unrealized_pnl": -759.4834316511674,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2016-11-22 00:00:00",
+      "total_value": 28315.57889067506,
+      "cash": 9380.032579324017,
+      "unrealized_pnl": -758.386379832495,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2016-11-30 00:00:00",
+      "total_value": 27940.6607190715,
+      "cash": 9389.653111749098,
+      "unrealized_pnl": -738.4234742847847,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2016-12-07 00:00:00",
+      "total_value": 28324.46287276205,
+      "cash": 9389.653111749098,
+      "unrealized_pnl": -724.9962465804645,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2016-12-14 00:00:00",
+      "total_value": 27831.877925741002,
+      "cash": 9390.197719109137,
+      "unrealized_pnl": -707.72982529829,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2016-12-21 00:00:00",
+      "total_value": 27953.83370580707,
+      "cash": 9390.197719109137,
+      "unrealized_pnl": -696.7553178565447,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2016-12-29 00:00:00",
+      "total_value": 28031.10869444456,
+      "cash": 9368.820892004278,
+      "unrealized_pnl": -685.6181382135509,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-01-06 00:00:00",
+      "total_value": 28271.69101610059,
+      "cash": 9368.820892004278,
+      "unrealized_pnl": -684.2651441430896,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-01-13 00:00:00",
+      "total_value": 28064.226111458673,
+      "cash": 9396.156179601345,
+      "unrealized_pnl": -720.0609979315332,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-01-23 00:00:00",
+      "total_value": 28037.800941854868,
+      "cash": 9396.156179601345,
+      "unrealized_pnl": -696.0981885328528,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-01-30 00:00:00",
+      "total_value": 27867.04869647344,
+      "cash": 9361.838500735708,
+      "unrealized_pnl": -697.1746832734534,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-02-06 00:00:00",
+      "total_value": 27978.060194194135,
+      "cash": 9361.838500735708,
+      "unrealized_pnl": -697.8456451055172,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-02-13 00:00:00",
+      "total_value": 28070.63439840671,
+      "cash": 9346.34520617266,
+      "unrealized_pnl": -681.3106560111071,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-02-21 00:00:00",
+      "total_value": 28358.517402498215,
+      "cash": 9346.34520617266,
+      "unrealized_pnl": -686.8618503890641,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-02-28 00:00:00",
+      "total_value": 27969.838967657965,
+      "cash": 9360.104788776514,
+      "unrealized_pnl": -655.4845251519682,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-03-07 00:00:00",
+      "total_value": 27955.558787383612,
+      "cash": 9360.104788776514,
+      "unrealized_pnl": -683.4298742367912,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-03-14 00:00:00",
+      "total_value": 27795.535089702993,
+      "cash": 9296.258650067984,
+      "unrealized_pnl": -718.1453445858651,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-03-21 00:00:00",
+      "total_value": 27729.169481359822,
+      "cash": 9296.258650067984,
+      "unrealized_pnl": -667.175756321203,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-03-28 00:00:00",
+      "total_value": 28033.384271065162,
+      "cash": 9308.928820042835,
+      "unrealized_pnl": -678.5476187917591,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-04-04 00:00:00",
+      "total_value": 28057.061804530833,
+      "cash": 9308.928820042835,
+      "unrealized_pnl": -673.0558940305402,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-04-11 00:00:00",
+      "total_value": 27927.085860357725,
+      "cash": 9322.253595893002,
+      "unrealized_pnl": -635.5276387815541,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-04-19 00:00:00",
+      "total_value": 27802.623313490916,
+      "cash": 9322.253595893002,
+      "unrealized_pnl": -634.0397102419112,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-04-26 00:00:00",
+      "total_value": 27858.12828364034,
+      "cash": 9291.470299215824,
+      "unrealized_pnl": -646.3570718621809,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-05-03 00:00:00",
+      "total_value": 27775.67004333381,
+      "cash": 9291.470299215824,
+      "unrealized_pnl": -690.6849331472666,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-05-10 00:00:00",
+      "total_value": 27861.860298521926,
+      "cash": 9264.376367548446,
+      "unrealized_pnl": -706.1405464850824,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-05-17 00:00:00",
+      "total_value": 27590.757178126758,
+      "cash": 9264.376367548446,
+      "unrealized_pnl": -685.0043163099418,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-05-24 00:00:00",
+      "total_value": 27796.687293419986,
+      "cash": 9217.310527428537,
+      "unrealized_pnl": -660.2098491619778,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-06-01 00:00:00",
+      "total_value": 28024.65451140001,
+      "cash": 9217.310527428537,
+      "unrealized_pnl": -651.4989769662025,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-06-08 00:00:00",
+      "total_value": 27760.87688320538,
+      "cash": 9242.356589812158,
+      "unrealized_pnl": -686.2383633140223,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-06-15 00:00:00",
+      "total_value": 27855.56620296718,
+      "cash": 9242.356589812158,
+      "unrealized_pnl": -638.5120110617129,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-06-22 00:00:00",
+      "total_value": 27766.761342965016,
+      "cash": 9256.926403839558,
+      "unrealized_pnl": -692.9070778723118,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-06-29 00:00:00",
+      "total_value": 27664.320997046216,
+      "cash": 9256.926403839558,
+      "unrealized_pnl": -687.6056751643885,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-07-07 00:00:00",
+      "total_value": 28270.57132206657,
+      "cash": 9449.5615711522,
+      "unrealized_pnl": -710.6985403535678,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-07-14 00:00:00",
+      "total_value": 28535.14453032603,
+      "cash": 9449.5615711522,
+      "unrealized_pnl": -713.4429335984117,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-07-21 00:00:00",
+      "total_value": 28177.563420874398,
+      "cash": 9449.182289925771,
+      "unrealized_pnl": -690.8771092336376,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-07-28 00:00:00",
+      "total_value": 28183.29798946805,
+      "cash": 9449.182289925771,
+      "unrealized_pnl": -689.1564867956084,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-08-04 00:00:00",
+      "total_value": 28191.883035170893,
+      "cash": 9445.759869043979,
+      "unrealized_pnl": -703.2934476928249,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-08-11 00:00:00",
+      "total_value": 27925.946332562122,
+      "cash": 9445.759869043979,
+      "unrealized_pnl": -710.8002716524163,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-08-18 00:00:00",
+      "total_value": 28067.42444480737,
+      "cash": 9414.231178910773,
+      "unrealized_pnl": -702.1008630258411,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-08-25 00:00:00",
+      "total_value": 28248.73786771077,
+      "cash": 9414.231178910773,
+      "unrealized_pnl": -682.8691164006256,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-09-01 00:00:00",
+      "total_value": 28070.501361302875,
+      "cash": 9357.387803936166,
+      "unrealized_pnl": -655.2174685393062,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-09-11 00:00:00",
+      "total_value": 28223.870808414227,
+      "cash": 9357.387803936166,
+      "unrealized_pnl": -630.1801107786468,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-09-18 00:00:00",
+      "total_value": 27726.511720876013,
+      "cash": 9137.930199275761,
+      "unrealized_pnl": -510.0752319065907,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-09-25 00:00:00",
+      "total_value": 27687.54943213312,
+      "cash": 9137.930199275761,
+      "unrealized_pnl": -500.8233079159344,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-10-02 00:00:00",
+      "total_value": 27614.624541734313,
+      "cash": 9043.467738735044,
+      "unrealized_pnl": -496.18723028632934,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-10-09 00:00:00",
+      "total_value": 27733.453823096082,
+      "cash": 9043.467738735044,
+      "unrealized_pnl": -495.08269471731035,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-10-16 00:00:00",
+      "total_value": 27479.4725899623,
+      "cash": 8995.295707389698,
+      "unrealized_pnl": -448.9158352929138,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-10-23 00:00:00",
+      "total_value": 27562.160855544636,
+      "cash": 8995.295707389698,
+      "unrealized_pnl": -436.2479224363665,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-10-30 00:00:00",
+      "total_value": 27252.24418445594,
+      "cash": 8906.398017712887,
+      "unrealized_pnl": -444.32785773545004,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-11-06 00:00:00",
+      "total_value": 27411.188625450293,
+      "cash": 8906.398017712887,
+      "unrealized_pnl": -436.9908823395025,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-11-13 00:00:00",
+      "total_value": 27382.451513321146,
+      "cash": 8925.29677197968,
+      "unrealized_pnl": -409.6686188373123,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-11-20 00:00:00",
+      "total_value": 27356.926927996476,
+      "cash": 8925.29677197968,
+      "unrealized_pnl": -421.40525225033133,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-11-28 00:00:00",
+      "total_value": 27509.547123543194,
+      "cash": 8916.488472067029,
+      "unrealized_pnl": -432.70613170828955,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-12-05 00:00:00",
+      "total_value": 27579.028570267954,
+      "cash": 8916.488472067029,
+      "unrealized_pnl": -408.8347362716371,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-12-12 00:00:00",
+      "total_value": 27323.85076240383,
+      "cash": 8908.745779877172,
+      "unrealized_pnl": -410.30036966463985,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-12-19 00:00:00",
+      "total_value": 27411.5994528535,
+      "cash": 8908.745779877172,
+      "unrealized_pnl": -424.4967920621596,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2017-12-27 00:00:00",
+      "total_value": 27258.533748844755,
+      "cash": 8860.505865969664,
+      "unrealized_pnl": -394.5145250519788,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-01-04 00:00:00",
+      "total_value": 27509.195849929092,
+      "cash": 8860.505865969664,
+      "unrealized_pnl": -410.11277110266315,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-01-11 00:00:00",
+      "total_value": 27186.496464131094,
+      "cash": 8745.995022826342,
+      "unrealized_pnl": -387.63537297779203,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-01-19 00:00:00",
+      "total_value": 27441.930690141064,
+      "cash": 8745.995022826342,
+      "unrealized_pnl": -396.05748997040536,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-01-26 00:00:00",
+      "total_value": 27338.28521258676,
+      "cash": 8795.72096695134,
+      "unrealized_pnl": -395.8928594779091,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-02-02 00:00:00",
+      "total_value": 26540.135302711646,
+      "cash": 8795.72096695134,
+      "unrealized_pnl": -451.4618469207629,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-02-09 00:00:00",
+      "total_value": 27427.031079682907,
+      "cash": 8787.80248304778,
+      "unrealized_pnl": -482.1316078542786,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-02-16 00:00:00",
+      "total_value": 28226.967046233956,
+      "cash": 8787.80248304778,
+      "unrealized_pnl": -480.6722405279919,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-02-26 00:00:00",
+      "total_value": 27466.154090332853,
+      "cash": 8856.031761267666,
+      "unrealized_pnl": -491.6816038575645,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-03-05 00:00:00",
+      "total_value": 27067.803221927978,
+      "cash": 8856.031761267666,
+      "unrealized_pnl": -505.7162199550468,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-03-12 00:00:00",
+      "total_value": 27241.72865782128,
+      "cash": 8842.258915771152,
+      "unrealized_pnl": -512.7390558729799,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-03-19 00:00:00",
+      "total_value": 26849.14771297518,
+      "cash": 8842.258915771152,
+      "unrealized_pnl": -486.5252973628224,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-03-26 00:00:00",
+      "total_value": 27766.7686937257,
+      "cash": 8857.604099714978,
+      "unrealized_pnl": -474.65463377263563,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-04-03 00:00:00",
+      "total_value": 27553.202270577956,
+      "cash": 8857.604099714978,
+      "unrealized_pnl": -431.7176010645883,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-04-10 00:00:00",
+      "total_value": 27649.70880397451,
+      "cash": 8899.769969598434,
+      "unrealized_pnl": -438.6219713902151,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-04-17 00:00:00",
+      "total_value": 28029.40070240336,
+      "cash": 8899.769969598434,
+      "unrealized_pnl": -420.8216688217491,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-04-24 00:00:00",
+      "total_value": 27154.38915233668,
+      "cash": 8900.819639741838,
+      "unrealized_pnl": -422.4574278442119,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-05-01 00:00:00",
+      "total_value": 27281.044527056067,
+      "cash": 8900.819639741838,
+      "unrealized_pnl": -425.96772170766184,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-05-08 00:00:00",
+      "total_value": 27297.842840146914,
+      "cash": 8882.683624331909,
+      "unrealized_pnl": -472.6179640180543,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-05-15 00:00:00",
+      "total_value": 27558.796330695073,
+      "cash": 8882.683624331909,
+      "unrealized_pnl": -481.5575820922012,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-05-22 00:00:00",
+      "total_value": 27291.738929456526,
+      "cash": 8898.24133965606,
+      "unrealized_pnl": -473.9880513719583,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-05-30 00:00:00",
+      "total_value": 27344.939192106096,
+      "cash": 8898.24133965606,
+      "unrealized_pnl": -447.3879200471715,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-06-06 00:00:00",
+      "total_value": 27454.307017865496,
+      "cash": 8891.10211861098,
+      "unrealized_pnl": -510.48150715393376,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-06-13 00:00:00",
+      "total_value": 27498.172447647732,
+      "cash": 8891.10211861098,
+      "unrealized_pnl": -509.01276775287135,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-06-20 00:00:00",
+      "total_value": 27367.693423778263,
+      "cash": 8899.254803087264,
+      "unrealized_pnl": -511.55961686198015,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-06-27 00:00:00",
+      "total_value": 27052.444305731096,
+      "cash": 8899.254803087264,
+      "unrealized_pnl": -454.22048373629553,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-07-05 00:00:00",
+      "total_value": 27540.753779735973,
+      "cash": 8933.952551572098,
+      "unrealized_pnl": -464.11784241431843,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-07-12 00:00:00",
+      "total_value": 27879.87594725675,
+      "cash": 8933.952551572098,
+      "unrealized_pnl": -500.70145440030626,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-07-19 00:00:00",
+      "total_value": 27240.09078956718,
+      "cash": 8850.52857531913,
+      "unrealized_pnl": -465.6152399200605,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-07-26 00:00:00",
+      "total_value": 27464.79866236559,
+      "cash": 8850.52857531913,
+      "unrealized_pnl": -459.01809786845087,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-08-02 00:00:00",
+      "total_value": 27377.53036279977,
+      "cash": 8887.170826238946,
+      "unrealized_pnl": -480.82631953732187,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-08-09 00:00:00",
+      "total_value": 27535.93815241788,
+      "cash": 8887.170826238946,
+      "unrealized_pnl": -486.4594425442808,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-08-16 00:00:00",
+      "total_value": 27438.605670903642,
+      "cash": 8867.607049164702,
+      "unrealized_pnl": -490.7117532179768,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-08-23 00:00:00",
+      "total_value": 27546.3260530868,
+      "cash": 8867.607049164702,
+      "unrealized_pnl": -491.48968650012836,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-08-30 00:00:00",
+      "total_value": 27232.63974750712,
+      "cash": 8894.009914977793,
+      "unrealized_pnl": -490.92725468646654,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-09-07 00:00:00",
+      "total_value": 27112.550600346076,
+      "cash": 8894.009914977793,
+      "unrealized_pnl": -468.42048017548734,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-09-14 00:00:00",
+      "total_value": 27335.70363812685,
+      "cash": 8910.606118677746,
+      "unrealized_pnl": -482.2303984512879,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-09-21 00:00:00",
+      "total_value": 27502.801402927293,
+      "cash": 8910.606118677746,
+      "unrealized_pnl": -473.1618951933446,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-09-28 00:00:00",
+      "total_value": 27258.522574339935,
+      "cash": 8856.012610248372,
+      "unrealized_pnl": -532.0353500099225,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-10-05 00:00:00",
+      "total_value": 27114.828787268267,
+      "cash": 8856.012610248372,
+      "unrealized_pnl": -514.9210605205702,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-10-12 00:00:00",
+      "total_value": 27486.603156445108,
+      "cash": 8885.824880904876,
+      "unrealized_pnl": -567.276502437407,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-10-19 00:00:00",
+      "total_value": 27539.454099268052,
+      "cash": 8885.824880904876,
+      "unrealized_pnl": -550.7045019448661,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-10-26 00:00:00",
+      "total_value": 26686.92462776299,
+      "cash": 8751.919052730007,
+      "unrealized_pnl": -565.3339969795666,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-11-02 00:00:00",
+      "total_value": 27203.342147325555,
+      "cash": 8751.919052730007,
+      "unrealized_pnl": -521.2715702633182,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-11-09 00:00:00",
+      "total_value": 27091.386276490015,
+      "cash": 8865.013455595818,
+      "unrealized_pnl": -467.7650113243293,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-11-16 00:00:00",
+      "total_value": 26834.538034824986,
+      "cash": 8865.013455595818,
+      "unrealized_pnl": -469.0447735500165,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-11-26 00:00:00",
+      "total_value": 27462.73012785558,
+      "cash": 8854.279958334868,
+      "unrealized_pnl": -488.66029292139245,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-12-03 00:00:00",
+      "total_value": 28282.849112153315,
+      "cash": 8854.279958334868,
+      "unrealized_pnl": -474.29492584855603,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-12-11 00:00:00",
+      "total_value": 27117.27062161912,
+      "cash": 8813.880612155917,
+      "unrealized_pnl": -489.2546018528044,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-12-18 00:00:00",
+      "total_value": 26402.37610409521,
+      "cash": 8813.880612155917,
+      "unrealized_pnl": -545.4663881323556,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2018-12-26 00:00:00",
+      "total_value": 27932.311519254978,
+      "cash": 8781.931975930953,
+      "unrealized_pnl": -601.5881693795725,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-01-03 00:00:00",
+      "total_value": 27834.367513905127,
+      "cash": 8781.931975930953,
+      "unrealized_pnl": -576.0425327791238,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-01-10 00:00:00",
+      "total_value": 27296.36689672148,
+      "cash": 8807.492031929127,
+      "unrealized_pnl": -461.1839174536908,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-01-17 00:00:00",
+      "total_value": 27541.174925381245,
+      "cash": 8807.492031929127,
+      "unrealized_pnl": -478.92670929257145,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-01-25 00:00:00",
+      "total_value": 27390.535685276656,
+      "cash": 8834.894952861086,
+      "unrealized_pnl": -457.85762529907265,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-02-01 00:00:00",
+      "total_value": 27762.539335313737,
+      "cash": 8834.894952861086,
+      "unrealized_pnl": -415.81038037759976,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-02-08 00:00:00",
+      "total_value": 27303.83888149812,
+      "cash": 8850.916958053895,
+      "unrealized_pnl": -402.0462025966151,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-02-15 00:00:00",
+      "total_value": 27807.041079283634,
+      "cash": 8850.916958053895,
+      "unrealized_pnl": -376.1571979923052,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-02-25 00:00:00",
+      "total_value": 27358.15291049782,
+      "cash": 8878.973257205162,
+      "unrealized_pnl": -353.8179645416466,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-03-04 00:00:00",
+      "total_value": 27321.713005625275,
+      "cash": 8878.973257205162,
+      "unrealized_pnl": -368.25182271325616,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-03-11 00:00:00",
+      "total_value": 27510.222700129925,
+      "cash": 8821.97656833509,
+      "unrealized_pnl": -369.79945487957673,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-03-18 00:00:00",
+      "total_value": 27831.42965729342,
+      "cash": 8821.97656833509,
+      "unrealized_pnl": -373.7593143070024,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-03-25 00:00:00",
+      "total_value": 27259.69497936172,
+      "cash": 8828.71763374851,
+      "unrealized_pnl": -366.31785710481824,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-04-01 00:00:00",
+      "total_value": 27713.951100525737,
+      "cash": 8828.71763374851,
+      "unrealized_pnl": -353.2809842380476,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-04-08 00:00:00",
+      "total_value": 27304.1174791094,
+      "cash": 8836.33000365086,
+      "unrealized_pnl": -331.35733317762754,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-04-15 00:00:00",
+      "total_value": 27356.368834311103,
+      "cash": 8836.33000365086,
+      "unrealized_pnl": -341.17641571526735,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-04-23 00:00:00",
+      "total_value": 27318.46384091658,
+      "cash": 8777.754680606826,
+      "unrealized_pnl": -404.494421608282,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-04-30 00:00:00",
+      "total_value": 27419.413859921537,
+      "cash": 8777.754680606826,
+      "unrealized_pnl": -388.5526873967301,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-05-07 00:00:00",
+      "total_value": 26831.61831157926,
+      "cash": 8760.757732931184,
+      "unrealized_pnl": -429.0340078184388,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-05-14 00:00:00",
+      "total_value": 26662.380528021462,
+      "cash": 8760.757732931184,
+      "unrealized_pnl": -377.5876083708957,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-05-21 00:00:00",
+      "total_value": 27312.05228643048,
+      "cash": 8769.976427541715,
+      "unrealized_pnl": -375.1647393008557,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-05-29 00:00:00",
+      "total_value": 26748.615053417267,
+      "cash": 8769.976427541715,
+      "unrealized_pnl": -402.859335829369,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-06-05 00:00:00",
+      "total_value": 27380.945329095644,
+      "cash": 8799.729222580561,
+      "unrealized_pnl": -313.4389891947328,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-06-12 00:00:00",
+      "total_value": 27719.77802083091,
+      "cash": 8799.729222580561,
+      "unrealized_pnl": -312.9047129434474,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-06-19 00:00:00",
+      "total_value": 27275.007732031896,
+      "cash": 8799.000856324148,
+      "unrealized_pnl": -295.41477262305045,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-06-26 00:00:00",
+      "total_value": 27168.92991773669,
+      "cash": 8799.000856324148,
+      "unrealized_pnl": -313.33845210351444,
+      "n_positions": 15
+    },
+    {
+      "timestamp": "2019-07-03 00:00:00",
+      "total_value": 27470.33486146334,
+      "cash": 8966.042290545172,
+      "unrealized_pnl": -540.5595021292269,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-07-11 00:00:00",
+      "total_value": 27481.458828940085,
+      "cash": 8966.042290545172,
+      "unrealized_pnl": -550.297008743968,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-07-18 00:00:00",
+      "total_value": 27387.154834893918,
+      "cash": 8976.132367033091,
+      "unrealized_pnl": -558.9590079408079,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-07-25 00:00:00",
+      "total_value": 27412.850005613458,
+      "cash": 8976.132367033091,
+      "unrealized_pnl": -581.0920368848018,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-08-01 00:00:00",
+      "total_value": 27155.36189413372,
+      "cash": 8972.684377595406,
+      "unrealized_pnl": -573.3847797451673,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-08-08 00:00:00",
+      "total_value": 27133.55712735516,
+      "cash": 8972.684377595406,
+      "unrealized_pnl": -547.7608573346652,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-08-15 00:00:00",
+      "total_value": 27375.68712765788,
+      "cash": 8975.908039804292,
+      "unrealized_pnl": -573.6746363777161,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-08-22 00:00:00",
+      "total_value": 27884.1567042068,
+      "cash": 8975.908039804292,
+      "unrealized_pnl": -561.5081968898912,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-08-29 00:00:00",
+      "total_value": 27612.932669082198,
+      "cash": 9015.141698121386,
+      "unrealized_pnl": -559.8531786452887,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-09-06 00:00:00",
+      "total_value": 27996.43557937719,
+      "cash": 9015.141698121386,
+      "unrealized_pnl": -537.1017679631992,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-09-13 00:00:00",
+      "total_value": 27421.172573552205,
+      "cash": 9022.793763006397,
+      "unrealized_pnl": -499.0093852883106,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-09-20 00:00:00",
+      "total_value": 27386.573905457,
+      "cash": 9022.793763006397,
+      "unrealized_pnl": -473.93071974011264,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-09-27 00:00:00",
+      "total_value": 27382.104726660516,
+      "cash": 9048.162301668322,
+      "unrealized_pnl": -479.2654419431255,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-10-04 00:00:00",
+      "total_value": 27260.905316555178,
+      "cash": 9048.162301668322,
+      "unrealized_pnl": -508.36921704259055,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-10-11 00:00:00",
+      "total_value": 27640.111149523247,
+      "cash": 9034.89799348946,
+      "unrealized_pnl": -520.1604939039246,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-10-18 00:00:00",
+      "total_value": 27733.77300841426,
+      "cash": 9034.89799348946,
+      "unrealized_pnl": -524.8415857725577,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-10-25 00:00:00",
+      "total_value": 27507.003242721228,
+      "cash": 9020.454517634302,
+      "unrealized_pnl": -499.94465404036896,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-11-01 00:00:00",
+      "total_value": 27716.512491596666,
+      "cash": 9020.454517634302,
+      "unrealized_pnl": -530.0582159972063,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-11-08 00:00:00",
+      "total_value": 27370.118556496087,
+      "cash": 8951.575024989996,
+      "unrealized_pnl": -544.80532697417,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-11-15 00:00:00",
+      "total_value": 27547.82300133963,
+      "cash": 8951.575024989996,
+      "unrealized_pnl": -538.5071878847447,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-11-22 00:00:00",
+      "total_value": 27375.8923562017,
+      "cash": 8960.46612495252,
+      "unrealized_pnl": -563.0500244604873,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-12-02 00:00:00",
+      "total_value": 27390.087576478058,
+      "cash": 8960.46612495252,
+      "unrealized_pnl": -575.5523943250198,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-12-09 00:00:00",
+      "total_value": 27356.86679796234,
+      "cash": 8992.37372027619,
+      "unrealized_pnl": -567.5442059010564,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-12-16 00:00:00",
+      "total_value": 27634.591996801744,
+      "cash": 8992.37372027619,
+      "unrealized_pnl": -589.0343550529027,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-12-23 00:00:00",
+      "total_value": 27383.468305426006,
+      "cash": 8969.726899304897,
+      "unrealized_pnl": -544.662396034052,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2019-12-31 00:00:00",
+      "total_value": 27442.160371146587,
+      "cash": 8969.726899304897,
+      "unrealized_pnl": -533.169899645825,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-01-08 00:00:00",
+      "total_value": 27210.363063596556,
+      "cash": 8824.406933924132,
+      "unrealized_pnl": -543.1297342106561,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-01-15 00:00:00",
+      "total_value": 27475.98352981119,
+      "cash": 8824.406933924132,
+      "unrealized_pnl": -512.8903910019629,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-01-23 00:00:00",
+      "total_value": 27148.772887177667,
+      "cash": 8805.102930994073,
+      "unrealized_pnl": -502.7319448865287,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-01-30 00:00:00",
+      "total_value": 26898.23880526348,
+      "cash": 8805.102930994073,
+      "unrealized_pnl": -520.4347456158845,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-02-06 00:00:00",
+      "total_value": 27112.271076244975,
+      "cash": 8790.160679044893,
+      "unrealized_pnl": -563.6095852366561,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-02-13 00:00:00",
+      "total_value": 27327.417354687375,
+      "cash": 8790.160679044893,
+      "unrealized_pnl": -537.8043311957103,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-02-21 00:00:00",
+      "total_value": 26940.518417764637,
+      "cash": 8794.150853808276,
+      "unrealized_pnl": -510.6285559089465,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-02-28 00:00:00",
+      "total_value": 24588.893759168546,
+      "cash": 8794.150853808276,
+      "unrealized_pnl": -712.0367035632818,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-03-06 00:00:00",
+      "total_value": 27332.816589418722,
+      "cash": 9098.577440664669,
+      "unrealized_pnl": -627.4078599990797,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-03-13 00:00:00",
+      "total_value": 25238.464274424736,
+      "cash": 9098.577440664669,
+      "unrealized_pnl": -819.0248082786003,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-03-20 00:00:00",
+      "total_value": 27651.358809668134,
+      "cash": 9528.351799999597,
+      "unrealized_pnl": -1002.6822283154481,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-03-27 00:00:00",
+      "total_value": 29876.25472655489,
+      "cash": 9528.351799999597,
+      "unrealized_pnl": -921.0502497433075,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-04-03 00:00:00",
+      "total_value": 28658.14549537864,
+      "cash": 9699.973634449942,
+      "unrealized_pnl": -924.4167443198855,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-04-13 00:00:00",
+      "total_value": 30997.296119448274,
+      "cash": 9699.973634449942,
+      "unrealized_pnl": -865.732751873654,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-04-20 00:00:00",
+      "total_value": 28662.355865885926,
+      "cash": 9709.880055530719,
+      "unrealized_pnl": -887.7751284629423,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-04-27 00:00:00",
+      "total_value": 29127.937824178825,
+      "cash": 9709.880055530719,
+      "unrealized_pnl": -849.9079352656812,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-05-04 00:00:00",
+      "total_value": 29118.05690687312,
+      "cash": 9679.168749758157,
+      "unrealized_pnl": -852.9696303648828,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-05-11 00:00:00",
+      "total_value": 29599.424193691197,
+      "cash": 9679.168749758157,
+      "unrealized_pnl": -935.0277433354231,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-05-18 00:00:00",
+      "total_value": 29624.021990619243,
+      "cash": 9608.117282695335,
+      "unrealized_pnl": -923.7491277923899,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-05-26 00:00:00",
+      "total_value": 29972.672216175208,
+      "cash": 9608.117282695335,
+      "unrealized_pnl": -895.5367344811353,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-06-02 00:00:00",
+      "total_value": 29410.523271553815,
+      "cash": 9768.767665419009,
+      "unrealized_pnl": -822.8064681232735,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-06-09 00:00:00",
+      "total_value": 30303.124068360747,
+      "cash": 9768.767665419009,
+      "unrealized_pnl": -804.5837869811888,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-06-16 00:00:00",
+      "total_value": 29568.901090204476,
+      "cash": 9764.08637404771,
+      "unrealized_pnl": -896.7304569357782,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-06-23 00:00:00",
+      "total_value": 29405.8447991362,
+      "cash": 9764.08637404771,
+      "unrealized_pnl": -993.8366354183914,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-06-30 00:00:00",
+      "total_value": 29254.938128309965,
+      "cash": 9655.292022508149,
+      "unrealized_pnl": -988.9254545927262,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-07-08 00:00:00",
+      "total_value": 29556.276986457193,
+      "cash": 9655.292022508149,
+      "unrealized_pnl": -1103.3070435912987,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-07-15 00:00:00",
+      "total_value": 29084.46753351335,
+      "cash": 9573.010952473534,
+      "unrealized_pnl": -1014.4112755799277,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-07-22 00:00:00",
+      "total_value": 29426.409171722833,
+      "cash": 9573.010952473534,
+      "unrealized_pnl": -1005.5632964167727,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-07-29 00:00:00",
+      "total_value": 29206.826063931523,
+      "cash": 9635.74258640814,
+      "unrealized_pnl": -982.331793206173,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-08-05 00:00:00",
+      "total_value": 29389.802141925175,
+      "cash": 9635.74258640814,
+      "unrealized_pnl": -1115.2546297868605,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-08-12 00:00:00",
+      "total_value": 29104.40471704403,
+      "cash": 9557.238829390511,
+      "unrealized_pnl": -1042.8995820501673,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-08-19 00:00:00",
+      "total_value": 28994.37556819882,
+      "cash": 9557.238829390511,
+      "unrealized_pnl": -1091.3949178480702,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-08-26 00:00:00",
+      "total_value": 28695.458135626624,
+      "cash": 9414.560913234754,
+      "unrealized_pnl": -1211.979224818909,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-09-02 00:00:00",
+      "total_value": 29225.545763035974,
+      "cash": 9414.560913234754,
+      "unrealized_pnl": -1251.6379184612897,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-09-10 00:00:00",
+      "total_value": 28243.604461102223,
+      "cash": 9397.12098569189,
+      "unrealized_pnl": -1107.183463890039,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-09-17 00:00:00",
+      "total_value": 28545.67704945342,
+      "cash": 9397.12098569189,
+      "unrealized_pnl": -1015.2454394509914,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-09-24 00:00:00",
+      "total_value": 28686.40257868309,
+      "cash": 9424.175399595699,
+      "unrealized_pnl": -1085.436433561817,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-10-01 00:00:00",
+      "total_value": 29357.989052353387,
+      "cash": 9424.175399595699,
+      "unrealized_pnl": -1181.547147906564,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-10-08 00:00:00",
+      "total_value": 28834.56816515727,
+      "cash": 9381.211018171902,
+      "unrealized_pnl": -1034.084453680543,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-10-15 00:00:00",
+      "total_value": 28896.441236231705,
+      "cash": 9381.211018171902,
+      "unrealized_pnl": -1115.3175892695244,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-10-22 00:00:00",
+      "total_value": 28666.538141977417,
+      "cash": 9334.098573807078,
+      "unrealized_pnl": -1074.9287969531733,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-10-29 00:00:00",
+      "total_value": 27774.814827083777,
+      "cash": 9334.098573807078,
+      "unrealized_pnl": -1082.4356406981767,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-11-05 00:00:00",
+      "total_value": 28762.542611039098,
+      "cash": 9295.989517477303,
+      "unrealized_pnl": -1141.4281328781947,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-11-12 00:00:00",
+      "total_value": 29129.155816222894,
+      "cash": 9295.989517477303,
+      "unrealized_pnl": -1046.6710465968738,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-11-19 00:00:00",
+      "total_value": 28832.650448373475,
+      "cash": 9443.660703027828,
+      "unrealized_pnl": -942.0580055420137,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-11-27 00:00:00",
+      "total_value": 29231.832383691835,
+      "cash": 9443.660703027828,
+      "unrealized_pnl": -911.9562510848771,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-12-04 00:00:00",
+      "total_value": 28965.73695855249,
+      "cash": 9411.780219862045,
+      "unrealized_pnl": -904.3198809944518,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-12-11 00:00:00",
+      "total_value": 28802.935271680777,
+      "cash": 9411.780219862045,
+      "unrealized_pnl": -886.4204794168174,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-12-18 00:00:00",
+      "total_value": 28660.834370785247,
+      "cash": 9410.561810294876,
+      "unrealized_pnl": -925.0637873404742,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2020-12-28 00:00:00",
+      "total_value": 28661.380859721678,
+      "cash": 9410.561810294876,
+      "unrealized_pnl": -1007.552365655812,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-01-05 00:00:00",
+      "total_value": 28825.467981224225,
+      "cash": 9364.272270210811,
+      "unrealized_pnl": -962.3078038631411,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-01-12 00:00:00",
+      "total_value": 29392.828047113308,
+      "cash": 9364.272270210811,
+      "unrealized_pnl": -885.7182860257957,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-01-20 00:00:00",
+      "total_value": 29069.933308164018,
+      "cash": 9471.58511884176,
+      "unrealized_pnl": -910.4754920614897,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-01-27 00:00:00",
+      "total_value": 28434.472050921046,
+      "cash": 9471.58511884176,
+      "unrealized_pnl": -971.289045656462,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-02-03 00:00:00",
+      "total_value": 28660.211814431466,
+      "cash": 9350.676087857284,
+      "unrealized_pnl": -978.7857483554344,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-02-10 00:00:00",
+      "total_value": 29164.80652655859,
+      "cash": 9350.676087857284,
+      "unrealized_pnl": -947.6987289495825,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-02-18 00:00:00",
+      "total_value": 28649.89394981664,
+      "cash": 9403.932441275198,
+      "unrealized_pnl": -928.7042541191075,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-02-25 00:00:00",
+      "total_value": 28403.126973480244,
+      "cash": 9403.932441275198,
+      "unrealized_pnl": -832.6979387853327,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-03-04 00:00:00",
+      "total_value": 28704.56638609465,
+      "cash": 9512.78283049716,
+      "unrealized_pnl": -850.815470693757,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-03-11 00:00:00",
+      "total_value": 29669.605172689626,
+      "cash": 9512.78283049716,
+      "unrealized_pnl": -821.7556276883032,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-03-18 00:00:00",
+      "total_value": 28687.80120514781,
+      "cash": 9510.483488859058,
+      "unrealized_pnl": -772.0400166278022,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-03-25 00:00:00",
+      "total_value": 28686.442134798002,
+      "cash": 9510.483488859058,
+      "unrealized_pnl": -759.7530619826645,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-04-01 00:00:00",
+      "total_value": 28615.17537452705,
+      "cash": 9186.977997844793,
+      "unrealized_pnl": -681.2719609303052,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-04-09 00:00:00",
+      "total_value": 28965.530530108997,
+      "cash": 9186.977997844793,
+      "unrealized_pnl": -777.9920689645062,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-04-16 00:00:00",
+      "total_value": 28058.000210596954,
+      "cash": 8893.481232490702,
+      "unrealized_pnl": -600.4429657664722,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-04-23 00:00:00",
+      "total_value": 28038.467902098117,
+      "cash": 8893.481232490702,
+      "unrealized_pnl": -598.0837467679346,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-04-30 00:00:00",
+      "total_value": 27837.937174754068,
+      "cash": 8870.899326038478,
+      "unrealized_pnl": -560.0587048303148,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-05-07 00:00:00",
+      "total_value": 28194.241621537625,
+      "cash": 8870.899326038478,
+      "unrealized_pnl": -492.62447146975273,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-05-14 00:00:00",
+      "total_value": 28175.229451534313,
+      "cash": 8850.854529748984,
+      "unrealized_pnl": -494.4302434584296,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-05-21 00:00:00",
+      "total_value": 28097.456457471166,
+      "cash": 8850.854529748984,
+      "unrealized_pnl": -495.22905008728446,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-05-28 00:00:00",
+      "total_value": 27709.138720982228,
+      "cash": 8710.09174370383,
+      "unrealized_pnl": -431.77790194666784,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-06-07 00:00:00",
+      "total_value": 27908.98978653727,
+      "cash": 8710.09174370383,
+      "unrealized_pnl": -380.0504233685716,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-06-14 00:00:00",
+      "total_value": 27254.241567804373,
+      "cash": 8442.401391330623,
+      "unrealized_pnl": -312.8791288579739,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-06-21 00:00:00",
+      "total_value": 26999.674426657373,
+      "cash": 8442.401391330623,
+      "unrealized_pnl": -375.2269506328846,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-06-28 00:00:00",
+      "total_value": 27080.282807367428,
+      "cash": 8348.684461879615,
+      "unrealized_pnl": -389.2939325438099,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-07-06 00:00:00",
+      "total_value": 27164.031587970432,
+      "cash": 8348.684461879615,
+      "unrealized_pnl": -463.99532959597605,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-07-13 00:00:00",
+      "total_value": 26783.949043471875,
+      "cash": 8231.019130812916,
+      "unrealized_pnl": -426.0419556708933,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-07-20 00:00:00",
+      "total_value": 26565.470242140265,
+      "cash": 8231.019130812916,
+      "unrealized_pnl": -441.2587821894663,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-07-27 00:00:00",
+      "total_value": 26826.73965859372,
+      "cash": 8220.420089252688,
+      "unrealized_pnl": -453.9728912468006,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-08-03 00:00:00",
+      "total_value": 26972.102387752417,
+      "cash": 8220.420089252688,
+      "unrealized_pnl": -425.55514222074567,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-08-10 00:00:00",
+      "total_value": 27065.967486942394,
+      "cash": 8304.994825506712,
+      "unrealized_pnl": -447.85122402690223,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-08-17 00:00:00",
+      "total_value": 27080.264981618184,
+      "cash": 8304.994825506712,
+      "unrealized_pnl": -468.87857347545116,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-08-24 00:00:00",
+      "total_value": 26963.274988819954,
+      "cash": 8266.91378582759,
+      "unrealized_pnl": -502.15040956094015,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-08-31 00:00:00",
+      "total_value": 27099.076961591076,
+      "cash": 8266.91378582759,
+      "unrealized_pnl": -507.8103527236246,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-09-08 00:00:00",
+      "total_value": 27058.5435897177,
+      "cash": 8355.990402240714,
+      "unrealized_pnl": -558.4547631706537,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-09-15 00:00:00",
+      "total_value": 26964.199857868334,
+      "cash": 8355.990402240714,
+      "unrealized_pnl": -543.360827920538,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-09-22 00:00:00",
+      "total_value": 27325.985083347263,
+      "cash": 8388.546994650582,
+      "unrealized_pnl": -567.50464146509,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-09-29 00:00:00",
+      "total_value": 27320.605404689195,
+      "cash": 8388.546994650582,
+      "unrealized_pnl": -496.9174118306562,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-10-06 00:00:00",
+      "total_value": 27283.09710890864,
+      "cash": 8464.385063883768,
+      "unrealized_pnl": -540.9020028772752,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-10-13 00:00:00",
+      "total_value": 27370.58439336774,
+      "cash": 8464.385063883768,
+      "unrealized_pnl": -503.16690595115085,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-10-20 00:00:00",
+      "total_value": 27440.45887478101,
+      "cash": 8498.507961249397,
+      "unrealized_pnl": -493.80930694444885,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-10-27 00:00:00",
+      "total_value": 27400.285361300477,
+      "cash": 8498.507961249397,
+      "unrealized_pnl": -545.5804910219455,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-11-03 00:00:00",
+      "total_value": 27315.26702657253,
+      "cash": 8435.740924655765,
+      "unrealized_pnl": -508.5813162463347,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-11-10 00:00:00",
+      "total_value": 27267.821266905547,
+      "cash": 8435.740924655765,
+      "unrealized_pnl": -510.1952319844057,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-11-17 00:00:00",
+      "total_value": 27007.932208744114,
+      "cash": 8347.999833824111,
+      "unrealized_pnl": -519.4982169511089,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-11-24 00:00:00",
+      "total_value": 27035.046674414487,
+      "cash": 8347.999833824111,
+      "unrealized_pnl": -531.5372356082806,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-12-02 00:00:00",
+      "total_value": 27264.768064437223,
+      "cash": 8255.622605558628,
+      "unrealized_pnl": -571.9382902231371,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-12-09 00:00:00",
+      "total_value": 27649.362890855915,
+      "cash": 8255.622605558628,
+      "unrealized_pnl": -563.5468670646904,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-12-16 00:00:00",
+      "total_value": 26911.585609693237,
+      "cash": 8251.758932346876,
+      "unrealized_pnl": -443.8971837980596,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-12-23 00:00:00",
+      "total_value": 27043.225529883133,
+      "cash": 8251.758932346876,
+      "unrealized_pnl": -491.5107920954231,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2021-12-31 00:00:00",
+      "total_value": 26971.723595105985,
+      "cash": 8270.821676338419,
+      "unrealized_pnl": -427.53486896397106,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-01-07 00:00:00",
+      "total_value": 26817.287804286647,
+      "cash": 8270.821676338419,
+      "unrealized_pnl": -334.1383818278584,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-01-14 00:00:00",
+      "total_value": 26978.2532114583,
+      "cash": 8310.190251671305,
+      "unrealized_pnl": -397.9299123648966,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-01-24 00:00:00",
+      "total_value": 26084.19743735915,
+      "cash": 8310.190251671305,
+      "unrealized_pnl": -359.0028065302706,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-01-31 00:00:00",
+      "total_value": 27029.697359159436,
+      "cash": 8171.928662711382,
+      "unrealized_pnl": -409.66989491009747,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-02-07 00:00:00",
+      "total_value": 26947.374214187734,
+      "cash": 8171.928662711382,
+      "unrealized_pnl": -397.17749885988115,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-02-14 00:00:00",
+      "total_value": 26473.207418323265,
+      "cash": 8128.186499623539,
+      "unrealized_pnl": -425.7057152385677,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-02-22 00:00:00",
+      "total_value": 26104.23825086063,
+      "cash": 8128.186499623539,
+      "unrealized_pnl": -419.9609323836866,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-03-01 00:00:00",
+      "total_value": 26302.516736823152,
+      "cash": 8102.056120223931,
+      "unrealized_pnl": -384.2699631201368,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-03-08 00:00:00",
+      "total_value": 25984.141729540235,
+      "cash": 8102.056120223931,
+      "unrealized_pnl": -265.3748762285834,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-03-15 00:00:00",
+      "total_value": 26864.776448286382,
+      "cash": 8115.7138728233795,
+      "unrealized_pnl": -333.37025922028977,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-03-22 00:00:00",
+      "total_value": 27873.84923371595,
+      "cash": 8115.7138728233795,
+      "unrealized_pnl": -348.5897093050655,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-03-29 00:00:00",
+      "total_value": 26653.73185918651,
+      "cash": 7980.478004088093,
+      "unrealized_pnl": -192.720162039029,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-04-05 00:00:00",
+      "total_value": 26302.902641211094,
+      "cash": 7980.478004088093,
+      "unrealized_pnl": -168.85156529135077,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-04-12 00:00:00",
+      "total_value": 26562.089519323134,
+      "cash": 8095.617526266106,
+      "unrealized_pnl": -88.66464517297443,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-04-20 00:00:00",
+      "total_value": 26908.715969465633,
+      "cash": 8095.617526266106,
+      "unrealized_pnl": -40.97560094340811,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-04-27 00:00:00",
+      "total_value": 26612.05708380313,
+      "cash": 8089.882886484868,
+      "unrealized_pnl": -114.17234861162028,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-05-04 00:00:00",
+      "total_value": 27123.99409166911,
+      "cash": 8089.882886484868,
+      "unrealized_pnl": -101.96403237310281,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-05-11 00:00:00",
+      "total_value": 26363.422330316498,
+      "cash": 8085.345273387582,
+      "unrealized_pnl": -150.84229624986435,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-05-18 00:00:00",
+      "total_value": 26386.49069753748,
+      "cash": 8085.345273387582,
+      "unrealized_pnl": -119.96912351827564,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-05-25 00:00:00",
+      "total_value": 26959.256417044944,
+      "cash": 8217.02545703216,
+      "unrealized_pnl": -105.3960478149299,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-06-02 00:00:00",
+      "total_value": 27771.020593573696,
+      "cash": 8217.02545703216,
+      "unrealized_pnl": -140.5464333847621,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-06-09 00:00:00",
+      "total_value": 26374.749576014743,
+      "cash": 8238.679842428724,
+      "unrealized_pnl": -129.87447652405672,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-06-16 00:00:00",
+      "total_value": 24677.843414033396,
+      "cash": 8238.679842428724,
+      "unrealized_pnl": -242.3350939167527,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-06-24 00:00:00",
+      "total_value": 27143.536137037172,
+      "cash": 8115.83898067335,
+      "unrealized_pnl": -277.61721942273005,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-07-01 00:00:00",
+      "total_value": 26896.973708225665,
+      "cash": 8115.83898067335,
+      "unrealized_pnl": -196.3735596737403,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-07-11 00:00:00",
+      "total_value": 26346.537956452827,
+      "cash": 8067.500047425425,
+      "unrealized_pnl": -260.3685372299596,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-07-18 00:00:00",
+      "total_value": 26217.457821637483,
+      "cash": 8067.500047425425,
+      "unrealized_pnl": -273.736000493028,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-07-25 00:00:00",
+      "total_value": 26534.17590839072,
+      "cash": 8019.540324456168,
+      "unrealized_pnl": -224.90106550930668,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-08-01 00:00:00",
+      "total_value": 27206.544886948497,
+      "cash": 8019.540324456168,
+      "unrealized_pnl": -222.69485936082143,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-08-08 00:00:00",
+      "total_value": 26357.77440209237,
+      "cash": 7935.523853006868,
+      "unrealized_pnl": -222.2140927076473,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-08-15 00:00:00",
+      "total_value": 27102.15734252258,
+      "cash": 7935.523853006868,
+      "unrealized_pnl": -181.41676488832232,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-08-22 00:00:00",
+      "total_value": 26141.840668954064,
+      "cash": 8038.0712163743465,
+      "unrealized_pnl": -162.3262097875472,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-08-29 00:00:00",
+      "total_value": 25813.470181661643,
+      "cash": 8038.0712163743465,
+      "unrealized_pnl": -107.49422587398234,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-09-06 00:00:00",
+      "total_value": 26471.10751948095,
+      "cash": 8050.9379862690275,
+      "unrealized_pnl": -147.08376814131967,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-09-13 00:00:00",
+      "total_value": 26616.255986840086,
+      "cash": 8050.9379862690275,
+      "unrealized_pnl": -125.97184138337563,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-09-20 00:00:00",
+      "total_value": 26254.736871470293,
+      "cash": 8056.6371325684,
+      "unrealized_pnl": -207.54215694175002,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-09-27 00:00:00",
+      "total_value": 25087.562820848532,
+      "cash": 8056.6371325684,
+      "unrealized_pnl": -330.6130831600135,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-10-04 00:00:00",
+      "total_value": 27107.841005796156,
+      "cash": 8056.142804937001,
+      "unrealized_pnl": -224.1681282619404,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-10-11 00:00:00",
+      "total_value": 26136.528016747357,
+      "cash": 8056.142804937001,
+      "unrealized_pnl": -228.96217289231615,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-10-18 00:00:00",
+      "total_value": 26849.70015507447,
+      "cash": 8103.273037419289,
+      "unrealized_pnl": -248.36534418268585,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-10-25 00:00:00",
+      "total_value": 27545.472066793773,
+      "cash": 8103.273037419289,
+      "unrealized_pnl": -229.89767694444714,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-11-01 00:00:00",
+      "total_value": 26817.20691653703,
+      "cash": 8238.64490850872,
+      "unrealized_pnl": -146.0567444249515,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-11-08 00:00:00",
+      "total_value": 26812.246040903356,
+      "cash": 8238.64490850872,
+      "unrealized_pnl": -91.31735043289908,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-11-15 00:00:00",
+      "total_value": 27117.668357589173,
+      "cash": 8310.004461747594,
+      "unrealized_pnl": -117.28452279482477,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-11-22 00:00:00",
+      "total_value": 27265.97051890139,
+      "cash": 8310.004461747594,
+      "unrealized_pnl": -74.43873314275636,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-11-30 00:00:00",
+      "total_value": 27587.65667470759,
+      "cash": 8384.656629382398,
+      "unrealized_pnl": -107.96582426907561,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-12-07 00:00:00",
+      "total_value": 26954.451834805383,
+      "cash": 8384.656629382398,
+      "unrealized_pnl": -101.90261643367478,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-12-14 00:00:00",
+      "total_value": 26853.953342164023,
+      "cash": 8320.735781897776,
+      "unrealized_pnl": -104.97475939197143,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-12-21 00:00:00",
+      "total_value": 26367.56706627344,
+      "cash": 8320.735781897776,
+      "unrealized_pnl": -100.07497941560034,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2022-12-29 00:00:00",
+      "total_value": 27390.544446371026,
+      "cash": 8385.678312266777,
+      "unrealized_pnl": -65.96101405559858,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-01-06 00:00:00",
+      "total_value": 27720.408601367395,
+      "cash": 8385.678312266777,
+      "unrealized_pnl": -9.013742780365519,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-01-13 00:00:00",
+      "total_value": 27298.038287974094,
+      "cash": 8451.506874657136,
+      "unrealized_pnl": 2.96956542023824,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-01-23 00:00:00",
+      "total_value": 27232.620788811593,
+      "cash": 8451.506874657136,
+      "unrealized_pnl": -76.88814365613999,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-01-30 00:00:00",
+      "total_value": 26903.468012725247,
+      "cash": 8371.955463607188,
+      "unrealized_pnl": -54.562591350349194,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-02-06 00:00:00",
+      "total_value": 27164.594980212278,
+      "cash": 8371.955463607188,
+      "unrealized_pnl": -124.48338552944134,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-02-13 00:00:00",
+      "total_value": 27220.030074921346,
+      "cash": 8328.62034724549,
+      "unrealized_pnl": -119.7658095745632,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-02-21 00:00:00",
+      "total_value": 26595.29761285215,
+      "cash": 8328.62034724549,
+      "unrealized_pnl": -135.37584679958053,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-02-28 00:00:00",
+      "total_value": 26923.126690651916,
+      "cash": 8320.200668036905,
+      "unrealized_pnl": -159.15890942811973,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-03-07 00:00:00",
+      "total_value": 26971.943049609294,
+      "cash": 8320.200668036905,
+      "unrealized_pnl": -179.42388022920252,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-03-14 00:00:00",
+      "total_value": 27194.104244725117,
+      "cash": 8268.099858527508,
+      "unrealized_pnl": -236.75756906723228,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-03-21 00:00:00",
+      "total_value": 27421.44030442866,
+      "cash": 8268.099858527508,
+      "unrealized_pnl": -323.48542912754095,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-03-28 00:00:00",
+      "total_value": 26856.36627819092,
+      "cash": 8227.003578995473,
+      "unrealized_pnl": -285.7660893071838,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-04-04 00:00:00",
+      "total_value": 27495.03602744376,
+      "cash": 8227.003578995473,
+      "unrealized_pnl": -260.7975512278622,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-04-12 00:00:00",
+      "total_value": 27054.84662480051,
+      "cash": 8372.268784124019,
+      "unrealized_pnl": -202.506107694578,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-04-19 00:00:00",
+      "total_value": 27221.796748676596,
+      "cash": 8372.268784124019,
+      "unrealized_pnl": -252.10888341711518,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-04-26 00:00:00",
+      "total_value": 26853.432756390896,
+      "cash": 8345.036386756692,
+      "unrealized_pnl": -302.31095050829947,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-05-03 00:00:00",
+      "total_value": 26946.317458844598,
+      "cash": 8345.036386756692,
+      "unrealized_pnl": -336.5470309680027,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-05-10 00:00:00",
+      "total_value": 26986.91084219434,
+      "cash": 8288.485095457172,
+      "unrealized_pnl": -368.549821349655,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-05-17 00:00:00",
+      "total_value": 26938.452029447926,
+      "cash": 8288.485095457172,
+      "unrealized_pnl": -444.93281087485036,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-05-24 00:00:00",
+      "total_value": 26531.211555187918,
+      "cash": 8156.816657154353,
+      "unrealized_pnl": -468.37585799251246,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-06-01 00:00:00",
+      "total_value": 26706.292496570422,
+      "cash": 8156.816657154353,
+      "unrealized_pnl": -613.7532681408064,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-06-08 00:00:00",
+      "total_value": 26692.54588388828,
+      "cash": 8107.547417925766,
+      "unrealized_pnl": -490.2888421027627,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-06-15 00:00:00",
+      "total_value": 27176.482617961527,
+      "cash": 8107.547417925766,
+      "unrealized_pnl": -532.0445287842729,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-06-23 00:00:00",
+      "total_value": 26212.753184461817,
+      "cash": 7961.438732488617,
+      "unrealized_pnl": -525.8190200259048,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-06-30 00:00:00",
+      "total_value": 26734.66817729505,
+      "cash": 7961.438732488617,
+      "unrealized_pnl": -470.7014616556934,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-07-10 00:00:00",
+      "total_value": 26582.39938338502,
+      "cash": 8035.071092833402,
+      "unrealized_pnl": -474.39422006943283,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-07-17 00:00:00",
+      "total_value": 26962.873669286302,
+      "cash": 8035.071092833402,
+      "unrealized_pnl": -512.4600720105364,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-07-24 00:00:00",
+      "total_value": 26675.234611849803,
+      "cash": 8081.545276769287,
+      "unrealized_pnl": -440.7225010216306,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-07-31 00:00:00",
+      "total_value": 26774.3374254179,
+      "cash": 8081.545276769287,
+      "unrealized_pnl": -462.26368523506943,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-08-07 00:00:00",
+      "total_value": 26859.50702862315,
+      "cash": 8126.850297223526,
+      "unrealized_pnl": -453.4862952817028,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-08-14 00:00:00",
+      "total_value": 26773.579499253538,
+      "cash": 8126.850297223526,
+      "unrealized_pnl": -443.987904627898,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-08-21 00:00:00",
+      "total_value": 26765.650661612424,
+      "cash": 8153.861825034345,
+      "unrealized_pnl": -491.8861656607543,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-08-28 00:00:00",
+      "total_value": 26910.950928823757,
+      "cash": 8153.861825034345,
+      "unrealized_pnl": -489.93846405520003,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-09-05 00:00:00",
+      "total_value": 26488.741697097947,
+      "cash": 8093.962434316649,
+      "unrealized_pnl": -524.6511641744305,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-09-12 00:00:00",
+      "total_value": 26497.32400943694,
+      "cash": 8093.962434316649,
+      "unrealized_pnl": -455.3100949506712,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-09-19 00:00:00",
+      "total_value": 26670.297724086347,
+      "cash": 8141.422378775763,
+      "unrealized_pnl": -461.6464927298093,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-09-26 00:00:00",
+      "total_value": 25961.587710480817,
+      "cash": 8141.422378775763,
+      "unrealized_pnl": -473.3241185092056,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-10-03 00:00:00",
+      "total_value": 26121.223663431705,
+      "cash": 7942.696581705852,
+      "unrealized_pnl": -548.0740394878183,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-10-10 00:00:00",
+      "total_value": 26657.5352453386,
+      "cash": 7942.696581705852,
+      "unrealized_pnl": -551.0308731409015,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-10-17 00:00:00",
+      "total_value": 26369.296803429897,
+      "cash": 7940.015770601265,
+      "unrealized_pnl": -494.0102120249305,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-10-24 00:00:00",
+      "total_value": 25771.64291225492,
+      "cash": 7940.015770601265,
+      "unrealized_pnl": -539.7484868426521,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-10-31 00:00:00",
+      "total_value": 26349.658892923602,
+      "cash": 7873.477523900956,
+      "unrealized_pnl": -510.8206204436124,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-11-07 00:00:00",
+      "total_value": 27047.54870101741,
+      "cash": 7873.477523900956,
+      "unrealized_pnl": -561.0912357372856,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-11-14 00:00:00",
+      "total_value": 26636.118500506112,
+      "cash": 7848.861373930045,
+      "unrealized_pnl": -514.2103543117032,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-11-21 00:00:00",
+      "total_value": 26790.12988759549,
+      "cash": 7848.861373930045,
+      "unrealized_pnl": -529.0810074154313,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-11-29 00:00:00",
+      "total_value": 26362.313715872075,
+      "cash": 7927.575398893185,
+      "unrealized_pnl": -499.00776307659305,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-12-06 00:00:00",
+      "total_value": 26433.90784796525,
+      "cash": 7927.575398893185,
+      "unrealized_pnl": -466.15763983479206,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-12-13 00:00:00",
+      "total_value": 26821.974462587757,
+      "cash": 8001.508271967473,
+      "unrealized_pnl": -448.7369217253148,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-12-20 00:00:00",
+      "total_value": 26774.015146334896,
+      "cash": 8001.508271967473,
+      "unrealized_pnl": -466.1060125688406,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2023-12-28 00:00:00",
+      "total_value": 26733.334336650994,
+      "cash": 8125.019799023628,
+      "unrealized_pnl": -449.3153673179859,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-01-05 00:00:00",
+      "total_value": 26485.604100829132,
+      "cash": 8125.019799023628,
+      "unrealized_pnl": -406.54831068929093,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-01-12 00:00:00",
+      "total_value": 26531.34541700498,
+      "cash": 8003.051289982041,
+      "unrealized_pnl": -483.98578861389,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-01-22 00:00:00",
+      "total_value": 26584.378488842,
+      "cash": 8003.051289982041,
+      "unrealized_pnl": -585.209132206302,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-01-29 00:00:00",
+      "total_value": 26459.811083426637,
+      "cash": 7910.4488601953635,
+      "unrealized_pnl": -568.7992302661589,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-02-05 00:00:00",
+      "total_value": 26417.369011775547,
+      "cash": 7910.4488601953635,
+      "unrealized_pnl": -613.6071929195468,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-02-12 00:00:00",
+      "total_value": 26316.26717213441,
+      "cash": 7866.346801757848,
+      "unrealized_pnl": -580.8103429132992,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-02-20 00:00:00",
+      "total_value": 26277.630022152873,
+      "cash": 7866.346801757848,
+      "unrealized_pnl": -524.2885353922053,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-02-27 00:00:00",
+      "total_value": 26378.324506311103,
+      "cash": 7902.2367768438335,
+      "unrealized_pnl": -552.9573275130183,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-03-05 00:00:00",
+      "total_value": 26492.05663146491,
+      "cash": 7902.2367768438335,
+      "unrealized_pnl": -500.5317933843752,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-03-12 00:00:00",
+      "total_value": 26530.10145895939,
+      "cash": 7943.977041837727,
+      "unrealized_pnl": -494.92521688186537,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-03-19 00:00:00",
+      "total_value": 26576.639712677836,
+      "cash": 7943.977041837727,
+      "unrealized_pnl": -480.95115495735206,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-03-26 00:00:00",
+      "total_value": 26101.687267085905,
+      "cash": 7774.183127458852,
+      "unrealized_pnl": -428.94990353593903,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-04-03 00:00:00",
+      "total_value": 26231.84434461601,
+      "cash": 7774.183127458852,
+      "unrealized_pnl": -374.02303189313295,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-04-10 00:00:00",
+      "total_value": 25966.587833534526,
+      "cash": 7822.745691122218,
+      "unrealized_pnl": -423.889073524379,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-04-17 00:00:00",
+      "total_value": 25427.11438022699,
+      "cash": 7822.745691122218,
+      "unrealized_pnl": -464.1633553298408,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-04-24 00:00:00",
+      "total_value": 26099.37771213562,
+      "cash": 7749.640025033841,
+      "unrealized_pnl": -399.46674772045185,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-05-01 00:00:00",
+      "total_value": 25851.106989712607,
+      "cash": 7749.640025033841,
+      "unrealized_pnl": -436.1562089371357,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-05-08 00:00:00",
+      "total_value": 25800.08194424592,
+      "cash": 7582.061590457123,
+      "unrealized_pnl": -381.0511475594134,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-05-15 00:00:00",
+      "total_value": 26246.856047467983,
+      "cash": 7582.061590457123,
+      "unrealized_pnl": -367.09824251723586,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-05-22 00:00:00",
+      "total_value": 25704.416157116397,
+      "cash": 7563.38489564341,
+      "unrealized_pnl": -382.8662858503179,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-05-30 00:00:00",
+      "total_value": 25366.489797913924,
+      "cash": 7563.38489564341,
+      "unrealized_pnl": -435.03387489411153,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-06-06 00:00:00",
+      "total_value": 25615.184439813616,
+      "cash": 7478.064751475929,
+      "unrealized_pnl": -494.4456861674788,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-06-13 00:00:00",
+      "total_value": 25653.97054585803,
+      "cash": 7478.064751475929,
+      "unrealized_pnl": -600.8631439296888,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-06-21 00:00:00",
+      "total_value": 25396.05912203408,
+      "cash": 7346.4020211311745,
+      "unrealized_pnl": -545.1512681033116,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-06-28 00:00:00",
+      "total_value": 25383.227604549775,
+      "cash": 7346.4020211311745,
+      "unrealized_pnl": -546.9854050216871,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-07-08 00:00:00",
+      "total_value": 25219.71754023347,
+      "cash": 7224.4114670234885,
+      "unrealized_pnl": -591.4924833824582,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-07-15 00:00:00",
+      "total_value": 25578.028109502684,
+      "cash": 7224.4114670234885,
+      "unrealized_pnl": -508.9275973872453,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-07-22 00:00:00",
+      "total_value": 25433.71378777595,
+      "cash": 7276.829174397044,
+      "unrealized_pnl": -448.5885629547479,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-07-29 00:00:00",
+      "total_value": 25297.36583485297,
+      "cash": 7276.829174397044,
+      "unrealized_pnl": -364.68597341778445,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-08-05 00:00:00",
+      "total_value": 24746.013746437755,
+      "cash": 7277.394979001126,
+      "unrealized_pnl": -366.4963167590495,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-08-12 00:00:00",
+      "total_value": 25250.973242562683,
+      "cash": 7277.394979001126,
+      "unrealized_pnl": -362.4863989387229,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-08-19 00:00:00",
+      "total_value": 25390.58668351224,
+      "cash": 7245.882425468324,
+      "unrealized_pnl": -351.4253563372424,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-08-26 00:00:00",
+      "total_value": 25577.15670414249,
+      "cash": 7245.882425468324,
+      "unrealized_pnl": -275.8873435123047,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-09-03 00:00:00",
+      "total_value": 25163.87787117445,
+      "cash": 7375.68468854673,
+      "unrealized_pnl": -251.72873281807628,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-09-10 00:00:00",
+      "total_value": 25052.1532124759,
+      "cash": 7375.68468854673,
+      "unrealized_pnl": -258.7940074144776,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-09-17 00:00:00",
+      "total_value": 25429.526365723017,
+      "cash": 7367.438309997293,
+      "unrealized_pnl": -244.46161416024455,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-09-24 00:00:00",
+      "total_value": 25720.33356415843,
+      "cash": 7367.438309997293,
+      "unrealized_pnl": -246.36632475784893,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-10-01 00:00:00",
+      "total_value": 25243.13579516031,
+      "cash": 7271.650036296887,
+      "unrealized_pnl": -147.90560499794574,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-10-08 00:00:00",
+      "total_value": 25197.313048394,
+      "cash": 7271.650036296887,
+      "unrealized_pnl": -235.9935469917742,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-10-15 00:00:00",
+      "total_value": 25042.154544862067,
+      "cash": 7180.271712697865,
+      "unrealized_pnl": -171.75324632951916,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-10-22 00:00:00",
+      "total_value": 25030.69678175611,
+      "cash": 7180.271712697865,
+      "unrealized_pnl": -226.8613831761971,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-10-29 00:00:00",
+      "total_value": 24880.937553100433,
+      "cash": 7092.149591776581,
+      "unrealized_pnl": -296.3852953897214,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-11-05 00:00:00",
+      "total_value": 24864.97371722328,
+      "cash": 7092.149591776581,
+      "unrealized_pnl": -233.55308175203754,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-11-12 00:00:00",
+      "total_value": 24549.64412870551,
+      "cash": 6901.399304545793,
+      "unrealized_pnl": -160.5364737169321,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-11-19 00:00:00",
+      "total_value": 24410.65519860216,
+      "cash": 6901.399304545793,
+      "unrealized_pnl": -142.97642572558527,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-11-26 00:00:00",
+      "total_value": 24807.419853418996,
+      "cash": 6941.013554529332,
+      "unrealized_pnl": -47.30761867372115,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-12-04 00:00:00",
+      "total_value": 24748.868446608143,
+      "cash": 6941.013554529332,
+      "unrealized_pnl": -168.55408196931683,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-12-11 00:00:00",
+      "total_value": 24332.138113814366,
+      "cash": 6711.23431278554,
+      "unrealized_pnl": -274.78968758243496,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-12-18 00:00:00",
+      "total_value": 23504.350659017982,
+      "cash": 6711.23431278554,
+      "unrealized_pnl": -414.02298679428503,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2024-12-26 00:00:00",
+      "total_value": 23861.426580335807,
+      "cash": 6489.785173830421,
+      "unrealized_pnl": -431.76750803812183,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-01-03 00:00:00",
+      "total_value": 23684.606548544238,
+      "cash": 6489.785173830421,
+      "unrealized_pnl": -398.3912058751855,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-01-13 00:00:00",
+      "total_value": 23941.96101195506,
+      "cash": 6477.001104202018,
+      "unrealized_pnl": -370.2890355290171,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-01-21 00:00:00",
+      "total_value": 24793.37781451078,
+      "cash": 6477.001104202018,
+      "unrealized_pnl": -234.21671038592564,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-01-28 00:00:00",
+      "total_value": 24028.41965504784,
+      "cash": 6600.115308349484,
+      "unrealized_pnl": -282.40090601901926,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-02-04 00:00:00",
+      "total_value": 24087.609064522167,
+      "cash": 6600.115308349484,
+      "unrealized_pnl": -217.76133581959715,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-02-11 00:00:00",
+      "total_value": 23995.221420819213,
+      "cash": 6531.585591310869,
+      "unrealized_pnl": -151.05705061332975,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-02-19 00:00:00",
+      "total_value": 24215.908167038342,
+      "cash": 6531.585591310869,
+      "unrealized_pnl": -136.33982680269958,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-02-26 00:00:00",
+      "total_value": 24027.34974458688,
+      "cash": 6599.863119869631,
+      "unrealized_pnl": -133.894372037793,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-03-05 00:00:00",
+      "total_value": 23785.2374466484,
+      "cash": 6599.863119869631,
+      "unrealized_pnl": -108.51033963925391,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-03-12 00:00:00",
+      "total_value": 24017.60518994746,
+      "cash": 6573.9873575740485,
+      "unrealized_pnl": -145.92887705996483,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-03-19 00:00:00",
+      "total_value": 24434.003639142855,
+      "cash": 6573.9873575740485,
+      "unrealized_pnl": -49.930213174514705,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-03-26 00:00:00",
+      "total_value": 24098.950937647667,
+      "cash": 6651.064724918567,
+      "unrealized_pnl": -41.41977618238556,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-04-02 00:00:00",
+      "total_value": 24107.695338963254,
+      "cash": 6651.064724918567,
+      "unrealized_pnl": 16.799064005506523,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-04-09 00:00:00",
+      "total_value": 26209.143091317106,
+      "cash": 6898.303832881434,
+      "unrealized_pnl": -323.21415380125984,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-04-16 00:00:00",
+      "total_value": 25797.40071176263,
+      "cash": 6898.303832881434,
+      "unrealized_pnl": -158.29053938746614,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-04-24 00:00:00",
+      "total_value": 24908.76680906356,
+      "cash": 6838.468384847127,
+      "unrealized_pnl": -64.04295745085494,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-05-01 00:00:00",
+      "total_value": 25166.03678479173,
+      "cash": 6838.468384847127,
+      "unrealized_pnl": -107.5306068061386,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-05-08 00:00:00",
+      "total_value": 24684.524848234923,
+      "cash": 6815.579212578011,
+      "unrealized_pnl": -45.883279930421,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-05-15 00:00:00",
+      "total_value": 25281.396225654687,
+      "cash": 6815.579212578011,
+      "unrealized_pnl": -101.21710063148183,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-05-22 00:00:00",
+      "total_value": 24409.05935364353,
+      "cash": 6734.2069081657355,
+      "unrealized_pnl": -99.94326054496275,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-05-30 00:00:00",
+      "total_value": 24646.243065608884,
+      "cash": 6734.2069081657355,
+      "unrealized_pnl": -65.6745331314799,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-06-06 00:00:00",
+      "total_value": 24556.33376728747,
+      "cash": 6680.083856733473,
+      "unrealized_pnl": -70.52086785321993,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-06-13 00:00:00",
+      "total_value": 24529.340284867205,
+      "cash": 6680.083856733473,
+      "unrealized_pnl": -55.94063919464193,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-06-23 00:00:00",
+      "total_value": 24611.636650194745,
+      "cash": 6706.639409224067,
+      "unrealized_pnl": -66.12892534252154,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-06-30 00:00:00",
+      "total_value": 24948.863754320242,
+      "cash": 6706.639409224067,
+      "unrealized_pnl": -129.811690970448,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-07-08 00:00:00",
+      "total_value": 24431.749384015948,
+      "cash": 6697.011928756163,
+      "unrealized_pnl": -82.20447042693047,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-07-15 00:00:00",
+      "total_value": 24299.41983440449,
+      "cash": 6697.011928756163,
+      "unrealized_pnl": -171.04007938142337,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-07-22 00:00:00",
+      "total_value": 24482.226773927654,
+      "cash": 6660.4961697059725,
+      "unrealized_pnl": -99.4419853080766,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-07-29 00:00:00",
+      "total_value": 24557.35858441041,
+      "cash": 6660.4961697059725,
+      "unrealized_pnl": -141.83233442159087,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-08-05 00:00:00",
+      "total_value": 24260.780257566792,
+      "cash": 6650.532569472112,
+      "unrealized_pnl": -191.9713065970156,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-08-12 00:00:00",
+      "total_value": 24518.345469778214,
+      "cash": 6650.532569472112,
+      "unrealized_pnl": -246.7580056016376,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-08-19 00:00:00",
+      "total_value": 24251.101032228413,
+      "cash": 6580.530052173641,
+      "unrealized_pnl": -138.7759963664995,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-08-26 00:00:00",
+      "total_value": 24411.49197930215,
+      "cash": 6580.530052173641,
+      "unrealized_pnl": -123.71703947404194,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-09-03 00:00:00",
+      "total_value": 24335.41909391514,
+      "cash": 6666.721756045732,
+      "unrealized_pnl": -183.06369626286266,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-09-10 00:00:00",
+      "total_value": 24524.11034837088,
+      "cash": 6666.721756045732,
+      "unrealized_pnl": -192.16769793427062,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-09-17 00:00:00",
+      "total_value": 24265.934190738644,
+      "cash": 6588.243432940127,
+      "unrealized_pnl": -155.1012838038165,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-09-24 00:00:00",
+      "total_value": 24347.590238136698,
+      "cash": 6588.243432940127,
+      "unrealized_pnl": -158.76775327288425,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-10-01 00:00:00",
+      "total_value": 24342.18892160046,
+      "cash": 6625.109391961258,
+      "unrealized_pnl": -154.20829739441564,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-10-08 00:00:00",
+      "total_value": 24395.079447267755,
+      "cash": 6625.109391961258,
+      "unrealized_pnl": -182.46971555349825,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-10-15 00:00:00",
+      "total_value": 24332.416081178122,
+      "cash": 6618.188621150205,
+      "unrealized_pnl": -169.4345755515513,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-10-22 00:00:00",
+      "total_value": 24383.978657668697,
+      "cash": 6618.188621150205,
+      "unrealized_pnl": -174.68728132895944,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-10-29 00:00:00",
+      "total_value": 23885.983962469698,
+      "cash": 6468.676344514262,
+      "unrealized_pnl": -316.32092214975404,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-11-05 00:00:00",
+      "total_value": 23711.194061469407,
+      "cash": 6468.676344514262,
+      "unrealized_pnl": -292.28360872812067,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-11-12 00:00:00",
+      "total_value": 24090.48939258858,
+      "cash": 6495.437329436379,
+      "unrealized_pnl": -230.47212084072856,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-11-19 00:00:00",
+      "total_value": 23581.999268036718,
+      "cash": 6495.437329436379,
+      "unrealized_pnl": -247.39145053896897,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-11-26 00:00:00",
+      "total_value": 24184.57928392508,
+      "cash": 6483.645543068251,
+      "unrealized_pnl": -214.15520277509768,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-12-04 00:00:00",
+      "total_value": 24284.319818863874,
+      "cash": 6483.645543068251,
+      "unrealized_pnl": -218.61194910121367,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-12-11 00:00:00",
+      "total_value": 24202.691405631744,
+      "cash": 6524.2807781748,
+      "unrealized_pnl": -216.57631770687743,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-12-18 00:00:00",
+      "total_value": 23984.278331640508,
+      "cash": 6524.2807781748,
+      "unrealized_pnl": -181.39671115039806,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2025-12-26 00:00:00",
+      "total_value": 24066.55033762486,
+      "cash": 6512.326561224956,
+      "unrealized_pnl": -190.11132658514333,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2026-01-05 00:00:00",
+      "total_value": 24134.972283394727,
+      "cash": 6512.326561224956,
+      "unrealized_pnl": -126.83912018066917,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2026-01-12 00:00:00",
+      "total_value": 24347.466627728652,
+      "cash": 6661.303142472518,
+      "unrealized_pnl": -129.67814278709704,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2026-01-20 00:00:00",
+      "total_value": 24147.662254562114,
+      "cash": 6661.303142472518,
+      "unrealized_pnl": -32.33038230788185,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2026-01-27 00:00:00",
+      "total_value": 24526.04944537601,
+      "cash": 6760.961861586043,
+      "unrealized_pnl": -74.50633325035881,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2026-02-03 00:00:00",
+      "total_value": 24580.62879837784,
+      "cash": 6760.961861586043,
+      "unrealized_pnl": 19.75006679470431,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2026-02-10 00:00:00",
+      "total_value": 24835.056629254806,
+      "cash": 6968.622859832005,
+      "unrealized_pnl": 48.81422767141672,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2026-02-18 00:00:00",
+      "total_value": 24886.819403236637,
+      "cash": 6968.622859832005,
+      "unrealized_pnl": 140.43076260393426,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2026-02-25 00:00:00",
+      "total_value": 25081.383716762433,
+      "cash": 7103.156812532046,
+      "unrealized_pnl": 78.39632322413954,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2026-03-04 00:00:00",
+      "total_value": 24985.19572893688,
+      "cash": 7103.156812532046,
+      "unrealized_pnl": 121.3741258121519,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2026-03-11 00:00:00",
+      "total_value": 24814.783297189326,
+      "cash": 7018.781485675222,
+      "unrealized_pnl": 12.63300904795068,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2026-03-18 00:00:00",
+      "total_value": 24512.52088580983,
+      "cash": 7018.781485675222,
+      "unrealized_pnl": 33.363221850260004,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2026-03-25 00:00:00",
+      "total_value": 25046.86199624478,
+      "cash": 7080.2019873164445,
+      "unrealized_pnl": 30.01364106028447,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2026-04-01 00:00:00",
+      "total_value": 25040.332551695337,
+      "cash": 7080.2019873164445,
+      "unrealized_pnl": 45.717452496200025,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2026-04-09 00:00:00",
+      "total_value": 24551.288288724296,
+      "cash": 6766.3353742716445,
+      "unrealized_pnl": 211.2801510302524,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2026-04-16 00:00:00",
+      "total_value": 24808.348546497084,
+      "cash": 6766.3353742716445,
+      "unrealized_pnl": 98.92657487462904,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2026-04-23 00:00:00",
+      "total_value": 24175.036635654506,
+      "cash": 6550.359661570177,
+      "unrealized_pnl": 182.26455286234787,
+      "n_positions": 16
+    },
+    {
+      "timestamp": "2026-04-30 00:00:00",
+      "total_value": 24429.256272550694,
+      "cash": 6550.359661570177,
+      "unrealized_pnl": 202.5401117961356,
+      "n_positions": 16
+    }
+  ]
+}

@@ -1,28 +1,31 @@
 /**
  * Strategy Detail Layout — generates static pages for all known strategy IDs.
  * Required for Next.js static export (output: 'export') with dynamic [id] routes.
+ *
+ * IDs come from config/strategy_registry.yaml (the lifecycle single source of
+ * truth) read at build time — never hardcode strategy ids here.
  */
 
+import fs from 'fs'
+import path from 'path'
+
 export function generateStaticParams() {
+  const registryPath = path.join(process.cwd(), '..', '..', 'config', 'strategy_registry.yaml')
+  try {
+    const yaml = fs.readFileSync(registryPath, 'utf-8')
+    const ids = Array.from(yaml.matchAll(/^\s*-\s*id:\s*([A-Za-z0-9_]+)\s*$/gm), m => m[1])
+    if (ids.length > 0) {
+      return ids.map(id => ({ id }))
+    }
+  } catch {
+    // fall through to minimal known set
+  }
   return [
-    // Crypto strategies
-    { id: 'btc_sniper' },
-    { id: 'crypto_scalping' },
-    { id: 'crypto_swing' },
-    { id: 'crypto_momentum' },
-    { id: 'crypto_breakout' },
-    { id: 'crypto_orderbook' },
-    { id: 'crypto_event' },
-    { id: 'crypto_macro_cycle' },
-    // Equity strategies
-    { id: 'equity_factor' },
-    { id: 'equity_timing' },
-    { id: 'equity_long_short' },
-    // Options strategies
+    { id: 'eth_sniper' },
     { id: 'spy_gamma_scalp' },
-    { id: 'delta_neutral' },
-    { id: 'spy_iron_condor' },
-    { id: 'spy_wheel' },
+    { id: 'btc_wheel' },
+    { id: 'combo_wheel_sniper' },
+    { id: 'btc_sniper' },
   ]
 }
 

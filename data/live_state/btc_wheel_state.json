@@ -1,0 +1,20 @@
+{
+ "equity": 100000.0,
+ "realized": 0.0,
+ "position": {
+  "put": "BTC-17JUL26-58000-P",
+  "call": "BTC-17JUL26-68000-C",
+  "kp": 58000.0,
+  "kc": 68000.0,
+  "expiry_ms": 1784275200000,
+  "mult": 0.7915786167385315,
+  "entry_index": 63164.92,
+  "entry_bid_p": 132.646332,
+  "entry_bid_c": 56.848428,
+  "credit_total": 131.25,
+  "opened": "2026-07-09T18:55:37+00:00"
+ },
+ "n_trades": 0,
+ "wins": 0,
+ "created": "2026-07-09T18:55:36+00:00"
+}

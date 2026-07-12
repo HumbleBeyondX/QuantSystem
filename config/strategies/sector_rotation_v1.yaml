@@ -1,0 +1,122 @@
+# ============================================================
+# Sector Rotation Strategy v1 — Config
+# ============================================================
+# GMM regime detection + cross-sectional factor scoring +
+# signal-tilted mean-variance optimization, bi-weekly rebalance,
+# market-neutral via SPY hedge.
+#
+# Backtest: 2010-01-01 → 2026-05-03
+#   Warm-up (no trading):  2010-01-01 → 2014-12-31 (5y for stable GMM)
+#   Walk-forward (OOS):    2015-01-01 → 2026-05-03 (~11.3y)
+# ============================================================
+
+strategy_id: sector_rotation_v1
+name: "Sector Rotation v1 (GMM + Factor Tilt + MV)"
+asset_class: equity
+enabled: true
+mode: backtest
+
+# ── Universe ──
+# 11 GICS sectors + 4 factor ETFs. SPY used for hedge, not in long sleeve.
+universe:
+  - XLK   # Technology
+  - XLF   # Financials
+  - XLV   # Health Care
+  - XLY   # Consumer Discretionary
+  - XLP   # Consumer Staples
+  - XLE   # Energy
+  - XLI   # Industrials
+  - XLU   # Utilities
+  - XLB   # Materials
+  - XLRE  # Real Estate (post-2015)
+  - XLC   # Communication Services (post-2018)
+  - MTUM  # Momentum factor
+  - QUAL  # Quality factor
+  - USMV  # Min volatility factor
+  - VLUE  # Value factor
+
+hedge_ticker: SPY
+
+# ── Backtest period ──
+backtest:
+  start_date: "2010-01-01"
+  end_date: "2026-05-03"
+  warmup_end: "2014-12-31"
+  oos_start: "2015-01-01"
+  initial_capital: 10000
+  fee_bps: 5
+  slippage_bps: 5
+  data_file: "data/sample/sector_rotation_2010-01-01_2026-05-03.parquet"
+
+# ── Rebalance ──
+rebalance:
+  frequency: "biweekly"        # every 10 trading days (~ every other Friday)
+  cadence_bars: 10
+
+# ── GMM regime detector ──
+regime:
+  n_components: 4
+  train_window_days: 756       # 3 years trailing window
+  refit_every_days: 21          # refit every ~month
+  random_state: 42
+
+# ── Factor weights per regime ──
+# Convention: positive weight = factor's z-score adds to long conviction.
+# vol_60d and beta_spy are already SIGN-FLIPPED in the factor (low vol/beta
+# → high z-score), so positive weights here mean "prefer defensive" sectors.
+regime_factor_weights:
+  bull:
+    mom_12_1:     0.30
+    mom_6_1:      0.20
+    trend_sma200: 0.20
+    st_reversal: -0.10
+    vol_60d:     -0.10           # in bull, we want HIGH vol (offensive)
+    beta_spy:    -0.10           # high beta — flip the sign of the flipped factor
+    div_yield:    0.00
+  bear:
+    mom_12_1:    -0.20            # invert in bear (recent winners get punished)
+    mom_6_1:     -0.15
+    trend_sma200: -0.15
+    st_reversal:  0.20            # contrarian works in bear
+    vol_60d:      0.30            # strong defensive tilt
+    beta_spy:     0.20            # low beta
+    div_yield:    0.10
+  crisis:
+    mom_12_1:    -0.10
+    mom_6_1:     -0.05
+    trend_sma200: -0.10
+    st_reversal:  0.10
+    vol_60d:      0.40            # MAX defensive
+    beta_spy:     0.30
+    div_yield:    0.20
+  neutral:
+    mom_12_1:     0.15
+    mom_6_1:      0.10
+    trend_sma200: 0.10
+    st_reversal:  0.05
+    vol_60d:      0.05
+    beta_spy:     0.00
+    div_yield:    0.00
+
+# ── Mean-variance optimizer ──
+mv:
+  cov_lookback_days: 252
+  cov_method: "ledoit_wolf"
+  weight_min: 0.0                # long-only on the long sleeve
+  weight_max: 0.30                # max 30% per ETF
+  target_volatility: 0.08         # 8% annualized portfolio vol
+  tilt_strength: 0.10             # how much score tilts expected returns
+  base_return_lookback_days: 60   # baseline expected return = trailing 60d return
+
+# ── Hedge sleeve ──
+hedge:
+  enabled: true
+  method: "spy_beta"               # short SPY at long-portfolio's beta
+  max_short_pct: 1.50              # don't short more than 150% of long sleeve
+
+# ── Acceptance gate ──
+acceptance:
+  min_sharpe: 2.0
+  max_drawdown_pct: 0.15
+  min_info_ratio_vs_spy: 0.5
+  max_annual_turnover: 3.0

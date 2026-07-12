@@ -8,5 +8,8 @@ REM ============================================================
 cd /d E:\Duke\QuantTrade\QuantSystem
 
 E:\CodingDownload\Anaconda\envs\quantsystem\python.exe scripts/live_paper_trade.py --data-source yahoo --mode once
-
+if errorlevel 1 (
+  echo [%date% %time%] Paper trading FAILED errorlevel=%errorlevel% >> logs\paper_trading\scheduler.log
+  exit /b 1
+)
 echo [%date% %time%] Paper trading completed >> logs\paper_trading\scheduler.log

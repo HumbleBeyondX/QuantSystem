@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.database.models import (
     AuditLogRecord,
     BacktestResultRecord,
+    FactorEvaluationRecord,
     FillRecord,
     OrderRecord,
     PortfolioSnapshotRecord,
@@ -348,6 +349,73 @@ class BacktestRepo:
     async def list_all(session: AsyncSession, *, limit: int = 50) -> Sequence[BacktestResultRecord]:
         stmt = select(BacktestResultRecord).order_by(desc(BacktestResultRecord.created_at)).limit(limit)
         return (await session.execute(stmt)).scalars().all()
+
+
+# ====================================================================
+# Factor Evaluations
+# ====================================================================
+
+class FactorEvaluationRepo:
+    """Data-access for the ``factor_evaluations`` table."""
+
+    @staticmethod
+    async def insert(session: AsyncSession, **kwargs: Any) -> FactorEvaluationRecord:
+        rec = FactorEvaluationRecord(**kwargs)
+        session.add(rec)
+        await session.flush()
+        return rec
+
+    @staticmethod
+    async def get(session: AsyncSession, eval_id: str) -> Optional[FactorEvaluationRecord]:
+        stmt = select(FactorEvaluationRecord).where(FactorEvaluationRecord.eval_id == eval_id)
+        return (await session.execute(stmt)).scalar_one_or_none()
+
+    @staticmethod
+    async def list_all(
+        session: AsyncSession,
+        *,
+        factor_name: Optional[str] = None,
+        category: Optional[str] = None,
+        symbol: Optional[str] = None,
+        limit: int = 500,
+    ) -> Sequence[FactorEvaluationRecord]:
+        stmt = select(FactorEvaluationRecord)
+        if factor_name:
+            stmt = stmt.where(FactorEvaluationRecord.factor_name == factor_name)
+        if category:
+            stmt = stmt.where(FactorEvaluationRecord.category == category)
+        if symbol:
+            stmt = stmt.where(FactorEvaluationRecord.symbol == symbol)
+        stmt = stmt.order_by(desc(FactorEvaluationRecord.evaluated_at)).limit(limit)
+        return (await session.execute(stmt)).scalars().all()
+
+    @staticmethod
+    async def latest_by_factor(
+        session: AsyncSession,
+        symbol: str,
+        timeframe: str,
+    ) -> List[FactorEvaluationRecord]:
+        """Get the most recent evaluation for each distinct factor_name."""
+        # Get all records, then dedupe in Python — simpler than window queries
+        stmt = (
+            select(FactorEvaluationRecord)
+            .where(
+                FactorEvaluationRecord.symbol == symbol,
+                FactorEvaluationRecord.timeframe == timeframe,
+            )
+            .order_by(desc(FactorEvaluationRecord.evaluated_at))
+        )
+        rows = (await session.execute(stmt)).scalars().all()
+
+        # Keep first occurrence of each (factor_name, horizon_bars)
+        seen: set = set()
+        latest: List[FactorEvaluationRecord] = []
+        for r in rows:
+            key = (r.factor_name, r.horizon_bars)
+            if key not in seen:
+                seen.add(key)
+                latest.append(r)
+        return latest
 
 
 # ====================================================================

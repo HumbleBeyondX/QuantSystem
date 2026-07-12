@@ -37,3 +37,14 @@ yfinance>=0.2.60
 google-auth>=2.0
 google-auth-oauthlib>=1.0
 google-api-python-client>=2.0
+
+# Cloud storage (Supabase — PostgreSQL + S3-compatible storage)
+# Optional at runtime: if SUPABASE_URL not set, all cloud features are no-ops.
+supabase>=2.5
+asyncpg>=0.29
+pyarrow>=15.0
+
+# SQLAlchemy (local + cloud SQL ORM)
+sqlalchemy[asyncio]>=2.0
+aiosqlite>=0.19
+alembic>=1.13

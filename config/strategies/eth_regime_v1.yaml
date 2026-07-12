@@ -1,0 +1,97 @@
+# ============================================================
+# ETH Regime-Switching Strategy v1 — Backtest Configuration
+# ============================================================
+# Progressive 1H strategy using factor composition per regime.
+#
+# Design: factor evaluation on ETH 1H 2024-2026 found that no single
+# factor has standalone alpha (max Rank IC = 0.049). Mean reversion
+# dominates the 1H regime. This strategy composes 5 factors per regime.
+#
+# NOT YET DEPLOYED LIVE — backtest-only. Do not start with
+# QS_LIVE_CONFIG pointing at this file.
+# ============================================================
+
+strategy_id: eth_regime_v1
+name: "ETH Regime-Switching v1 (1H)"
+asset_class: crypto
+enabled: true
+mode: backtest
+
+# ── Trading symbol ──
+symbols:
+  - "ETH/USDT:USDT"
+
+# ── Market data ──
+data:
+  timeframe: "1h"
+  warmup_bars: 720    # 30 days of 1H for factor z-scoring + regime classification
+  poll_interval_seconds: 30
+  btc_reference_symbol: "BTC/USDT:USDT"   # needed for cross-asset factors
+
+# ── Strategy parameters ──
+parameters:
+  # Leverage & risk (less aggressive than Sniper's 50x)
+  leverage: 20.0
+  risk_per_trade: 0.02        # 2% per trade (vs Sniper 5%)
+  max_margin_pct: 0.30
+  initial_capital: 1000       # for backtest only; live mode uses exchange balance
+
+  # Signal thresholds
+  entry_threshold: 1.5        # composite score magnitude to enter
+  zscore_window: 720          # 30 days of 1H for factor standardization
+
+  # Stops (tighter than Sniper because 1H is faster)
+  atr_period: 24
+  atr_stop: 2.5
+
+  # Regime detector
+  regime_adx_period: 14
+  regime_vol_window: 24
+  regime_corr_window: 24
+  regime_vol_history_window: 720    # 30 days
+
+  # Small-account min lot handling (OKX ETH-USDT-SWAP min = 0.1 ETH)
+  force_min_lot: true
+  max_risk_override_pct: 0.50
+
+  # Fees (for backtest accounting)
+  fee_rate: 0.0005            # OKX taker fee 0.05%
+
+# ── Backtest settings ──
+backtest:
+  start_date: "2024-01-01"
+  end_date: "2026-04-16"
+  initial_cash: 1000.0
+  slippage_bps: 5             # 5 basis points per trade
+  fee_rate: 0.0005
+  data_file: "data/sample/ETH_USDT_1h_2024-01-01_to_2026-04-16_okx.csv"
+  btc_data_file: "data/sample/BTC_USDT_1h_2024-01-01_to_2026-04-16_okx.csv"
+
+  # Walk-forward split for acceptance gate
+  in_sample_end: "2025-06-30"       # 1.5y IS
+  out_of_sample_start: "2025-07-01" # 9.5m OOS
+
+# ── Acceptance gate (both IS and OOS must pass) ──
+acceptance:
+  min_sharpe: 1.5
+  max_drawdown_pct: 0.20
+  min_profit_factor: 1.5
+  min_trades: 100
+  max_oos_sharpe_degradation: 0.40  # OOS Sharpe must be at least 60% of IS
+
+# ── Risk limits (for live mode — not used in backtest) ──
+risk:
+  max_order_value: 5000
+  max_position_pct: 0.50
+  max_leverage: 25.0
+  max_daily_orders: 40
+  max_daily_loss_pct: 0.05
+  max_drawdown_pct: 0.20
+  max_session_loss_usd: 50
+
+# ── Logging ──
+logging:
+  log_every_poll: false
+  log_new_bars: true
+  log_signals: true
+  log_regime_changes: true

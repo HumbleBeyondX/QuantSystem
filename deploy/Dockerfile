@@ -38,6 +38,15 @@ COPY portfolio/ /app/portfolio/
 COPY backtesting/ /app/backtesting/
 COPY config/ /app/config/
 COPY dashboard/backend/ /app/dashboard/backend/
+COPY dashboard/alerts/ /app/dashboard/alerts/
+COPY scripts/live_paper_trade.py /app/scripts/live_paper_trade.py
+# data/ is a code package (data.quality) AND a state dir (data/live_state).
+# Code ships in the image; state lives on the qs-data volume mounted at
+# /app/data/live_state (mounting all of /app/data would shadow the code).
+COPY data/__init__.py /app/data/__init__.py
+COPY data/quality/ /app/data/quality/
+COPY data/altdata/ /app/data/altdata/
+COPY scripts/monitor_13f.py /app/scripts/monitor_13f.py
 
 # Create empty __init__.py files where needed
 RUN touch /app/__init__.py

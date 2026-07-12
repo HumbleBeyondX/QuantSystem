@@ -1,7 +1,9 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
+import TearSheet from '@/components/charts/TearSheet'
 
 /**
  * Backtest Page - Fully API-driven with workflow integration
@@ -29,6 +31,7 @@ interface StrategyInfo {
   backtest_sharpe: number | null
   backtest_win_rate: number | null
   backtest_trades: number | null
+  runnable?: boolean
 }
 
 interface BacktestResult {
@@ -70,6 +73,7 @@ function BacktestInner() {
   const [selectedFile, setSelectedFile] = useState('')
   const [statusMsg, setStatusMsg] = useState('')
   const [catalogLoaded, setCatalogLoaded] = useState(false)
+  const [recordsRefresh, setRecordsRefresh] = useState(0)
 
   // Fetch catalog, results, data files on mount
   useEffect(() => {
@@ -102,10 +106,14 @@ function BacktestInner() {
           } else {
             setSymbol(qSymbol || 'BTC/USDT')
           }
-        } else if (data.length > 0) {
-          setSelectedStrategy(data[0].id)
-          setSymbol(data[0].symbols[0] || 'BTC/USDT')
-          setParams(data[0].default_params || {})
+        } else {
+          const runnables = data.filter(s => s.runnable === true)
+          const first = runnables[0] || null
+          if (first) {
+            setSelectedStrategy(first.id)
+            setSymbol(first.symbols[0] || 'BTC/USDT')
+            setParams(first.default_params || {})
+          }
         }
         setCatalogLoaded(true)
       }
@@ -262,6 +270,12 @@ function BacktestInner() {
         </div>
       </div>
 
+      {/* Research pipeline map */}
+      <PipelineStrip />
+
+      {/* Official Research Records */}
+      <OfficialRecords refreshKey={recordsRefresh} />
+
       {/* Configuration Form */}
       <div className="bg-surface rounded-xl border border-border p-6">
         <h3 className="text-lg font-semibold mb-4">Configuration</h3>
@@ -279,9 +293,9 @@ function BacktestInner() {
                 onChange={e => handleStrategyChange(e.target.value)}
                 className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-accent"
               >
-                {/* Group by asset class */}
+                {/* Group by asset class — runnable strategies only */}
                 {['crypto', 'options', 'equity'].map(cls => {
-                  const group = catalog.filter(s => s.asset_class === cls)
+                  const group = catalog.filter(s => s.asset_class === cls && s.runnable === true)
                   if (group.length === 0) return null
                   return (
                     <optgroup key={cls} label={cls.charAt(0).toUpperCase() + cls.slice(1)}>
@@ -464,6 +478,13 @@ function BacktestInner() {
             </span>
           </div>
 
+          {/* Promote to official record */}
+          <PromotePanel
+            key={selectedResult.backtest_id}
+            result={selectedResult}
+            onPromoted={() => setRecordsRefresh(k => k + 1)}
+          />
+
           {/* KPI Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
             {[
@@ -496,6 +517,14 @@ function BacktestInner() {
               </div>
             </div>
           )}
+
+          {/* Tear sheet — full analytics vs benchmark */}
+          <div className="pt-2 border-t border-border/50">
+            <TearSheet
+              key={selectedResult.backtest_id}
+              analyticsUrl={`/api/backtest/results/${selectedResult.backtest_id}/analytics`}
+            />
+          </div>
 
           {/* Recent Trades */}
           {selectedResult.trades && selectedResult.trades.length > 0 && (
@@ -648,6 +677,633 @@ export default function BacktestPage() {
   )
 }
 
+
+// ---------------------------------------------------------------------------
+// Research Pipeline Strip — workflow map: data → strategy → backtest → record
+// ---------------------------------------------------------------------------
+
+const PIPELINE_STEPS: Array<{
+  n: number
+  label: string
+  href: string | null
+  caption: string
+  current?: boolean
+}> = [
+  { n: 1, label: 'Pull data', href: '/data', caption: 'fetch_market_data.py · Collection tab' },
+  { n: 2, label: 'Write strategy', href: '/workshop', caption: 'scaffold from template' },
+  { n: 3, label: 'Backtest', href: null, caption: 'run → tear sheet vs benchmark', current: true },
+  { n: 4, label: 'Record', href: '#records', caption: 'promote → IS/OOS validate → 1.5 gate' },
+]
+
+function PipelineStrip() {
+  return (
+    <div className="flex items-center gap-2 flex-wrap px-4 py-2.5 rounded-lg border border-border/50 bg-surface/50">
+      {PIPELINE_STEPS.map((step, i) => {
+        const inner = (
+          <span className="flex items-baseline gap-1.5 whitespace-nowrap">
+            <span
+              className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold self-center ${
+                step.current ? 'bg-accent text-white' : 'bg-background text-gray-500 border border-border'
+              }`}
+            >
+              {step.n}
+            </span>
+            <span className={`text-xs font-medium ${step.current ? 'text-accent' : 'text-gray-300'}`}>
+              {step.label}
+            </span>
+            <span className="text-[10px] text-gray-500 hidden md:inline">{step.caption}</span>
+          </span>
+        )
+        return (
+          <span key={step.n} className="flex items-center gap-2">
+            {i > 0 && <span className="text-gray-600 text-xs">→</span>}
+            {step.href === null ? (
+              inner
+            ) : step.href.startsWith('#') ? (
+              <a href={step.href} className="hover:opacity-80 transition-opacity">
+                {inner}
+              </a>
+            ) : (
+              <Link href={step.href} className="hover:opacity-80 transition-opacity">
+                {inner}
+              </Link>
+            )}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Promote to Official Record
+// ---------------------------------------------------------------------------
+
+function PromotePanel({ result, onPromoted }: { result: BacktestResult; onPromoted: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState(`${result.strategy} ${result.symbol}`)
+  const [notes, setNotes] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [promoted, setPromoted] = useState<{ id: string; file: string } | null>(null)
+  const [error, setError] = useState('')
+
+  const handlePromote = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      const res = await fetch(`${API}/api/backtest/results/${result.backtest_id}/promote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, notes }),
+      })
+      if (res.status === 409) {
+        setError('Cannot promote: backtest is not completed')
+      } else if (!res.ok) {
+        const errText = await res.text().catch(() => `Status ${res.status}`)
+        setError(`Promote failed: ${errText}`)
+      } else {
+        const data = await res.json()
+        setPromoted({ id: data.id, file: data.file })
+        setOpen(false)
+        onPromoted()
+      }
+    } catch (e: any) {
+      setError(`Promote failed: ${e.message}`)
+    }
+    setBusy(false)
+  }
+
+  if (promoted) {
+    return (
+      <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 space-y-1">
+        <p className="text-sm text-warning font-medium">
+          Promoted as <span className="font-mono">{promoted.id}</span>
+        </p>
+        <p className="text-[11px] text-gray-400 font-mono">{promoted.file}</p>
+        <p className="text-[11px] text-gray-500">
+          candidate — needs IS/OOS validation before the 1.5 gate
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      {!open ? (
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setOpen(true)}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-warning/40 text-warning hover:bg-warning/10 transition-colors"
+          >
+            Promote → Official Record
+          </button>
+          {error && <span className="text-[11px] text-danger">{error}</span>}
+        </div>
+      ) : (
+        <div className="flex items-end gap-3 flex-wrap p-3 rounded-lg border border-border bg-background">
+          <div>
+            <label className="block text-[11px] text-gray-500 mb-1">Record name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              className="w-56 bg-surface border border-border rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-accent"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] text-gray-500 mb-1">Notes (optional)</label>
+            <input
+              type="text"
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="e.g. params, data caveats"
+              className="w-64 bg-surface border border-border rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-accent"
+            />
+          </div>
+          <button
+            onClick={handlePromote}
+            disabled={busy || !name.trim()}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              busy || !name.trim()
+                ? 'bg-warning/30 text-white/50 cursor-not-allowed'
+                : 'bg-warning text-black hover:bg-warning/80'
+            }`}
+          >
+            {busy ? 'Promoting...' : 'Promote'}
+          </button>
+          <button
+            onClick={() => {
+              setOpen(false)
+              setError('')
+            }}
+            className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+          >
+            Cancel
+          </button>
+          {error && <span className="text-[11px] text-danger w-full">{error}</span>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Official Research Records
+// ---------------------------------------------------------------------------
+
+interface ResearchRecord {
+  id: string
+  name?: string
+  status: string
+  verdict: string
+  created?: string
+  period?: { start?: string; end?: string; oos_start?: string }
+  headline?: Record<string, number | null>
+  data_note?: string
+  script?: string
+  has_curve?: boolean
+  rerun?: any
+}
+
+interface RerunState {
+  status: 'idle' | 'running' | 'completed' | 'failed'
+  tail?: string[]
+  started_at?: string
+  finished_at?: string
+  returncode?: number
+}
+
+type CurveSeries = Record<string, Array<{ date: string; equity: number }>>
+
+const HEADLINE_DEFS: Array<{ key: string; label: string; fmt: (v: number) => string }> = [
+  { key: 'sharpe', label: 'Sharpe', fmt: v => v.toFixed(2) },
+  { key: 'oos_sharpe', label: 'OOS Sharpe', fmt: v => v.toFixed(2) },
+  { key: 'walkforward_sharpe', label: 'WF Sharpe', fmt: v => v.toFixed(2) },
+  { key: 'max_dd', label: 'Max DD', fmt: v => `${(Math.abs(v) <= 1 ? v * 100 : v).toFixed(1)}%` },
+  { key: 'cagr', label: 'CAGR', fmt: v => `${(Math.abs(v) <= 1 ? v * 100 : v).toFixed(1)}%` },
+  { key: 'correlation', label: 'Corr', fmt: v => v.toFixed(2) },
+]
+
+function RerunPanel({
+  rec,
+  rerun,
+  tailOpen,
+  onRerun,
+  onToggleTail,
+}: {
+  rec: ResearchRecord
+  rerun: RerunState | undefined
+  tailOpen: boolean
+  onRerun: () => void
+  onToggleTail: () => void
+}) {
+  const isRunning = rerun?.status === 'running'
+  const hasTail = (rerun?.tail?.length ?? 0) > 0
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          onClick={e => {
+            e.stopPropagation()
+            onRerun()
+          }}
+          disabled={isRunning}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+            isRunning
+              ? 'border-border text-gray-500 cursor-not-allowed'
+              : 'border-accent/40 text-accent hover:bg-accent/10'
+          }`}
+        >
+          {isRunning ? (
+            <span className="flex items-center gap-2">
+              <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              Re-running...
+            </span>
+          ) : (
+            'Re-run (reproduce)'
+          )}
+        </button>
+        {rerun && rerun.status !== 'idle' && rerun.status !== 'running' && (
+          <span
+            className={`text-[11px] font-medium ${
+              rerun.status === 'completed' ? 'text-success' : 'text-danger'
+            }`}
+          >
+            {rerun.status === 'completed'
+              ? `Completed${rerun.returncode != null ? ` (exit ${rerun.returncode})` : ''}`
+              : `Failed${rerun.returncode != null ? ` (exit ${rerun.returncode})` : ''}`}
+          </span>
+        )}
+        {hasTail && (
+          <button
+            onClick={e => {
+              e.stopPropagation()
+              onToggleTail()
+            }}
+            className="text-[11px] text-gray-400 hover:text-gray-200 transition-colors"
+          >
+            {tailOpen ? '▾ Hide output' : '▸ Show output'}
+          </button>
+        )}
+      </div>
+      {hasTail && tailOpen && (
+        <pre className="text-[11px] text-gray-400 bg-background border border-border rounded-lg p-3 overflow-x-auto max-h-64 overflow-y-auto font-mono whitespace-pre">
+          {rerun!.tail!.join('\n')}
+        </pre>
+      )}
+    </div>
+  )
+}
+
+function OfficialRecords({ refreshKey = 0 }: { refreshKey?: number }) {
+  const [gateRule, setGateRule] = useState('')
+  const [records, setRecords] = useState<ResearchRecord[]>([])
+  const [loaded, setLoaded] = useState(false)
+  const [expandedRec, setExpandedRec] = useState<string | null>(null)
+  const [curves, setCurves] = useState<Record<string, CurveSeries>>({})
+  const [curveLoading, setCurveLoading] = useState<string | null>(null)
+  const [reruns, setReruns] = useState<Record<string, RerunState>>({})
+  const [tailOpen, setTailOpen] = useState<Record<string, boolean>>({})
+  const pollTimers = useRef<Record<string, ReturnType<typeof setInterval>>>({})
+
+  useEffect(() => {
+    const timers = pollTimers.current
+    ;(async () => {
+      try {
+        const res = await fetch(`${API}/api/backtest/records`)
+        if (res.ok) {
+          const data = await res.json()
+          setGateRule(data.gate_rule || '')
+          setRecords(data.records || [])
+        }
+      } catch {}
+      setLoaded(true)
+    })()
+    return () => {
+      Object.values(timers).forEach(t => clearInterval(t))
+      Object.keys(timers).forEach(k => delete timers[k])
+    }
+  }, [refreshKey])
+
+  const pollRerun = useCallback((id: string) => {
+    if (pollTimers.current[id]) return
+    const tick = async () => {
+      try {
+        const res = await fetch(`${API}/api/backtest/records/${id}/rerun/status`)
+        if (!res.ok) return
+        const data: RerunState = await res.json()
+        setReruns(prev => ({ ...prev, [id]: data }))
+        if (data.status !== 'running') {
+          if (pollTimers.current[id]) {
+            clearInterval(pollTimers.current[id])
+            delete pollTimers.current[id]
+          }
+          if ((data.tail?.length ?? 0) > 0) {
+            setTailOpen(prev => ({ ...prev, [id]: true }))
+          }
+        }
+      } catch {}
+    }
+    tick()
+    pollTimers.current[id] = setInterval(tick, 3000)
+  }, [])
+
+  const handleRerun = useCallback(
+    async (id: string) => {
+      setReruns(prev => ({ ...prev, [id]: { ...prev[id], status: 'running' } }))
+      try {
+        const res = await fetch(`${API}/api/backtest/records/${id}/rerun`, { method: 'POST' })
+        if (res.ok || res.status === 409) {
+          // 409 = already running — just start polling
+          pollRerun(id)
+        } else {
+          const errText = await res.text().catch(() => `Status ${res.status}`)
+          setReruns(prev => ({ ...prev, [id]: { status: 'failed', tail: [errText] } }))
+          setTailOpen(prev => ({ ...prev, [id]: true }))
+        }
+      } catch (e: any) {
+        setReruns(prev => ({ ...prev, [id]: { status: 'failed', tail: [`Error: ${e.message}`] } }))
+        setTailOpen(prev => ({ ...prev, [id]: true }))
+      }
+    },
+    [pollRerun]
+  )
+
+  const toggleCurve = useCallback(
+    async (rec: ResearchRecord) => {
+      if (expandedRec === rec.id) {
+        setExpandedRec(null)
+        return
+      }
+      setExpandedRec(rec.id)
+      if (rec.has_curve && !curves[rec.id]) {
+        setCurveLoading(rec.id)
+        try {
+          const res = await fetch(`${API}/api/backtest/records/${rec.id}/curve`)
+          if (res.ok) {
+            const data = await res.json()
+            setCurves(prev => ({ ...prev, [rec.id]: data.series || {} }))
+          }
+        } catch {}
+        setCurveLoading(null)
+      }
+    },
+    [expandedRec, curves]
+  )
+
+  if (loaded && records.length === 0) return null
+
+  const validated = records.filter(r => r.status !== 'rejected')
+  const rejected = records.filter(r => r.status === 'rejected')
+  const nCandidates = validated.filter(r => r.status === 'candidate').length
+
+  const renderHeadline = (rec: ResearchRecord) =>
+    HEADLINE_DEFS.filter(d => rec.headline && typeof rec.headline[d.key] === 'number').map(d => (
+      <div key={d.key}>
+        <p className="text-[10px] text-gray-500">{d.label}</p>
+        <p
+          className={`text-sm font-bold ${
+            d.key === 'max_dd' ? 'text-danger' : d.key === 'oos_sharpe' ? 'text-accent' : 'text-gray-100'
+          }`}
+        >
+          {d.fmt(rec.headline![d.key] as number)}
+        </p>
+      </div>
+    ))
+
+  const renderCurveBlock = (rec: ResearchRecord) => {
+    if (expandedRec !== rec.id) return null
+    return (
+      <div className="mt-3 pt-3 border-t border-border/50 space-y-4" onClick={e => e.stopPropagation()}>
+        {rec.has_curve && (
+          curveLoading === rec.id ? (
+            <div className="h-56 bg-background rounded-lg animate-pulse" />
+          ) : curves[rec.id] ? (
+            <MultiSeriesCurveSVG series={curves[rec.id]} />
+          ) : (
+            <p className="text-xs text-gray-500 py-4 text-center">Failed to load curve</p>
+          )
+        )}
+        <TearSheet analyticsUrl={`/api/backtest/records/${rec.id}/analytics`} />
+      </div>
+    )
+  }
+
+  return (
+    <div id="records" className="bg-surface rounded-xl border border-border p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">Official Research Records</h3>
+          {gateRule && (
+            <p className="text-xs text-gray-500 mt-0.5">
+              Gate rule: <span className="text-gray-400">{gateRule}</span>
+            </p>
+          )}
+        </div>
+        <span className="text-xs text-gray-500">
+          {loaded
+            ? `${validated.length - nCandidates} validated${nCandidates > 0 ? ` · ${nCandidates} candidate` : ''} · ${rejected.length} rejected`
+            : 'Loading...'}
+        </span>
+      </div>
+
+      {!loaded && <div className="h-32 bg-background rounded-lg animate-pulse" />}
+
+      {/* Validated + candidate records — prominent cards */}
+      {validated.map(rec => {
+        const isCandidate = rec.status === 'candidate'
+        return (
+        <div
+          key={rec.id}
+          className={`rounded-xl border p-5 transition-colors cursor-pointer ${
+            isCandidate
+              ? 'border-warning/30 bg-warning/5 hover:border-warning/60'
+              : 'border-success/30 bg-success/5 hover:border-success/60'
+          }`}
+          onClick={() => toggleCurve(rec)}
+        >
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="font-semibold text-gray-100">{rec.name || rec.id}</h4>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                  isCandidate ? 'bg-warning/15 text-warning' : 'bg-success/15 text-success'
+                }`}>
+                  {rec.status}
+                </span>
+                <span className="text-[10px] text-gray-500">
+                  {expandedRec === rec.id ? '▾ hide tear sheet' : '▸ click for tear sheet'}
+                </span>
+              </div>
+              <p className={`text-xs mt-1 ${isCandidate ? 'text-warning/90' : 'text-success/90'}`}>{rec.verdict}</p>
+              {rec.period && (
+                <p className="text-[11px] text-gray-500 mt-1">
+                  {rec.period.start} → {rec.period.end}
+                  {rec.period.oos_start && <span className="text-gray-400"> · OOS from {rec.period.oos_start}</span>}
+                  {rec.created && <span> · recorded {rec.created}</span>}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-4 flex-shrink-0">{renderHeadline(rec)}</div>
+          </div>
+
+          {(rec.script || rec.data_note) && (
+            <div className="mt-3">
+              {rec.script && <p className="text-[10px] text-gray-500 font-mono">{rec.script}</p>}
+              {rec.data_note && <p className="text-[11px] text-gray-500 mt-0.5">{rec.data_note}</p>}
+            </div>
+          )}
+
+          <div className="mt-3" onClick={e => e.stopPropagation()}>
+            <RerunPanel
+              rec={rec}
+              rerun={reruns[rec.id]}
+              tailOpen={!!tailOpen[rec.id]}
+              onRerun={() => handleRerun(rec.id)}
+              onToggleTail={() => setTailOpen(prev => ({ ...prev, [rec.id]: !prev[rec.id] }))}
+            />
+          </div>
+
+          {renderCurveBlock(rec)}
+        </div>
+        )
+      })}
+
+      {/* Rejected records — compact rows */}
+      {rejected.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-gray-500">Rejected</p>
+          {rejected.map(rec => (
+            <div
+              key={rec.id}
+              className="rounded-lg border-l-2 border-danger/50 bg-background px-4 py-2.5 cursor-pointer hover:bg-background/70"
+              onClick={() => toggleCurve(rec)}
+            >
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                  <span className="text-sm font-medium text-gray-200">{rec.name || rec.id}</span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-danger/10 text-danger">
+                    rejected
+                  </span>
+                  {rec.headline?.oos_sharpe != null && (
+                    <span className="text-xs text-gray-400">
+                      OOS Sharpe <span className="text-danger font-semibold">{(rec.headline.oos_sharpe as number).toFixed(2)}</span>
+                    </span>
+                  )}
+                  <span className="text-[11px] text-gray-500 italic truncate">{rec.verdict}</span>
+                </div>
+                <div onClick={e => e.stopPropagation()} className="flex-shrink-0">
+                  <RerunPanel
+                    rec={rec}
+                    rerun={reruns[rec.id]}
+                    tailOpen={!!tailOpen[rec.id]}
+                    onRerun={() => handleRerun(rec.id)}
+                    onToggleTail={() => setTailOpen(prev => ({ ...prev, [rec.id]: !prev[rec.id] }))}
+                  />
+                </div>
+              </div>
+              {rec.script && <p className="text-[10px] text-gray-600 font-mono mt-1">{rec.script}</p>}
+              {renderCurveBlock(rec)}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Multi-series SVG Equity Curve (records — rebased to 100k)
+// ---------------------------------------------------------------------------
+
+const SERIES_COLORS: Record<string, string> = {
+  wheel: '#3b82f6',
+  sniper: '#f59e0b',
+  combo_70_30: '#10b981',
+}
+const FALLBACK_COLORS = ['#8b5cf6', '#ec4899', '#14b8a6', '#eab308']
+
+function MultiSeriesCurveSVG({ series }: { series: CurveSeries }) {
+  const names = Object.keys(series).filter(n => (series[n]?.length ?? 0) > 1)
+  if (names.length === 0) {
+    return <p className="text-xs text-gray-500 py-4 text-center">No curve data</p>
+  }
+
+  const BASELINE = 100000
+  let minVal = BASELINE
+  let maxVal = BASELINE
+  for (const n of names) {
+    for (const p of series[n]) {
+      if (p.equity < minVal) minVal = p.equity
+      if (p.equity > maxVal) maxVal = p.equity
+    }
+  }
+  minVal *= 0.995
+  maxVal *= 1.005
+  const range = maxVal - minVal || 1
+
+  const w = 800
+  const h = 240
+  const chartH = h - 20 // reserve space for date labels
+
+  const yOf = (v: number) => chartH - ((v - minVal) / range) * chartH
+
+  const paths = names.map((n, idx) => {
+    const pts = series[n]
+    const d = pts
+      .map((p, i) => `${i === 0 ? 'M' : 'L'}${((i / (pts.length - 1)) * w).toFixed(2)},${yOf(p.equity).toFixed(2)}`)
+      .join(' ')
+    const color = SERIES_COLORS[n] ?? FALLBACK_COLORS[idx % FALLBACK_COLORS.length]
+    const isCombo = n.startsWith('combo')
+    return { name: n, d, color, width: isCombo ? 2.5 : 1.5 }
+  })
+
+  // Date axis labels from the longest series: first / mid / last
+  const longest = names.reduce((a, b) => (series[a].length >= series[b].length ? a : b))
+  const dates = series[longest]
+  const firstDate = dates[0]?.date ?? ''
+  const midDate = dates[Math.floor(dates.length / 2)]?.date ?? ''
+  const lastDate = dates[dates.length - 1]?.date ?? ''
+  const baselineY = yOf(BASELINE)
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full">
+        {/* 100k baseline */}
+        <line x1="0" y1={baselineY} x2={w} y2={baselineY} stroke="#374151" strokeWidth="1" strokeDasharray="4" />
+        <text x="4" y={baselineY - 4} fill="#6b7280" fontSize="10">
+          $100k
+        </text>
+        {paths.map(p => (
+          <path key={p.name} d={p.d} fill="none" stroke={p.color} strokeWidth={p.width} />
+        ))}
+        {/* Date axis */}
+        <text x="0" y={h - 4} fill="#6b7280" fontSize="10">
+          {firstDate}
+        </text>
+        <text x={w / 2} y={h - 4} fill="#6b7280" fontSize="10" textAnchor="middle">
+          {midDate}
+        </text>
+        <text x={w} y={h - 4} fill="#6b7280" fontSize="10" textAnchor="end">
+          {lastDate}
+        </text>
+      </svg>
+      {/* Legend */}
+      <div className="flex items-center gap-4 mt-2 flex-wrap">
+        {paths.map(p => (
+          <span key={p.name} className="flex items-center gap-1.5 text-[11px] text-gray-400">
+            <span className="inline-block w-4 h-0.5 rounded" style={{ backgroundColor: p.color }} />
+            {p.name}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 // ---------------------------------------------------------------------------
 // SVG Equity Curve Component

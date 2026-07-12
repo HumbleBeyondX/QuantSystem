@@ -1,0 +1,99 @@
+{
+  "config": {
+    "tickers": [
+      "XBI",
+      "GDX",
+      "UAL",
+      "KRE"
+    ],
+    "total_capital": 10000.0,
+    "drop": 2.5,
+    "rsi_os": 20.0,
+    "pt": 1.5,
+    "sl": 2.5,
+    "max_hold": 4,
+    "start": "2024-01-01",
+    "end": "2026-05-03"
+  },
+  "sleeves": {
+    "XBI": {
+      "ticker": "XBI",
+      "n_trades": 16,
+      "win_rate_pct": 68.8,
+      "profit_factor": 2.7,
+      "avg_days_held": 2.0,
+      "time_in_market_pct": 3.8,
+      "initial_capital": 2500.0,
+      "final_value": 2916.71,
+      "total_return_pct": 16.67,
+      "annual_return_pct": 6.85,
+      "annual_volatility": 0.0723,
+      "sharpe_ratio": 0.947,
+      "max_drawdown_pct": 3.12,
+      "avg_win_pct": 2.47,
+      "avg_loss_pct": -1.94
+    },
+    "GDX": {
+      "ticker": "GDX",
+      "n_trades": 37,
+      "win_rate_pct": 67.6,
+      "profit_factor": 1.69,
+      "avg_days_held": 2.2,
+      "time_in_market_pct": 9.5,
+      "initial_capital": 2500.0,
+      "final_value": 3240.41,
+      "total_return_pct": 29.62,
+      "annual_return_pct": 11.79,
+      "annual_volatility": 0.1317,
+      "sharpe_ratio": 0.895,
+      "max_drawdown_pct": 12.83,
+      "avg_win_pct": 2.77,
+      "avg_loss_pct": -3.24
+    },
+    "UAL": {
+      "ticker": "UAL",
+      "n_trades": 33,
+      "win_rate_pct": 69.7,
+      "profit_factor": 1.63,
+      "avg_days_held": 1.6,
+      "time_in_market_pct": 6.2,
+      "initial_capital": 2500.0,
+      "final_value": 3176.07,
+      "total_return_pct": 27.04,
+      "annual_return_pct": 10.83,
+      "annual_volatility": 0.1352,
+      "sharpe_ratio": 0.801,
+      "max_drawdown_pct": 17.86,
+      "avg_win_pct": 2.96,
+      "avg_loss_pct": -3.96
+    },
+    "KRE": {
+      "ticker": "KRE",
+      "n_trades": 19,
+      "win_rate_pct": 68.4,
+      "profit_factor": 1.46,
+      "avg_days_held": 2.7,
+      "time_in_market_pct": 6.1,
+      "initial_capital": 2500.0,
+      "final_value": 2681.94,
+      "total_return_pct": 7.28,
+      "annual_return_pct": 3.06,
+      "annual_volatility": 0.0623,
+      "sharpe_ratio": 0.492,
+      "max_drawdown_pct": 6.36,
+      "avg_win_pct": 1.94,
+      "avg_loss_pct": -2.79
+    }
+  },
+  "portfolio": {
+    "initial": 10000.0,
+    "final": 12015.130372211488,
+    "total_return_pct": 20.15130372211489,
+    "annual_return_pct": 8.208107140715203,
+    "annual_volatility": 0.0592578493037386,
+    "sharpe_ratio": 1.3851510368934958,
+    "max_drawdown_pct": 5.664495935402392,
+    "total_trades": 105,
+    "weighted_win_rate_pct": 68.58761904761904
+  }
+}

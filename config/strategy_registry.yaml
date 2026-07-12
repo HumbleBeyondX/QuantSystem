@@ -1,0 +1,310 @@
+# ============================================================
+# Strategy Lifecycle Registry — SINGLE SOURCE OF TRUTH
+# ============================================================
+# Every strategy the platform knows about, with its honest lifecycle
+# stage and REAL recorded numbers (no aspirational placeholders).
+#
+# stage:   live       — trading real money
+#          paper      — shadow/paper trading with real market data
+#          validated  — passed the OOS Sharpe >= 1.5 gate, awaiting paper/live
+#          research   — under investigation, not deployed anywhere
+#          rejected   — failed the gate; kept for the record
+#          retired    — superseded / user opted out
+#
+# gate:    the hard rule — OOS Sharpe >= 1.5 or auto-reject.
+# runnable: appears in the Backtest page runner dropdown
+#           (must have a handler in dashboard/backend/routers/backtest.py).
+# record:  id of the validated backtest record (see /api/backtest/records).
+# ============================================================
+
+strategies:
+  # ── LIVE ────────────────────────────────────────────────────
+  - id: eth_sniper
+    name: ETH Momentum Sniper
+    stage: live
+    asset_class: crypto
+    category: crypto
+    symbols: ["ETH/USDT"]
+    description: >
+      High-leverage ETH perpetual trend-following (50x, fixed-risk sizing,
+      ATR trailing stop 3.0, max hold 180 bars, 4H). Live on OKX via the
+      Tokyo VPS runner.
+    metrics: {backtest_sharpe: 2.03, oos_sharpe: 2.00, win_rate: 0.55, trades: 260}
+    gate: {threshold: 1.5, oos_sharpe: 2.00, passed: true}
+    links: {deployment: tokyo-eth-sniper, record: combo_wheel_sniper}
+    notes: Sniper leg of the validated combo (corr -0.26 vs BTC wheel).
+
+  # ── PAPER ───────────────────────────────────────────────────
+  - id: spy_gamma_scalp
+    name: SPY Gamma Scalp
+    stage: paper
+    asset_class: options
+    category: options
+    symbols: ["SPY"]
+    description: >
+      VRP harvesting: sell ATM SPY straddle + delta hedge. Paper trading
+      daily (16:30 task) with real Alpaca OPRA chains.
+    metrics: {backtest_sharpe: 1.98, walkforward_sharpe: 2.91, win_rate: 0.80, trades: 40}
+    gate: {threshold: 1.5, oos_sharpe: 2.91, passed: true}
+    runnable: true
+    default_params:
+      initial_capital: 100000
+      contracts_per_trade: 1
+      hedge_threshold_pct: 0.5
+      dte_range: [3, 7]
+      signal_threshold: 0.25
+    links: {paper_log: gamma_scalp_daily.jsonl}
+    notes: Walk-forward validated (Sharpe 2.91 across folds).
+
+  - id: btc_wheel
+    name: BTC Wheel (real Deribit chains)
+    stage: paper
+    asset_class: crypto_options
+    category: options
+    symbols: ["BTC-DERIBIT-OPTIONS"]
+    description: >
+      Weekly BTC strangle seller (put 0.92x / call 1.08x index, 5-9 DTE,
+      hold to expiry). Paper fills at REAL Deribit bids, marks at real
+      mark prices, Deribit fee model. 8-week paper judgment underway;
+      first weekly settlement 2026-07-17.
+    metrics: {backtest_sharpe: 1.35, oos_sharpe: 1.09, max_dd: -0.124, cagr: 0.17}
+    gate:
+      threshold: 1.5
+      oos_sharpe: 1.09
+      passed: false
+      note: >
+        Fails standalone; approved ONLY as the wheel leg of the validated
+        combo (corr -0.26 with ETH sniper lifts combo OOS to 2.66).
+    links: {paper_log: btc_wheel_daily.jsonl, record: combo_wheel_sniper}
+
+  # ── VALIDATED (gate passed, portfolio level) ────────────────
+  - id: combo_wheel_sniper
+    name: "Combo: BTC Wheel + ETH Sniper (70/30)"
+    stage: validated
+    asset_class: portfolio
+    category: portfolio
+    symbols: ["BTC-DERIBIT-OPTIONS", "ETH/USDT"]
+    description: >
+      Portfolio-level combination: 70% BTC wheel (real DVOL x live-chain
+      calibrated IV) + 30% ETH sniper. Negative leg correlation (-0.26)
+      is the edge — premium selling and trend legs hedge each other's
+      regime. Both legs individually deployed (wheel paper / sniper live).
+    metrics: {backtest_sharpe: 2.81, oos_sharpe: 2.66, max_dd: -0.061, cagr: 0.357, correlation: -0.262}
+    gate: {threshold: 1.5, oos_sharpe: 2.66, passed: true}
+    links: {record: combo_wheel_sniper}
+    notes: >
+      First strategy to pass the gate. Caveats on record: sniper params
+      in-sample; smile calibration from a single day's chain.
+
+  # ── RESEARCH ────────────────────────────────────────────────
+  - id: gamma_squeeze_scanner
+    name: Gamma Squeeze Scanner
+    stage: research
+    asset_class: options
+    category: options
+    symbols: ["dynamic-universe"]
+    description: >
+      Daily scanner ranking gamma-squeeze candidates from Alpaca OPRA
+      chains (yfinance failover). Signal research tool — no automated
+      execution.
+    metrics: {}
+    gate: {threshold: 1.5, passed: null}
+
+  - id: thirteenf_drift
+    name: 13F Filing Drift
+    stage: research
+    asset_class: equity
+    category: equity
+    symbols: ["dynamic-universe"]
+    description: >
+      Celebrity-filer 13F drift via stock+margin (call-buying variant
+      REJECTED — theta/spread/IV tax). EDGAR listener live on VPS;
+      paper trading planned for the 2026-08-14 filing season.
+    metrics: {}
+    gate: {threshold: 1.5, passed: null}
+    notes: OOS gate decision deferred to Aug-14 filing season paper run.
+
+  # ── RETIRED ─────────────────────────────────────────────────
+  - id: btc_sniper
+    name: BTC Momentum Sniper v5
+    stage: retired
+    asset_class: crypto
+    category: crypto
+    symbols: ["BTC/USDT"]
+    description: >
+      High-leverage BTC perp trend-following (50x, fixed-risk, Donchian +
+      EMA21 pullback, 4H). Superseded by the ETH variant which went live;
+      user decision: do NOT paper trade this one. Kept runnable for
+      research backtests.
+    metrics: {backtest_sharpe: 1.68, win_rate: 0.546, trades: 260}
+    gate: {threshold: 1.5, oos_sharpe: 1.68, passed: true}
+    runnable: true
+    default_params:
+      leverage: 50.0
+      risk_per_trade: 0.05
+      atr_stop: 3.5
+      atr_trail: 2.5
+      min_score: 2
+      initial_capital: 10000
+    notes: Retired by user decision 2026-07-10 — live capital is on eth_sniper.
+
+  # ── REJECTED (real recorded verdicts) ───────────────────────
+  - id: crypto_macro_cycle
+    name: BTC/ETH Macro Cycle
+    stage: rejected
+    asset_class: crypto
+    category: crypto
+    symbols: ["BTC/USDT", "ETH/USDT"]
+    description: 5x leveraged macro-cycle composite scoring, 4H.
+    metrics: {backtest_sharpe: 0.41, win_rate: 0.626, trades: 222}
+    gate: {threshold: 1.5, oos_sharpe: 0.41, passed: false}
+    runnable: true
+    default_params: {leverage: 5.0, max_trades_per_day: 3, lookback: 60, composite_threshold: 0.7}
+
+  - id: tsmom_diversified
+    name: TSMOM Diversified (Moskowitz 2012)
+    stage: rejected
+    asset_class: multi_asset
+    category: equity
+    symbols: ["SPY", "EFA", "EEM", "TLT", "IEF", "GLD", "USO", "DBC", "UUP", "FXE"]
+    description: 12m time-series momentum, vol-targeted, 10 ETFs.
+    metrics: {oos_sharpe: 1.01, is_sharpe: 0.07}
+    gate: {threshold: 1.5, oos_sharpe: 1.01, passed: false}
+    links: {record: tsmom_research}
+
+  - id: pairs_trading
+    name: Cointegration Pairs Trading
+    stage: rejected
+    asset_class: equity
+    category: equity
+    symbols: ["dynamic-pairs"]
+    description: Gatev/Avellaneda-Lee cointegrated pairs mean reversion.
+    metrics: {oos_sharpe: -0.30}
+    gate: {threshold: 1.5, oos_sharpe: -0.30, passed: false}
+    links: {record: pairs_trading_research}
+
+  - id: xs_reversal
+    name: Cross-Sectional Reversal (Lehmann 1990)
+    stage: rejected
+    asset_class: equity
+    category: equity
+    symbols: ["SP500-universe"]
+    description: Weekly cross-sectional reversal; edge eaten by costs.
+    metrics: {oos_sharpe: -0.11}
+    gate: {threshold: 1.5, oos_sharpe: -0.11, passed: false}
+    links: {record: xs_reversal_research}
+
+  - id: sp500_sector_neutral_qmom
+    name: SP500 Sector-Neutral Quality-Momentum
+    stage: rejected
+    asset_class: equity
+    category: equity
+    symbols: ["SP500-universe"]
+    description: >
+      Sector-neutral XS momentum + quality. Best variant (long-only
+      Top-10) Sharpe 0.94 — below gate.
+    metrics: {backtest_sharpe: 0.94}
+    gate: {threshold: 1.5, oos_sharpe: 0.94, passed: false}
+    links: {record: sp500_sector_neutral_qmom}
+
+  - id: one_dte_single_name_calls
+    name: 1DTE Single-Name Call Buying (META/NVDA)
+    stage: rejected
+    asset_class: options
+    category: options
+    symbols: ["META", "NVDA"]
+    description: >
+      Buy Thursday->Friday-expiry calls on high-beta single names.
+      Tested on real Alpaca OPRA 5-min bars 2024-02..2026-07
+      (scripts/test_1dte_calls.py). Unconditional: bleeds (META ATM avg
+      -21%/trade, median -98%). Momentum-filtered (+1% day): mean turns
+      positive ONLY via 1-3 lottery weeks — every variant negative
+      ex-top-1 trade. 5th confirmation of the long-options tax.
+    metrics: {avg_ret_atm_uncond: -0.207, win_rate_atm_uncond: 0.274, median_ret: -0.98}
+    gate:
+      threshold: 1.5
+      passed: false
+      note: >
+        P&L concentration: winners cluster on catalyst weeks (earnings
+        reactions +2-6% Friday moves). Only defensible follow-up is a
+        catalyst-conditioned variant (~8 trades/yr, weak power).
+    links: {record: test_1dte_calls}
+
+  - id: earnings_pead_calls
+    name: Earnings-Week PEAD Call Buying (NDX leaders)
+    stage: rejected
+    asset_class: options
+    category: options
+    symbols: ["NDX-18-leaders"]
+    description: >
+      Catalyst-conditioned follow-up to one_dte_single_name_calls: buy
+      same-week-Friday ATM call AFTER a >=1.5% earnings-reaction day,
+      18 NDX leaders, 170 real events 2024-02..2026-07
+      (scripts/test_earnings_1dte_calls.py). Pre-event variant dead
+      (IV crush, avg -2.2%, flips sign by year). PEAD variant is the
+      FIRST buying structure to survive ex-top-1 (+9.88) and ex-top-3
+      (+1.84) — but portfolio Sharpe 0.79, OOS(2025-07+) 0.38; best
+      threshold-mined config (>=5%) OOS 0.01 and collapses ex-PLTR
+      (0.61 full / -0.30 OOS). Edge = PLTR/TSLA momo regime 2024-25.
+    metrics: {backtest_sharpe: 0.79, oos_sharpe: 0.38, avg_ret_per_trade: 0.259, max_dd: -0.109}
+    gate: {threshold: 1.5, oos_sharpe: 0.38, passed: false}
+    links: {record: earnings_1dte_calls}
+    notes: >
+      Closest miss of the 6 long-options tests. Signal structure real
+      (monotonic in reaction strength; same-week only), but regime- and
+      name-concentrated. Revisit only if a cross-sectional version with
+      a hedged/spread structure is proposed.
+
+  - id: earnings_pead_put_spreads
+    name: Post-Earnings Put Spread Selling (NDX leaders)
+    stage: rejected
+    asset_class: options
+    category: options
+    symbols: ["NDX-18-leaders"]
+    description: >
+      Sell 2-grid put spread at reaction close (>=1.5% up day), hold to
+      Friday expiry. 57 real events (scripts/test_pead_sleeve.py). 63%
+      win rate but avg return-on-risk -5.5% — post-crush credit too thin
+      vs full-width losses. Negative every year; portfolio Sharpe -0.45,
+      OOS -0.98.
+    metrics: {backtest_sharpe: -0.45, oos_sharpe: -0.98, win_rate: 0.63, avg_ret_on_risk: -0.055}
+    gate: {threshold: 1.5, oos_sharpe: -0.98, passed: false}
+    links: {record: pead_sleeve}
+
+  - id: momo_earnings_lottery_sleeve
+    name: Momo-Stock Earnings Lottery Sleeve (ex-ante top-15 6m momentum)
+    stage: rejected
+    asset_class: options
+    category: options
+    symbols: ["SP500-momo-top15"]
+    description: >
+      User-mandated lottery sleeve (small size, multiple-seeking, not
+      Sharpe-gated): quarterly ex-ante top-15 6m-momentum names from the
+      153-name SP500 panel, buy same-week ATM call after >=1.5% earnings
+      reaction. n=36: avg +1.8%, ex-top1 -2.98, 6 hits >100%, max +362%,
+      bankroll +0.3% total over 2.4y at 0.5%/bet — dead money. ALSO:
+      within megacaps, ex-ante 6m momentum does NOT select the payers
+      (non-monotonic terciles +27%/-30%/+20%).
+    metrics: {avg_ret: 0.018, hits_gt_100pct: 6, max_ret: 3.62, bankroll_multiple: 1.003}
+    gate:
+      threshold: 1.5
+      passed: false
+      note: >
+        Caveat: SP500-panel momentum leaders are not true 妖股 (PLTR-2024/
+        SMCI/APP/MSTR live outside this 153-name universe). A broad
+        optionable-universe panel (~Russell 1000) would be needed to test
+        the real hypothesis; evidence so far gives it a low prior.
+    links: {record: pead_sleeve}
+
+  - id: thirteenf_calls
+    name: 13F Disclosure-Day Calls
+    stage: rejected
+    asset_class: options
+    category: options
+    symbols: ["dynamic-universe"]
+    description: >
+      Buying calls on 13F disclosure drift — rejected: theta + spread +
+      IV-timing tax kills the drift edge (4th failure of long-options
+      on drift signals).
+    metrics: {}
+    gate: {threshold: 1.5, passed: false}
