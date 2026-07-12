@@ -146,7 +146,7 @@ class UptimeWatchdog:
                     ok = await self._check_deployment(dep)
                     await self._record(f"dep:{dep['id']}", ok,
                                        f"deployment {dep['name']} ({dep['host']})")
-                for name in ("gamma_scalp", "btc_wheel"):
+                for name in ("gamma_scalp", "btc_wheel", "btc_wheel_delta"):
                     await self._record(f"sched:{name}", self._check_scheduler(name),
                                        f"local scheduler {name}")
                 self.last_run = datetime.now(timezone.utc).isoformat(timespec="seconds")

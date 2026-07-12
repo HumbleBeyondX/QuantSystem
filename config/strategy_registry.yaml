@@ -123,7 +123,7 @@ strategies:
   # ── VALIDATED ───────────────────────────────────────────────
   - id: btc_wheel_delta
     name: BTC Wheel — delta-targeted strikes (0.40P/0.20C)
-    stage: validated
+    stage: paper
     asset_class: crypto_options
     category: options
     symbols: ["BTC-DERIBIT-OPTIONS"]
@@ -138,12 +138,13 @@ strategies:
       beta check (corr 0.47 but beta 0.13 vs BTC; B&H same window 0.34).
     metrics: {backtest_sharpe: 1.74, is_sharpe: 1.64, oos_sharpe: 2.07, max_dd: -0.142, cagr: 0.299}
     gate: {threshold: 1.5, oos_sharpe: 2.07, passed: true}
-    links: {record: wheel_delta_strike}
+    links: {record: wheel_delta_strike, paper_log: btc_wheel_delta_daily.jsonl}
     notes: >
       BS pricing is a flagged approximation; Nautilus cross-check
       infeasible for options (no historical chains) — real-chain paper
-      is the arbiter. Recommend: start paper alongside the fixed wheel
-      (do NOT replace it mid-window).
+      is the arbiter. PAPERING since 2026-07-12 (16:50 daily task,
+      alongside the fixed wheel — fixed wheel window untouched). First
+      position: 63000P(-0.35)/66000C(0.20) exp 07-17.
 
   # ── RESEARCH ────────────────────────────────────────────────
   - id: gamma_squeeze_scanner
