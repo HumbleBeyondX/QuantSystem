@@ -161,11 +161,14 @@ def test_backtest_records_combo(client):
     r = client.get("/api/backtest/records")
     assert r.status_code == 200
     recs = {x["id"]: x for x in r.json()["records"]}
+    # 2026-07-12: v1 combo INVALIDATED (sniper-leg loss-cap defect found
+    # by the NautilusTrader parity pilot); v2 is the honest re-run
     combo = recs["combo_wheel_sniper"]
-    assert combo["status"] == "validated"
-    assert combo["headline"]["sharpe"] == 2.81
-    assert combo["headline"]["oos_sharpe"] == 2.66
+    assert combo["status"] == "invalidated"
     assert combo["has_curve"]
+    v2 = recs["combo_wheel_sniper_v2"]
+    assert v2["status"] == "rejected"
+    assert v2["headline"]["oos_sharpe"] == 0.32
     # rejected research is on the record too, honestly
     assert recs["tsmom_research"]["status"] == "rejected"
 
@@ -228,9 +231,10 @@ def test_promotion_report_btc_wheel(client):
             "drawdown", "sla", "backtest_gate"} <= ids
     # wheel is 3 days into an 8-week paper run — must NOT be ready yet
     assert d["ready"] is False
-    # combo-leg approval logic: standalone gate failed but combo validated
+    # combo-leg approval VOID since 2026-07-12 (combo invalidated) —
+    # wheel must now pass the gate on its own
     bg = next(c for c in d["checks"] if c["id"] == "backtest_gate")
-    assert bg["passed"] is True
+    assert bg["passed"] is False
 
 
 def test_go_live_blocked_without_gates(client):

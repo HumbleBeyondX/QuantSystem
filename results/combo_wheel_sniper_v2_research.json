@@ -1,0 +1,88 @@
+{
+ "id": "combo_wheel_sniper_v2_honest",
+ "supersedes": "combo_wheel_sniper (v1 sniper leg inflated by loss-cap defect)",
+ "defect": "backtest_btc_sniper.py _close() capped losses at -margin*0.95 without ever liquidating during holds",
+ "period": {
+  "start": "2021-03-24",
+  "end": "2026-03-28",
+  "oos_start": "2024-09-01"
+ },
+ "correlation": {
+  "full": -0.226,
+  "oos": -0.161
+ },
+ "legs": {
+  "wheel": {
+   "sharpe": 1.35,
+   "max_dd": -0.1241,
+   "cagr": 0.1701
+  },
+  "sniper_honest": {
+   "sharpe": 0.23,
+   "max_dd": -0.5628,
+   "cagr": 0.0205
+  }
+ },
+ "combos": {
+  "30/70": {
+   "full": {
+    "sharpe": 0.45,
+    "max_dd": -0.3679,
+    "cagr": 0.0799
+   },
+   "oos": {
+    "sharpe": -0.29,
+    "max_dd": -0.2778,
+    "cagr": -0.0954
+   }
+  },
+  "50/50": {
+   "full": {
+    "sharpe": 0.72,
+    "max_dd": -0.2486,
+    "cagr": 0.1132
+   },
+   "oos": {
+    "sharpe": -0.1,
+    "max_dd": -0.1943,
+    "cagr": -0.0323
+   }
+  },
+  "70/30": {
+   "full": {
+    "sharpe": 1.18,
+    "max_dd": -0.1419,
+    "cagr": 0.1408
+   },
+   "oos": {
+    "sharpe": 0.32,
+    "max_dd": -0.1303,
+    "cagr": 0.0295
+   }
+  },
+  "85/15": {
+   "full": {
+    "sharpe": 1.45,
+    "max_dd": -0.117,
+    "cagr": 0.1573
+   },
+   "oos": {
+    "sharpe": 0.94,
+    "max_dd": -0.0857,
+    "cagr": 0.0745
+   }
+  },
+  "100/0": {
+   "full": {
+    "sharpe": 1.35,
+    "max_dd": -0.1241,
+    "cagr": 0.1701
+   },
+   "oos": {
+    "sharpe": 1.42,
+    "max_dd": -0.0849,
+    "cagr": 0.1179
+   }
+  }
+ }
+}
