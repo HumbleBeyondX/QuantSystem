@@ -570,3 +570,18 @@ def _live_next_steps(strategy_id: str, throttle: float) -> List[str]:
             "(paper task keeps running as control).",
         ]
     return ["Configure the live runner for this strategy."]
+
+
+@router.post("/{strategy_id}/retire")
+async def retire(strategy_id: str, req: GoLiveRequest):
+    """One-click retire (any stage). Reason required; audit-trailed.
+    Does NOT close positions — flatten on the exchange first."""
+    if strategy_id not in CATALOG_MAP:
+        raise HTTPException(404, f"unknown strategy {strategy_id}")
+    if not req.reason.strip():
+        raise HTTPException(400, "reason required")
+    import asyncio
+    from core.promotion.gates import retire_strategy
+    result = await asyncio.to_thread(retire_strategy, strategy_id, req.reason)
+    CATALOG_MAP[strategy_id].stage = "retired"
+    return result

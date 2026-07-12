@@ -29,7 +29,7 @@ strategies:
       High-leverage ETH perpetual trend-following (50x, fixed-risk sizing,
       ATR trailing stop 3.0, max hold 180 bars, 4H). Live on OKX via the
       Tokyo VPS runner.
-    metrics: {backtest_sharpe: 0.23, oos_sharpe: 0.23, max_dd: -0.563, reported_v1_sharpe: 2.03}
+    metrics: {backtest_sharpe: 0.23, oos_sharpe: 0.23, max_dd: -0.563, reported_v1_sharpe: 2.03, final_realized_pnl_usd: 5.77}
     gate:
       threshold: 1.5
       oos_sharpe: 0.23

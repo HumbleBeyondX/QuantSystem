@@ -323,3 +323,29 @@ def demote_to_paper(strategy_id: str, reason: str) -> Dict[str, Any]:
                             "strategy": strategy_id, "action": "demote_paper",
                             "reason": reason}) + "\n")
     return {"strategy_id": strategy_id, "stage": "paper"}
+
+
+def retire_strategy(strategy_id: str, reason: str,
+                    final_pnl_usd: Optional[float] = None) -> Dict[str, Any]:
+    """One-click retirement: stage override + permanent audit row.
+
+    Risk note: retiring does NOT close positions — the UI must surface
+    open positions and the user flattens them (exchange truth), then a
+    reconciliation record captures the realized P&L.
+    """
+    overrides = load_stage_overrides()
+    overrides[strategy_id] = {
+        "stage": "retired",
+        "retired_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "reason": reason,
+        **({"final_pnl_usd": final_pnl_usd} if final_pnl_usd is not None else {}),
+    }
+    OVERRIDES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    OVERRIDES_PATH.write_text(json.dumps(overrides, indent=1), encoding="utf-8")
+    with open(AUDIT_PATH, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"ts": overrides[strategy_id]["retired_at"],
+                            "strategy": strategy_id, "action": "retire",
+                            "reason": reason,
+                            "final_pnl_usd": final_pnl_usd}) + "\n")
+    logger.info("strategy_retired", strategy=strategy_id)
+    return {"strategy_id": strategy_id, "stage": "retired"}

@@ -136,6 +136,8 @@ const METRIC_DEFS: Array<{ key: string; label: string; fmt: (v: number) => strin
   { key: 'correlation', label: 'Corr', fmt: v => v.toFixed(2) },
   { key: 'win_rate', label: 'Win Rate', fmt: v => `${(v <= 1 ? v * 100 : v).toFixed(0)}%` },
   { key: 'trades', label: 'Trades', fmt: v => v.toLocaleString() },
+  // exchange-reconciled realized P&L for retired live strategies
+  { key: 'final_realized_pnl_usd', label: 'Final Realized P&L', fmt: v => `${v >= 0 ? '+' : ''}$${v.toFixed(2)}` },
 ]
 
 function GateChip({ gate }: { gate: GateInfo }) {
@@ -578,6 +580,97 @@ function StrategyCard({
           {promoOpen && <PromotionPanel strategyId={strategy.id} onPromoted={onRefresh} />}
         </div>
       )}
+
+      {/* One-click retire (live/paper). Does NOT close positions —
+          flatten on the exchange first; realized P&L is reconciled
+          from exchange truth. */}
+      {(strategy.stage === 'live' || strategy.stage === 'paper') && (
+        <div className="pt-2">
+          <RetireControl strategyId={strategy.id} onRetired={onRefresh} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RetireControl({
+  strategyId,
+  onRetired,
+}: {
+  strategyId: string
+  onRetired: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [reason, setReason] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const retire = async () => {
+    setSubmitting(true)
+    setError(null)
+    try {
+      const res = await fetch(`${API}/api/strategies/${strategyId}/retire`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason.trim() }),
+      })
+      const data = await res.json().catch(() => null)
+      if (res.ok) {
+        onRetired()
+      } else {
+        setError(data?.detail ? String(data.detail) : `Retire failed (${res.status})`)
+      }
+    } catch (e: any) {
+      setError(`Cannot reach backend: ${e.message}`)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="text-[10px] text-gray-500 hover:text-rose-400 underline decoration-dotted transition-colors"
+      >
+        Retire strategy
+      </button>
+    )
+  }
+
+  return (
+    <div className="mt-2 space-y-2 w-full">
+      <p className="text-[10px] text-amber-400/80">
+        Retiring stops lifecycle tracking but does NOT close positions — flatten on the
+        exchange first. Recorded permanently in the audit trail.
+      </p>
+      <input
+        type="text"
+        value={reason}
+        onChange={e => setReason(e.target.value)}
+        placeholder="Retirement reason (required)"
+        className="w-full bg-surface border border-border rounded px-2 py-1 text-xs text-gray-100 placeholder-gray-600 focus:outline-none focus:border-accent/50"
+      />
+      <div className="flex items-center gap-2">
+        <button
+          onClick={retire}
+          disabled={reason.trim() === '' || submitting}
+          className={`text-[11px] px-2 py-1 rounded transition-colors ${
+            reason.trim() !== '' && !submitting
+              ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-500/20'
+              : 'bg-surface border border-border text-gray-600 cursor-not-allowed'
+          }`}
+        >
+          {submitting ? 'Retiring...' : 'Confirm retire'}
+        </button>
+        <button
+          onClick={() => setOpen(false)}
+          className="text-[11px] text-gray-500 hover:text-gray-300"
+        >
+          Cancel
+        </button>
+      </div>
+      {error && <p className="text-[11px] text-rose-400 break-words">{error}</p>}
     </div>
   )
 }

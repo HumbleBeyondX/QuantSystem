@@ -155,12 +155,13 @@ def _gamma_card() -> StrategyCard:
 # BTC wheel (local paper, REAL Deribit chains — shadow fills)
 # ────────────────────────────────────────────────────────────
 
-def _wheel_card() -> StrategyCard:
+def _wheel_card(sid: str = "btc_wheel",
+                name: str = "BTC Wheel (real-chain paper)") -> StrategyCard:
     card = StrategyCard(
-        id="btc_wheel", name="BTC Wheel (real-chain paper)", direction="neutral",
+        id=sid, name=name, direction="neutral",
         mode="paper", status="flat", source="local:deribit_shadow",
     )
-    daily = LOG_DIR / "btc_wheel_daily.jsonl"
+    daily = LOG_DIR / f"{sid}_daily.jsonl"
     try:
         lines = daily.read_text().strip().splitlines()
         if not lines:
@@ -256,11 +257,26 @@ async def _eth_card() -> StrategyCard:
 @router.get("/strategies", response_model=MonitorSnapshot)
 async def monitor_strategies() -> MonitorSnapshot:
     """All effective strategies in monitor-card form + portfolio rollup."""
-    gamma, wheel, eth = await asyncio.gather(
-        asyncio.to_thread(_gamma_card), asyncio.to_thread(_wheel_card),
+    gamma, wheel, wheel_delta, eth = await asyncio.gather(
+        asyncio.to_thread(_gamma_card),
+        asyncio.to_thread(_wheel_card),
+        asyncio.to_thread(_wheel_card, "btc_wheel_delta",
+                          "BTC Wheel Delta (0.40P/0.20C paper)"),
         _eth_card(),
     )
-    cards = [gamma, wheel, eth]
+    cards = [gamma, wheel, wheel_delta, eth]
+
+    # lifecycle filter: retired/rejected strategies leave the monitor —
+    # the registry (with stage overrides) is the single source of truth
+    try:
+        from dashboard.backend.routers.strategies import CATALOG_MAP
+        monitor_to_registry = {"gamma_scalp": "spy_gamma_scalp"}
+        def _stage(cid: str) -> str:
+            s = CATALOG_MAP.get(monitor_to_registry.get(cid, cid))
+            return s.stage if s else "unknown"
+        cards = [c for c in cards if _stage(c.id) not in ("retired", "rejected")]
+    except Exception as e:
+        logger.warning("monitor_stage_filter_failed", error=str(e))
     return MonitorSnapshot(
         generated_at=datetime.now(timezone.utc).isoformat(),
         total_equity=round(sum(c.equity or 0 for c in cards), 2),
