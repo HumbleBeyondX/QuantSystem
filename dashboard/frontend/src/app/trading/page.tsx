@@ -117,6 +117,8 @@ interface WheelPosition {
   call: string
   kp: number
   kc: number
+  put_delta?: number
+  call_delta?: number
   expiry_ms: number
   mult: number
   entry_index: number
@@ -223,6 +225,161 @@ function EquityCurveChart({ data }: { data: EquityPoint[] }) {
   )
 }
 
+// ── BTC Wheel Section (shared by btc_wheel + btc_wheel_delta variants) ──
+
+function WheelSection({ data, title }: { data: WheelData | null; title: string }) {
+  return (
+    <>
+      <h2 className="text-base font-semibold text-gray-200 border-b border-border pb-2">
+        {title}
+      </h2>
+
+      {data ? (
+        <>
+          {/* Summary Row */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            <MetricCard
+              title="Total Equity"
+              value={`$${(data.last_mark?.total_equity ?? data.state.equity).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+              color={(data.last_mark?.total_equity ?? data.state.equity) >= data.state.equity ? 'text-success' : 'text-danger'}
+            />
+            <MetricCard
+              title="Realized P&L"
+              value={`${(data.last_mark?.realized ?? data.state.realized) >= 0 ? '+' : ''}$${(data.last_mark?.realized ?? data.state.realized).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+              color={(data.last_mark?.realized ?? data.state.realized) >= 0 ? 'text-success' : 'text-danger'}
+            />
+            <MetricCard
+              title="Unrealized P&L"
+              value={`${(data.last_mark?.unrealized ?? 0) >= 0 ? '+' : ''}$${(data.last_mark?.unrealized ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+              color={(data.last_mark?.unrealized ?? 0) >= 0 ? 'text-success' : 'text-danger'}
+            />
+            <MetricCard
+              title="BTC Index"
+              value={data.last_mark ? `$${data.last_mark.index.toLocaleString(undefined, { minimumFractionDigits: 1 })}` : 'N/A'}
+              sub={`Last: ${data.last_mark?.date ?? 'N/A'}`}
+            />
+            <div className="bg-surface rounded-xl border border-border p-4">
+              <p className="text-[11px] text-gray-500 uppercase tracking-wider">Last Action</p>
+              <span className={`inline-block mt-1.5 px-2 py-0.5 rounded text-xs font-bold ${
+                data.last_mark?.action === 'OPEN' ? 'bg-primary/20 text-primary' :
+                data.last_mark?.action === 'SETTLE' ? 'bg-warning/20 text-warning' :
+                'bg-gray-700/50 text-gray-400'
+              }`}>
+                {data.last_mark?.action ?? 'N/A'}
+              </span>
+              <p className="text-[10px] text-gray-500 mt-1">
+                {data.n_trades} trades &middot; {data.wins} wins
+              </p>
+            </div>
+          </div>
+
+          {/* Open Position */}
+          {data.position && (
+            <div className="bg-surface rounded-xl border border-border p-5">
+              <h3 className="text-sm font-semibold text-gray-300 mb-4">Open Position — Short Strangle</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                <div className="bg-background rounded-lg p-3">
+                  <span className="px-2 py-0.5 rounded text-xs font-bold bg-danger/20 text-danger">
+                    SHORT PUT {data.position.kp.toLocaleString()}
+                    {typeof data.position.put_delta === 'number' && ` (Δ ${data.position.put_delta.toFixed(2)})`}
+                  </span>
+                  <p className="font-mono text-sm mt-2 text-gray-200">{data.position.put}</p>
+                </div>
+                <div className="bg-background rounded-lg p-3">
+                  <span className="px-2 py-0.5 rounded text-xs font-bold bg-danger/20 text-danger">
+                    SHORT CALL {data.position.kc.toLocaleString()}
+                    {typeof data.position.call_delta === 'number' && ` (Δ ${data.position.call_delta.toFixed(2)})`}
+                  </span>
+                  <p className="font-mono text-sm mt-2 text-gray-200">{data.position.call}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                <div><span className="text-gray-500">Entry index:</span> <span className="font-mono">${data.position.entry_index.toLocaleString(undefined, { minimumFractionDigits: 1 })}</span></div>
+                <div><span className="text-gray-500">Total credit:</span> <span className="font-mono text-success">${data.position.credit_total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                <div>
+                  <span className="text-gray-500">Expiry:</span>{' '}
+                  <span className="font-mono">
+                    {new Date(data.position.expiry_ms).toISOString().split('T')[0]}
+                    {' '}({Math.max(0, Math.ceil((data.position.expiry_ms - Date.now()) / 86400000))}d)
+                  </span>
+                </div>
+                <div><span className="text-gray-500">Multiplier:</span> <span className="font-mono">{data.position.mult.toFixed(4)}</span></div>
+              </div>
+            </div>
+          )}
+
+          {/* Equity Curve */}
+          <div className="bg-surface rounded-xl border border-border p-5">
+            <h3 className="text-sm font-semibold text-gray-300 mb-3">Equity Curve</h3>
+            <EquityCurveChart data={data.equity_curve.map(p => ({ ...p, drawdown: 0 }))} />
+            {data.equity_curve.length > 0 && (
+              <div className="flex justify-between text-[10px] text-gray-600 mt-1 px-1">
+                <span>{data.equity_curve[0]?.date}</span>
+                <span>{data.equity_curve[data.equity_curve.length - 1]?.date}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Trades */}
+          <div className="bg-surface rounded-xl border border-border p-5">
+            <h3 className="text-sm font-semibold text-gray-300 mb-3">
+              Trade History
+              {data.trades.length > 0 && <span className="text-gray-500 font-normal ml-2">({data.trades.length} trades)</span>}
+            </h3>
+            <div className="overflow-x-auto max-h-72 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-surface">
+                  <tr className="text-gray-500 border-b border-border">
+                    <th className="text-left py-2 px-2">Date</th>
+                    <th className="text-left px-2">Action</th>
+                    <th className="text-left px-2">Instruments</th>
+                    <th className="text-right px-2">Credit / P&L</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...data.trades].reverse().map((t, i) => (
+                    <tr key={i} className="border-b border-border/30 hover:bg-background/50 transition-colors">
+                      <td className="py-1.5 px-2 font-mono">{t.ts?.split('T')[0]}</td>
+                      <td className="px-2">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                          t.action === 'OPEN' ? 'bg-primary/20 text-primary' :
+                          (t.pnl ?? 0) >= 0 ? 'bg-success/20 text-success' : 'bg-danger/20 text-danger'
+                        }`}>
+                          {t.action}
+                        </span>
+                      </td>
+                      <td className="px-2 font-mono text-gray-400">
+                        {[t.put, t.call].filter(Boolean).join(' / ') || '--'}
+                      </td>
+                      <td className={`text-right px-2 font-mono ${
+                        t.action === 'OPEN' ? 'text-primary' : (t.pnl ?? 0) >= 0 ? 'text-success' : 'text-danger'
+                      }`}>
+                        {t.action === 'OPEN'
+                          ? `+$${(t.credit_total ?? 0).toFixed(2)}`
+                          : `${(t.pnl ?? 0) >= 0 ? '+' : ''}$${(t.pnl ?? 0).toFixed(2)}`
+                        }
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {data.trades.length === 0 && (
+                <p className="text-center text-gray-500 py-6 text-sm">No wheel trades yet.</p>
+              )}
+            </div>
+          </div>
+
+          <p className="text-[10px] text-gray-600">
+            Shadow fills at real Deribit bids &middot; marks at real mark prices &middot; settlement at intrinsic. First weekly settlement 2026-07-17.
+          </p>
+        </>
+      ) : (
+        <p className="text-sm text-gray-500">BTC wheel not papering yet.</p>
+      )}
+    </>
+  )
+}
+
 // ── Main Page ────────────────────────────────────────────────
 
 export default function TradingPage() {
@@ -239,6 +396,7 @@ export default function TradingPage() {
   const [selectedSource, setSelectedSource] = useState('alpaca')
   const [useExecution, setUseExecution] = useState(true)
   const [wheel, setWheel] = useState<WheelData | null>(null)
+  const [wheelDelta, setWheelDelta] = useState<WheelData | null>(null)
 
   // Fetch deployed strategies list
   const fetchDeployed = useCallback(async () => {
@@ -293,18 +451,23 @@ export default function TradingPage() {
     }
   }, [selectedStrategyId])
 
-  // Fetch BTC wheel paper-trading status (404 = wheel never ran)
+  // Fetch BTC wheel paper-trading status for both variants (404 = variant never ran)
   const fetchWheel = useCallback(async () => {
-    try {
-      const res = await fetch(`${API}/api/paper-trading/btc-wheel`)
-      if (!res.ok) {
-        setWheel(null)
-        return
+    const fetchVariant = async (variant: string): Promise<WheelData | null> => {
+      try {
+        const res = await fetch(`${API}/api/paper-trading/btc-wheel?variant=${variant}`)
+        if (!res.ok) return null
+        return await res.json()
+      } catch {
+        return null
       }
-      setWheel(await res.json())
-    } catch {
-      setWheel(null)
     }
+    const [base, delta] = await Promise.all([
+      fetchVariant('btc_wheel'),
+      fetchVariant('btc_wheel_delta'),
+    ])
+    setWheel(base)
+    setWheelDelta(delta)
   }, [])
 
   useEffect(() => {
@@ -430,33 +593,39 @@ export default function TradingPage() {
               </button>
             )
           })}
-          {/* BTC wheel paper runner (jsonl telemetry, not a deployment record) */}
-          <button
-            onClick={() => setSelectedStrategyId('btc_wheel')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-              selectedStrategyId === 'btc_wheel'
-                ? 'bg-primary/20 border-primary/50 text-primary'
-                : 'bg-surface border-border text-gray-400 hover:border-gray-500 hover:text-gray-200'
-            }`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${wheel ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
-            <span>BTC Wheel</span>
-            <span className="text-[10px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-400">paper</span>
-            {wheel && (wheel.last_mark?.unrealized ?? 0) + (wheel.last_mark?.realized ?? 0) !== 0 && (
-              <span className={`font-mono ${
-                (wheel.last_mark?.realized ?? 0) + (wheel.last_mark?.unrealized ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'
-              }`}>
-                {(wheel.last_mark?.realized ?? 0) + (wheel.last_mark?.unrealized ?? 0) >= 0 ? '+' : ''}
-                ${((wheel.last_mark?.realized ?? 0) + (wheel.last_mark?.unrealized ?? 0)).toFixed(0)}
-              </span>
-            )}
-          </button>
+          {/* BTC wheel paper runners (jsonl telemetry, not deployment records) */}
+          {([
+            { id: 'btc_wheel', label: 'BTC Wheel', data: wheel },
+            { id: 'btc_wheel_delta', label: 'BTC Wheel Δ', data: wheelDelta },
+          ] as const).map(v => {
+            const pnl = (v.data?.last_mark?.realized ?? 0) + (v.data?.last_mark?.unrealized ?? 0)
+            return (
+              <button
+                key={v.id}
+                onClick={() => setSelectedStrategyId(v.id)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                  selectedStrategyId === v.id
+                    ? 'bg-primary/20 border-primary/50 text-primary'
+                    : 'bg-surface border-border text-gray-400 hover:border-gray-500 hover:text-gray-200'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${v.data ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
+                <span>{v.label}</span>
+                <span className="text-[10px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-400">paper</span>
+                {v.data && pnl !== 0 && (
+                  <span className={`font-mono ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {pnl >= 0 ? '+' : ''}${pnl.toFixed(0)}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
       )}
 
       {tab === 'monitor' ? (
         <>
-          {selectedStrategyId !== 'btc_wheel' && (<>
+          {selectedStrategyId !== 'btc_wheel' && selectedStrategyId !== 'btc_wheel_delta' && (<>
           {/* ── SPY Gamma Scalp ── */}
           <h2 className="text-base font-semibold text-gray-200 border-b border-border pb-2">
             SPY Gamma Scalp &mdash; paper (Alpaca OPRA)
@@ -679,153 +848,13 @@ export default function TradingPage() {
 
           </>)}
 
-          {/* ── BTC Wheel ── */}
-          {selectedStrategyId === 'btc_wheel' && (<>
-          <h2 className="text-base font-semibold text-gray-200 border-b border-border pb-2">
-            BTC Wheel &mdash; paper (real Deribit chains)
-          </h2>
-
-          {wheel ? (
-            <>
-              {/* Summary Row */}
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                <MetricCard
-                  title="Total Equity"
-                  value={`$${(wheel.last_mark?.total_equity ?? wheel.state.equity).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                  color={(wheel.last_mark?.total_equity ?? wheel.state.equity) >= wheel.state.equity ? 'text-success' : 'text-danger'}
-                />
-                <MetricCard
-                  title="Realized P&L"
-                  value={`${(wheel.last_mark?.realized ?? wheel.state.realized) >= 0 ? '+' : ''}$${(wheel.last_mark?.realized ?? wheel.state.realized).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                  color={(wheel.last_mark?.realized ?? wheel.state.realized) >= 0 ? 'text-success' : 'text-danger'}
-                />
-                <MetricCard
-                  title="Unrealized P&L"
-                  value={`${(wheel.last_mark?.unrealized ?? 0) >= 0 ? '+' : ''}$${(wheel.last_mark?.unrealized ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                  color={(wheel.last_mark?.unrealized ?? 0) >= 0 ? 'text-success' : 'text-danger'}
-                />
-                <MetricCard
-                  title="BTC Index"
-                  value={wheel.last_mark ? `$${wheel.last_mark.index.toLocaleString(undefined, { minimumFractionDigits: 1 })}` : 'N/A'}
-                  sub={`Last: ${wheel.last_mark?.date ?? 'N/A'}`}
-                />
-                <div className="bg-surface rounded-xl border border-border p-4">
-                  <p className="text-[11px] text-gray-500 uppercase tracking-wider">Last Action</p>
-                  <span className={`inline-block mt-1.5 px-2 py-0.5 rounded text-xs font-bold ${
-                    wheel.last_mark?.action === 'OPEN' ? 'bg-primary/20 text-primary' :
-                    wheel.last_mark?.action === 'SETTLE' ? 'bg-warning/20 text-warning' :
-                    'bg-gray-700/50 text-gray-400'
-                  }`}>
-                    {wheel.last_mark?.action ?? 'N/A'}
-                  </span>
-                  <p className="text-[10px] text-gray-500 mt-1">
-                    {wheel.n_trades} trades &middot; {wheel.wins} wins
-                  </p>
-                </div>
-              </div>
-
-              {/* Open Position */}
-              {wheel.position && (
-                <div className="bg-surface rounded-xl border border-border p-5">
-                  <h3 className="text-sm font-semibold text-gray-300 mb-4">Open Position — Short Strangle</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                    <div className="bg-background rounded-lg p-3">
-                      <span className="px-2 py-0.5 rounded text-xs font-bold bg-danger/20 text-danger">
-                        SHORT PUT {wheel.position.kp.toLocaleString()}
-                      </span>
-                      <p className="font-mono text-sm mt-2 text-gray-200">{wheel.position.put}</p>
-                    </div>
-                    <div className="bg-background rounded-lg p-3">
-                      <span className="px-2 py-0.5 rounded text-xs font-bold bg-danger/20 text-danger">
-                        SHORT CALL {wheel.position.kc.toLocaleString()}
-                      </span>
-                      <p className="font-mono text-sm mt-2 text-gray-200">{wheel.position.call}</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                    <div><span className="text-gray-500">Entry index:</span> <span className="font-mono">${wheel.position.entry_index.toLocaleString(undefined, { minimumFractionDigits: 1 })}</span></div>
-                    <div><span className="text-gray-500">Total credit:</span> <span className="font-mono text-success">${wheel.position.credit_total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-                    <div>
-                      <span className="text-gray-500">Expiry:</span>{' '}
-                      <span className="font-mono">
-                        {new Date(wheel.position.expiry_ms).toISOString().split('T')[0]}
-                        {' '}({Math.max(0, Math.ceil((wheel.position.expiry_ms - Date.now()) / 86400000))}d)
-                      </span>
-                    </div>
-                    <div><span className="text-gray-500">Multiplier:</span> <span className="font-mono">{wheel.position.mult.toFixed(4)}</span></div>
-                  </div>
-                </div>
-              )}
-
-              {/* Equity Curve */}
-              <div className="bg-surface rounded-xl border border-border p-5">
-                <h3 className="text-sm font-semibold text-gray-300 mb-3">Equity Curve</h3>
-                <EquityCurveChart data={wheel.equity_curve.map(p => ({ ...p, drawdown: 0 }))} />
-                {wheel.equity_curve.length > 0 && (
-                  <div className="flex justify-between text-[10px] text-gray-600 mt-1 px-1">
-                    <span>{wheel.equity_curve[0]?.date}</span>
-                    <span>{wheel.equity_curve[wheel.equity_curve.length - 1]?.date}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Trades */}
-              <div className="bg-surface rounded-xl border border-border p-5">
-                <h3 className="text-sm font-semibold text-gray-300 mb-3">
-                  Trade History
-                  {wheel.trades.length > 0 && <span className="text-gray-500 font-normal ml-2">({wheel.trades.length} trades)</span>}
-                </h3>
-                <div className="overflow-x-auto max-h-72 overflow-y-auto">
-                  <table className="w-full text-xs">
-                    <thead className="sticky top-0 bg-surface">
-                      <tr className="text-gray-500 border-b border-border">
-                        <th className="text-left py-2 px-2">Date</th>
-                        <th className="text-left px-2">Action</th>
-                        <th className="text-left px-2">Instruments</th>
-                        <th className="text-right px-2">Credit / P&L</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[...wheel.trades].reverse().map((t, i) => (
-                        <tr key={i} className="border-b border-border/30 hover:bg-background/50 transition-colors">
-                          <td className="py-1.5 px-2 font-mono">{t.ts?.split('T')[0]}</td>
-                          <td className="px-2">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] ${
-                              t.action === 'OPEN' ? 'bg-primary/20 text-primary' :
-                              (t.pnl ?? 0) >= 0 ? 'bg-success/20 text-success' : 'bg-danger/20 text-danger'
-                            }`}>
-                              {t.action}
-                            </span>
-                          </td>
-                          <td className="px-2 font-mono text-gray-400">
-                            {[t.put, t.call].filter(Boolean).join(' / ') || '--'}
-                          </td>
-                          <td className={`text-right px-2 font-mono ${
-                            t.action === 'OPEN' ? 'text-primary' : (t.pnl ?? 0) >= 0 ? 'text-success' : 'text-danger'
-                          }`}>
-                            {t.action === 'OPEN'
-                              ? `+$${(t.credit_total ?? 0).toFixed(2)}`
-                              : `${(t.pnl ?? 0) >= 0 ? '+' : ''}$${(t.pnl ?? 0).toFixed(2)}`
-                            }
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {wheel.trades.length === 0 && (
-                    <p className="text-center text-gray-500 py-6 text-sm">No wheel trades yet.</p>
-                  )}
-                </div>
-              </div>
-
-              <p className="text-[10px] text-gray-600">
-                Shadow fills at real Deribit bids &middot; marks at real mark prices &middot; settlement at intrinsic. First weekly settlement 2026-07-17.
-              </p>
-            </>
-          ) : (
-            <p className="text-sm text-gray-500">BTC wheel not papering yet.</p>
+          {/* ── BTC Wheel (both variants share WheelSection) ── */}
+          {selectedStrategyId === 'btc_wheel' && (
+            <WheelSection data={wheel} title="BTC Wheel — paper (real Deribit chains)" />
           )}
-          </>)}
+          {selectedStrategyId === 'btc_wheel_delta' && (
+            <WheelSection data={wheelDelta} title="BTC Wheel Delta — paper (0.40Δ put / 0.20Δ call, real Deribit chains)" />
+          )}
         </>
       ) : (
         /* ── Control Panel Tab ── */

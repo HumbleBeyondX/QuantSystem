@@ -60,6 +60,26 @@ interface Summary {
   total_session_orders: number
 }
 
+// Minimal slice of the strategy registry needed to detect retired strategies
+interface RegistryStrategyLite {
+  id: string
+  name: string
+  stage: string
+  notes?: string | null
+  gate?: { note?: string | null } | null
+  metrics?: Record<string, number | null> | null
+  links?: {
+    deployment?: string | null
+    promotion?: { reason?: string | null } | null
+  } | null
+}
+
+interface RetirementInfo {
+  stage: string
+  reason: string | null
+  finalPnl: number | null
+}
+
 // ── Helpers ──────────────────────────────────────────────────
 
 const regionFlags: Record<string, string> = {
@@ -96,6 +116,22 @@ function timeSince(iso: string | null): string {
   return `${mins}m`
 }
 
+function excerpt(text?: string | null, max = 180): string | null {
+  if (!text) return null
+  const clean = text.trim().replace(/\s+/g, ' ')
+  if (!clean) return null
+  return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean
+}
+
+function retirementInfo(s: RegistryStrategyLite): RetirementInfo {
+  const pnl = s.metrics?.final_realized_pnl_usd
+  return {
+    stage: s.stage,
+    reason: s.links?.promotion?.reason || excerpt(s.notes) || excerpt(s.gate?.note),
+    finalPnl: typeof pnl === 'number' ? pnl : null,
+  }
+}
+
 // ── Main Component ──────────────────────────────────────────
 
 interface ReportStatus {
@@ -111,6 +147,7 @@ interface ReportStatus {
 export default function CloudPage() {
   const [deployments, setDeployments] = useState<DeploymentStatus[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
+  const [retiredStrategies, setRetiredStrategies] = useState<RegistryStrategyLite[]>([])
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -125,14 +162,20 @@ export default function CloudPage() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [depRes, sumRes, repRes] = await Promise.all([
+      const [depRes, sumRes, repRes, regRes] = await Promise.all([
         fetch(`${API}/api/deployments`),
         fetch(`${API}/api/deployments/summary`),
         fetch(`${API}/api/reports/daily/status`),
+        fetch(`${API}/api/strategies/registry`),
       ])
       if (depRes.ok) setDeployments(await depRes.json())
       if (sumRes.ok) setSummary(await sumRes.json())
       if (repRes.ok) setReportStatus(await repRes.json())
+      if (regRes.ok) {
+        const reg = await regRes.json()
+        const groups = reg?.groups ?? {}
+        setRetiredStrategies([...(groups.retired ?? []), ...(groups.rejected ?? [])])
+      }
       setError(null)
     } catch (e: any) {
       setError('Backend not reachable. Start local dashboard first.')
@@ -251,6 +294,45 @@ export default function CloudPage() {
     }
   }
 
+  // ── Zone classification ────────────────────────────────────
+  // Registry lifecycle stage wins over live probe status: a deployment whose
+  // strategy is retired/rejected is HISTORICAL even if its VPS runner still
+  // reports emergency-stopped or online.
+  const retiredById = new Map(retiredStrategies.map(s => [s.id, s]))
+
+  const historicalDeployments = deployments.filter(d => retiredById.has(d.deployment.strategy_id))
+  const activeDeployments = deployments.filter(d => !retiredById.has(d.deployment.strategy_id))
+  const runningDeployments = activeDeployments.filter(
+    d => d.online && d.runner_status?.running && !d.runner_status?.emergency_stopped
+  )
+  const stoppedDeployments = activeDeployments.filter(d => !runningDeployments.includes(d))
+
+  // Retired registry strategies that reference a deployment whose record is
+  // gone — still shown as historical ghost cards.
+  const ghostRetired = retiredStrategies.filter(
+    s =>
+      s.links?.deployment &&
+      !deployments.some(
+        d => d.deployment.strategy_id === s.id || d.deployment.id === s.links?.deployment
+      )
+  )
+
+  const renderCard = (d: DeploymentStatus, historical: RetirementInfo | null = null) => (
+    <DeploymentCard
+      key={d.deployment.id}
+      data={d}
+      historical={historical}
+      actionLoading={actionLoading}
+      onEmergencyStop={() => doAction(d.deployment.id, 'emergency-stop')}
+      onForceClose={() => doAction(d.deployment.id, 'force-close')}
+      onRestart={() => doAction(d.deployment.id, 'restart')}
+      onToggleLogs={() => fetchLogs(d.deployment.id)}
+      logsExpanded={expandedLogs === d.deployment.id}
+      logs={expandedLogs === d.deployment.id ? logs : []}
+      logsLoading={logsLoading && expandedLogs === d.deployment.id}
+    />
+  )
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -282,12 +364,12 @@ export default function CloudPage() {
         </div>
       )}
 
-      {/* Deployments List */}
+      {/* Deployment Zones */}
       {loading ? (
         <div className="bg-surface rounded-xl border border-border p-12 text-center">
           <p className="text-gray-500 animate-pulse">Loading deployments...</p>
         </div>
-      ) : deployments.length === 0 ? (
+      ) : deployments.length === 0 && ghostRetired.length === 0 ? (
         <div className="bg-surface rounded-xl border border-border p-12 text-center">
           <p className="text-gray-500 text-lg">No deployments configured</p>
           <p className="text-gray-600 text-sm mt-2">
@@ -295,21 +377,39 @@ export default function CloudPage() {
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {deployments.map(d => (
-            <DeploymentCard
-              key={d.deployment.id}
-              data={d}
-              actionLoading={actionLoading}
-              onEmergencyStop={() => doAction(d.deployment.id, 'emergency-stop')}
-              onForceClose={() => doAction(d.deployment.id, 'force-close')}
-              onRestart={() => doAction(d.deployment.id, 'restart')}
-              onToggleLogs={() => fetchLogs(d.deployment.id)}
-              logsExpanded={expandedLogs === d.deployment.id}
-              logs={expandedLogs === d.deployment.id ? logs : []}
-              logsLoading={logsLoading && expandedLogs === d.deployment.id}
-            />
-          ))}
+        <div className="space-y-6">
+          {runningDeployments.length > 0 && (
+            <section className="space-y-3">
+              <ZoneHeader title="RUNNING" count={runningDeployments.length} dot="bg-green-500" />
+              <div className="space-y-4">{runningDeployments.map(d => renderCard(d))}</div>
+            </section>
+          )}
+
+          {stoppedDeployments.length > 0 && (
+            <section className="space-y-3">
+              <ZoneHeader title="STOPPED" count={stoppedDeployments.length} dot="bg-amber-500" />
+              <div className="space-y-4">{stoppedDeployments.map(d => renderCard(d))}</div>
+            </section>
+          )}
+
+          {(historicalDeployments.length > 0 || ghostRetired.length > 0) && (
+            <section className="space-y-3">
+              <ZoneHeader
+                title="HISTORICAL"
+                hint="retired"
+                count={historicalDeployments.length + ghostRetired.length}
+                dot="bg-zinc-500"
+              />
+              <div className="space-y-4">
+                {historicalDeployments.map(d =>
+                  renderCard(d, retirementInfo(retiredById.get(d.deployment.strategy_id)!))
+                )}
+                {ghostRetired.map(s => (
+                  <GhostHistoricalCard key={s.id} strategy={s} info={retirementInfo(s)} />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
 
@@ -376,20 +476,21 @@ export default function CloudPage() {
           )}
 
           <div className="flex gap-2">
-            <button
-              onClick={() => doRunnerAction('emergency-stop')}
+            <ConfirmButton
+              label="Emergency Stop"
+              onConfirm={() => doRunnerAction('emergency-stop')}
               disabled={runnerLoading !== null || localRunner.emergency_stopped}
-              className="px-4 py-2 bg-red-800 hover:bg-red-700 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
-            >
-              Emergency Stop
-            </button>
-            <button
-              onClick={() => doRunnerAction('force-close')}
+              sizeClassName="px-4 py-2 text-sm"
+              idleClassName="bg-red-800 hover:bg-red-700 text-white"
+            />
+            <ConfirmButton
+              label="Force Close Positions"
+              confirmLabel="Force Close"
+              onConfirm={() => doRunnerAction('force-close')}
               disabled={runnerLoading !== null}
-              className="px-4 py-2 bg-orange-800 hover:bg-orange-700 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
-            >
-              Force Close Positions
-            </button>
+              sizeClassName="px-4 py-2 text-sm"
+              idleClassName="bg-orange-800 hover:bg-orange-700 text-white"
+            />
           </div>
         </div>
       )}
@@ -473,6 +574,79 @@ export default function CloudPage() {
   )
 }
 
+// ── Zone Header ─────────────────────────────────────────────
+
+function ZoneHeader({ title, count, dot, hint }: { title: string; count: number; dot: string; hint?: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className={`w-2 h-2 rounded-full ${dot}`} />
+      <h3 className="text-sm font-bold uppercase tracking-widest text-gray-300">{title}</h3>
+      {hint && <span className="text-xs text-gray-600">({hint})</span>}
+      <span className="text-xs text-gray-500">{count}</span>
+      <div className="flex-1 h-px bg-border" />
+    </div>
+  )
+}
+
+// ── Confirm Button (two-step destructive action) ────────────
+
+function ConfirmButton({
+  label,
+  confirmLabel,
+  onConfirm,
+  disabled,
+  sizeClassName,
+  idleClassName,
+}: {
+  label: string
+  confirmLabel?: string
+  onConfirm: () => void
+  disabled?: boolean
+  sizeClassName: string
+  idleClassName: string
+}) {
+  const [armed, setArmed] = useState(false)
+
+  // Auto-revert after 5s if untouched
+  useEffect(() => {
+    if (!armed) return
+    const t = setTimeout(() => setArmed(false), 5000)
+    return () => clearTimeout(t)
+  }, [armed])
+
+  if (armed) {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <button
+          onClick={() => {
+            setArmed(false)
+            onConfirm()
+          }}
+          className={`${sizeClassName} bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-lg transition-colors`}
+        >
+          Confirm {confirmLabel ?? label}?
+        </button>
+        <button
+          onClick={() => setArmed(false)}
+          className={`${sizeClassName} bg-gray-800 hover:bg-gray-700 text-gray-400 rounded-lg transition-colors`}
+        >
+          Cancel
+        </button>
+      </span>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => setArmed(true)}
+      disabled={disabled}
+      className={`${sizeClassName} ${idleClassName} rounded-lg transition-colors disabled:opacity-50`}
+    >
+      {label}
+    </button>
+  )
+}
+
 // ── Summary Card ────────────────────────────────────────────
 
 function SummaryCard({ label, value, color }: { label: string; value: string | number; color?: string }) {
@@ -492,10 +666,68 @@ function SummaryCard({ label, value, color }: { label: string; value: string | n
   )
 }
 
+// ── Retirement Details (shared by historical cards) ─────────
+
+function RetirementDetails({ info }: { info: RetirementInfo }) {
+  return (
+    <div className="mb-4 bg-background rounded-lg p-3 flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Retirement Reason</p>
+        <p className="text-xs text-gray-400 leading-relaxed">
+          {info.reason ?? 'No reason recorded'}
+        </p>
+      </div>
+      {info.finalPnl != null && (
+        <div className="shrink-0 text-right">
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Final Realized P&L</p>
+          <p className={`text-lg font-mono font-bold ${info.finalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {formatPnl(info.finalPnl)}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function StageBadge({ stage }: { stage: string }) {
+  const cls = stage === 'rejected' ? 'bg-red-500/20 text-red-400' : 'bg-zinc-500/20 text-zinc-400'
+  return (
+    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${cls}`}>
+      {stage}
+    </span>
+  )
+}
+
+// ── Ghost Historical Card (registry-only, deployment record gone) ──
+
+function GhostHistoricalCard({ strategy, info }: { strategy: RegistryStrategyLite; info: RetirementInfo }) {
+  return (
+    <div className="bg-surface rounded-xl border border-border p-5 opacity-60">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <span className="w-3 h-3 rounded-full flex-shrink-0 bg-zinc-600" />
+          <div>
+            <h3 className="text-base font-semibold">{strategy.name}</h3>
+            <p className="text-xs text-gray-500">
+              Strategy: {strategy.id}
+              {strategy.links?.deployment && (
+                <span className="ml-2 text-gray-600">(deployment record removed: {strategy.links.deployment})</span>
+              )}
+            </p>
+          </div>
+        </div>
+        <StageBadge stage={info.stage} />
+      </div>
+      <RetirementDetails info={info} />
+    </div>
+  )
+}
+
 // ── Deployment Card ─────────────────────────────────────────
 
 function DeploymentCard({
   data,
+  historical,
   actionLoading,
   onEmergencyStop,
   onForceClose,
@@ -506,6 +738,7 @@ function DeploymentCard({
   logsLoading,
 }: {
   data: DeploymentStatus
+  historical: RetirementInfo | null
   actionLoading: string | null
   onEmergencyStop: () => void
   onForceClose: () => void
@@ -518,36 +751,33 @@ function DeploymentCard({
   const dep = data.deployment
   const rs = data.runner_status
   const isRunning = data.online && rs?.running && !rs?.emergency_stopped
-  const isEmergency = rs?.emergency_stopped
+  const isEmergency = !!rs?.emergency_stopped
   const snapshot = rs?.position_manager_snapshot
 
   const regionFlag = regionFlags[dep.region] || ''
-  const statusColor = isEmergency
-    ? 'bg-red-500'
+  const statusColor = historical
+    ? 'bg-zinc-600'
+    : isEmergency
+    ? 'bg-amber-500'
     : isRunning
     ? 'bg-green-500 animate-pulse'
     : data.online
     ? 'bg-yellow-500'
     : 'bg-gray-600'
 
-  const statusText = isEmergency
-    ? 'EMERGENCY STOPPED'
-    : isRunning
-    ? 'RUNNING'
-    : data.online
-    ? 'ONLINE (idle)'
-    : 'OFFLINE'
-
-  const statusTextColor = isEmergency
-    ? 'text-red-400'
-    : isRunning
+  const statusText = isRunning ? 'RUNNING' : data.online ? 'ONLINE (idle)' : 'OFFLINE'
+  const statusTextColor = isRunning
     ? 'text-green-400'
     : data.online
     ? 'text-yellow-400'
     : 'text-gray-500'
 
   return (
-    <div className={`bg-surface rounded-xl border ${isRunning ? 'border-green-800/40' : 'border-border'} p-5`}>
+    <div
+      className={`bg-surface rounded-xl border ${
+        !historical && isRunning ? 'border-green-800/40' : 'border-border'
+      } p-5 ${historical ? 'opacity-60' : ''}`}
+    >
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
@@ -565,12 +795,23 @@ function DeploymentCard({
           {data.latency_ms !== null && (
             <span className="text-[10px] text-gray-600 font-mono">{data.latency_ms}ms</span>
           )}
-          <span className={`text-sm font-semibold ${statusTextColor}`}>{statusText}</span>
+          {historical ? (
+            <StageBadge stage={historical.stage} />
+          ) : isEmergency ? (
+            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-400">
+              EMERGENCY STOPPED
+            </span>
+          ) : (
+            <span className={`text-sm font-semibold ${statusTextColor}`}>{statusText}</span>
+          )}
         </div>
       </div>
 
+      {/* Retirement details */}
+      {historical && <RetirementDetails info={historical} />}
+
       {/* Metrics Grid */}
-      {rs && (
+      {rs && !historical && (
         <div className="grid grid-cols-6 gap-3 mb-4">
           <MetricBox label="Session P&L" value={formatPnl(rs.session_pnl)} color={rs.session_pnl >= 0 ? 'green' : 'red'} />
           <MetricBox label="Trades" value={rs.session_trades} />
@@ -588,7 +829,7 @@ function DeploymentCard({
       )}
 
       {/* Open Positions */}
-      {snapshot && snapshot.positions.length > 0 && (
+      {!historical && snapshot && snapshot.positions.length > 0 && (
         <div className="mb-4 bg-background rounded-lg p-3">
           <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">Open Positions</p>
           {snapshot.positions.map((pos, i) => (
@@ -630,29 +871,33 @@ function DeploymentCard({
         >
           {logsExpanded ? 'Hide Logs' : 'View Logs'}
         </button>
-        <button
-          onClick={onRestart}
-          disabled={actionLoading !== null}
-          className="px-3 py-1.5 bg-blue-800 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors disabled:opacity-50"
-        >
-          Restart
-        </button>
-        <div className="ml-auto flex gap-2">
-          <button
-            onClick={onForceClose}
-            disabled={actionLoading !== null || !isRunning}
-            className="px-3 py-1.5 bg-orange-800 hover:bg-orange-700 text-white text-xs rounded-lg transition-colors disabled:opacity-50"
-          >
-            Force Close
-          </button>
-          <button
-            onClick={onEmergencyStop}
-            disabled={actionLoading !== null || !isRunning}
-            className="px-3 py-1.5 bg-red-800 hover:bg-red-700 text-white text-xs rounded-lg transition-colors disabled:opacity-50"
-          >
-            Emergency Stop
-          </button>
-        </div>
+        {!historical && (
+          <>
+            <ConfirmButton
+              label="Restart"
+              onConfirm={onRestart}
+              disabled={actionLoading !== null}
+              sizeClassName="px-3 py-1.5 text-xs"
+              idleClassName="bg-blue-800 hover:bg-blue-700 text-white"
+            />
+            <div className="ml-auto flex gap-2">
+              <ConfirmButton
+                label="Force Close"
+                onConfirm={onForceClose}
+                disabled={actionLoading !== null || !isRunning}
+                sizeClassName="px-3 py-1.5 text-xs"
+                idleClassName="bg-orange-800 hover:bg-orange-700 text-white"
+              />
+              <ConfirmButton
+                label="Emergency Stop"
+                onConfirm={onEmergencyStop}
+                disabled={actionLoading !== null || !isRunning}
+                sizeClassName="px-3 py-1.5 text-xs"
+                idleClassName="bg-red-800 hover:bg-red-700 text-white"
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {/* Logs Panel */}
