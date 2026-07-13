@@ -55,17 +55,17 @@ def test_gamma_card_uses_real_local_data(client):
     assert gamma["updated_at"] is not None
 
 
-def test_eth_card_degrades_not_crashes(client):
-    """Whether the Tokyo VPS is up or down, the card must be well-formed."""
+def test_retired_strategies_leave_the_monitor(client):
+    """eth_sniper retired 2026-07-12 (position closed, runner stopped) —
+    the monitor must reflect the registry lifecycle, not history."""
     body = client.get("/api/monitor/strategies").json()
-    eth = next(s for s in body["strategies"] if s["id"] == "eth_sniper")
-    assert eth["mode"] == "live"
-    assert eth["status"] in ("running", "stale", "unreachable")
-    if eth["status"] == "unreachable":
-        assert "no_telemetry" in eth["flags"]
-        assert eth["equity"] is None
-    else:
-        assert eth["equity"] is not None
+    ids = [s["id"] for s in body["strategies"]]
+    assert "eth_sniper" not in ids
+    # the living books are all present, incl. the new delta wheel
+    assert {"gamma_scalp", "btc_wheel", "btc_wheel_delta"} <= set(ids)
+    delta = next(s for s in body["strategies"] if s["id"] == "btc_wheel_delta")
+    assert delta["mode"] == "paper"
+    assert delta["status"] in ("running", "flat", "stale", "unreachable")
 
 
 def test_wheel_card_real_chain_data(client):

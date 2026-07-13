@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { Fragment, useState, useEffect, useCallback } from 'react'
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002'
 const MARKET_API = API.replace('/api', '') + '/api/market'
@@ -52,7 +52,26 @@ interface QuoteData {
   bid: number; ask: number; volume: number; high: number; low: number
 }
 
-type Tab = 'quotes' | 'sources' | 'inventory' | 'collection' | 'features' | 'pipeline'
+interface CatalogEntry {
+  asset_class?: string
+  symbol?: string
+  freq?: string
+  rows?: number
+  start?: string
+  end?: string
+  source?: string
+  sha256?: string
+  written_at?: string
+  quality?: string
+  [key: string]: unknown
+}
+
+interface CatalogResponse {
+  count: number
+  entries: CatalogEntry[]
+}
+
+type Tab = 'catalog' | 'quotes' | 'sources' | 'inventory' | 'collection' | 'features' | 'pipeline'
 
 // ── Week-2: real source-health probes (replaces mtime-based fake status) ──
 interface SourceHealth {
@@ -138,8 +157,168 @@ function LiveHealthPanel() {
 
 // ── Main Component ────────────────────────────────────────────
 
+// ── Catalog tab: the unified data spine (GET /api/data/catalog) ──
+
+function dateOnly(s?: string | null): string {
+  if (!s || typeof s !== 'string') return '—'
+  return s.split('T')[0].split(' ')[0]
+}
+
+function CatalogTab() {
+  const [catalog, setCatalog] = useState<CatalogResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const fetchCatalog = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`${API}/api/data/catalog`, { cache: 'no-store' })
+      if (!res.ok) {
+        setError(`Catalog endpoint returned ${res.status}`)
+        setCatalog(null)
+      } else {
+        const d = await res.json()
+        setCatalog({ count: d?.count ?? 0, entries: Array.isArray(d?.entries) ? d.entries : [] })
+        setError(null)
+      }
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to reach catalog endpoint')
+      setCatalog(null)
+    }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { fetchCatalog() }, [fetchCatalog])
+
+  const entries = catalog?.entries ?? []
+  const totalRows = entries.reduce((acc, e) => acc + (typeof e.rows === 'number' ? e.rows : 0), 0)
+
+  // Group by asset_class (stable order: alphabetical, unknown last)
+  const groups = new Map<string, CatalogEntry[]>()
+  for (const e of entries) {
+    const key = e.asset_class || 'unknown'
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(e)
+  }
+  const groupKeys = Array.from(groups.keys()).sort((a, b) =>
+    a === 'unknown' ? 1 : b === 'unknown' ? -1 : a.localeCompare(b))
+
+  const assetClassStyle = (ac: string) =>
+    ac === 'crypto' ? 'bg-purple-500/20 text-purple-400' :
+    ac === 'equity' ? 'bg-blue-500/20 text-blue-400' :
+    ac === 'options' ? 'bg-amber-500/20 text-amber-400' :
+    'bg-gray-500/20 text-gray-400'
+
+  return (
+    <div className="space-y-4">
+      {/* Summary line + refresh */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-400">
+          {catalog ? (
+            <>
+              <span className="font-semibold text-gray-100">{catalog.count}</span> datasets
+              {' · '}
+              <span className="font-mono tabular-nums">{totalRows.toLocaleString()}</span> total rows
+            </>
+          ) : loading ? 'Loading catalog…' : 'Catalog unavailable'}
+        </p>
+        <button
+          onClick={fetchCatalog}
+          disabled={loading}
+          className="px-3 py-1.5 bg-surface border border-border rounded-lg text-xs text-gray-400 hover:text-gray-100 hover:border-gray-500 transition-colors disabled:opacity-50"
+        >
+          {loading ? 'Refreshing…' : 'Refresh'}
+        </button>
+      </div>
+
+      {error && (
+        <div className="bg-surface rounded-xl border border-danger/30 p-5 text-sm text-danger">
+          Failed to load data catalog: {error}
+        </div>
+      )}
+
+      {!error && !loading && entries.length === 0 && (
+        <div className="bg-surface rounded-xl border border-border p-8 text-center text-sm text-gray-500">
+          No datasets in the catalog yet. Ingest data to populate it.
+        </div>
+      )}
+
+      {entries.length > 0 && (
+        <div className="bg-surface rounded-xl border border-border overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-gray-400 border-b border-border bg-background/50">
+                  <th className="text-left px-4 py-3 font-medium">Symbol</th>
+                  <th className="text-left px-4 py-3 font-medium">Freq</th>
+                  <th className="text-right px-4 py-3 font-medium">Rows</th>
+                  <th className="text-left px-4 py-3 font-medium">Span</th>
+                  <th className="text-left px-4 py-3 font-medium">Source</th>
+                  <th className="text-left px-4 py-3 font-medium">SHA-256</th>
+                  <th className="text-left px-4 py-3 font-medium">Quality</th>
+                </tr>
+              </thead>
+              <tbody>
+                {groupKeys.map((ac) => (
+                  <Fragment key={ac}>
+                    <tr className="bg-background/70 border-b border-border/50">
+                      <td colSpan={7} className="px-4 py-2">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium uppercase ${assetClassStyle(ac)}`}>
+                          {ac}
+                        </span>
+                        <span className="text-[11px] text-gray-500 ml-2">
+                          {groups.get(ac)!.length} dataset{groups.get(ac)!.length === 1 ? '' : 's'}
+                        </span>
+                      </td>
+                    </tr>
+                    {groups.get(ac)!.map((e, i) => {
+                      const qualityOk = typeof e.quality === 'string' && /\bOK\b/.test(e.quality)
+                      return (
+                        <tr key={`${ac}-${e.symbol ?? i}-${e.freq ?? i}`} className="border-b border-border/50 hover:bg-background/30 transition-colors">
+                          <td className="px-4 py-2.5 font-mono font-medium text-gray-100">{e.symbol ?? '—'}</td>
+                          <td className="px-4 py-2.5 font-mono text-xs text-gray-300">{e.freq ?? '—'}</td>
+                          <td className="px-4 py-2.5 text-right font-mono text-xs text-gray-300 tabular-nums">
+                            {typeof e.rows === 'number' ? e.rows.toLocaleString() : '—'}
+                          </td>
+                          <td className="px-4 py-2.5 font-mono text-xs text-gray-400 whitespace-nowrap">
+                            {dateOnly(e.start)} → {dateOnly(e.end)}
+                          </td>
+                          <td className="px-4 py-2.5 text-xs text-gray-400">{e.source ?? '—'}</td>
+                          <td className="px-4 py-2.5">
+                            {e.sha256 ? (
+                              <span className="font-mono text-[11px] text-gray-500 cursor-help" title={e.sha256}>
+                                {e.sha256.slice(0, 10)}
+                              </span>
+                            ) : '—'}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {e.quality ? (
+                              <span
+                                className={`text-xs font-mono inline-block max-w-[320px] truncate align-middle cursor-help ${qualityOk ? 'text-success' : 'text-amber-400'}`}
+                                title={e.quality}
+                              >
+                                {qualityOk ? 'OK' : e.quality}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-500">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function DataLayerPage() {
-  const [tab, setTab] = useState<Tab>('sources')
+  const [tab, setTab] = useState<Tab>('catalog')
   const [sources, setSources] = useState<DataSource[]>([])
   const [inventory, setInventory] = useState<DatasetInfo[]>([])
   const [features, setFeatures] = useState<FeatureInfo[]>([])
@@ -241,6 +420,7 @@ export default function DataLayerPage() {
   const batchPipes = pipelines.filter((p) => p.type === 'batch').length
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
+    { id: 'catalog', label: 'Catalog' },
     { id: 'sources', label: 'Data Sources', count: sources.length },
     { id: 'inventory', label: 'Inventory', count: totalDatasets },
     { id: 'collection', label: 'Collection', count: jobs.length },
@@ -289,7 +469,10 @@ export default function DataLayerPage() {
         ))}
       </div>
 
-      {loading ? (
+      {/* ── Catalog Tab (self-loading; independent of fetchAll) ───── */}
+      {tab === 'catalog' && <CatalogTab />}
+
+      {tab !== 'catalog' && (loading ? (
         <div className="space-y-4">
           {[...Array(3)].map((_, i) => (
             <div key={i} className="bg-surface rounded-xl border border-border p-6 animate-pulse h-32" />
@@ -721,7 +904,7 @@ export default function DataLayerPage() {
             </div>
           )}
         </>
-      )}
+      ))}
     </div>
   )
 }

@@ -491,11 +491,17 @@ async def get_config(strategy_id: str = Query(default="spy_gamma_scalp")):
 
 @router.get("/btc-wheel")
 async def btc_wheel_status(history: int = Query(90, le=1000),
-                           trades: int = Query(30, le=500)):
-    """BTC wheel paper state + daily marks + settled trades."""
-    state_file = STATE_DIR / "btc_wheel_state.json"
+                           trades: int = Query(30, le=500),
+                           variant: str = Query("btc_wheel")):
+    """BTC wheel paper state + daily marks + settled trades.
+
+    variant: btc_wheel (fixed strikes) | btc_wheel_delta (delta-targeted)
+    """
+    if variant not in ("btc_wheel", "btc_wheel_delta"):
+        raise HTTPException(400, f"unknown wheel variant {variant}")
+    state_file = STATE_DIR / f"{variant}_state.json"
     if not state_file.exists():
-        raise HTTPException(404, "btc_wheel_state.json not found — wheel not papering yet")
+        raise HTTPException(404, f"{variant}_state.json not found — not papering yet")
     state = json.loads(state_file.read_text(encoding="utf-8"))
 
     def _tail_jsonl(path: Path, n: int) -> List[Dict[str, Any]]:
@@ -511,11 +517,11 @@ async def btc_wheel_status(history: int = Query(90, le=1000),
                     continue
         return rows[-n:]
 
-    daily = _tail_jsonl(LOG_DIR / "btc_wheel_daily.jsonl", history)
-    trade_rows = _tail_jsonl(LOG_DIR / "btc_wheel_trades.jsonl", trades)
+    daily = _tail_jsonl(LOG_DIR / f"{variant}_daily.jsonl", history)
+    trade_rows = _tail_jsonl(LOG_DIR / f"{variant}_trades.jsonl", trades)
     last = daily[-1] if daily else {}
     return {
-        "strategy_id": "btc_wheel",
+        "strategy_id": variant,
         "state": state,
         "position": state.get("position"),
         "last_mark": last,

@@ -54,15 +54,50 @@ class UptimeWatchdog:
     def __init__(self) -> None:
         self._task: Optional[asyncio.Task] = None
         self._fails: Dict[str, int] = {}
-        self._alerted: Dict[str, bool] = {}
+        # alert state persists across backend restarts — otherwise each
+        # restart re-sent the same outage alert (email storm, 2026-07-12)
+        self._alerted: Dict[str, bool] = self._load_alert_state()
         self.last_run: Optional[str] = None
+
+    def _state_path(self):
+        from core.paths import get_data_dir
+        return get_data_dir() / "watchdog_state.json"
+
+    def _load_alert_state(self) -> Dict[str, bool]:
+        import json
+        try:
+            p = self._state_path()
+            if p.exists():
+                return {k: bool(v) for k, v in json.loads(p.read_text()).items()}
+        except Exception:
+            pass
+        return {}
+
+    def _persist_alert_state(self) -> None:
+        import json
+        try:
+            self._state_path().write_text(json.dumps(self._alerted))
+        except Exception:
+            pass
+
+    @staticmethod
+    def _retired_strategy_ids() -> set:
+        """Registry lifecycle: retired/rejected strategies leave monitoring."""
+        try:
+            from dashboard.backend.routers.strategies import CATALOG_MAP
+            return {sid for sid, s in CATALOG_MAP.items()
+                    if s.stage in ("retired", "rejected")}
+        except Exception:
+            return set()
 
     # ── targets ──
     def _deployments(self):
         try:
             cfg = yaml.safe_load(
                 (get_resource_root() / "config" / "deployments.yaml").read_text())
-            return [d for d in cfg.get("deployments", []) if d.get("enabled")]
+            retired = self._retired_strategy_ids()
+            return [d for d in cfg.get("deployments", []) if d.get("enabled")
+                    and d.get("strategy_id") not in retired]
         except Exception:
             return []
 
@@ -124,7 +159,9 @@ class UptimeWatchdog:
                     f"{datetime.now(timezone.utc).isoformat(timespec='seconds')}.",
                     critical=False)
             self._fails[key] = 0
-            self._alerted[key] = False
+            if self._alerted.get(key):
+                self._alerted[key] = False
+                self._persist_alert_state()
         else:
             self._fails[key] = self._fails.get(key, 0) + 1
             if self._fails[key] >= FAILS_TO_ALERT and not self._alerted.get(key):
@@ -137,6 +174,7 @@ class UptimeWatchdog:
                     f"browser SSH, then Reboot.",
                     critical=True)
                 self._alerted[key] = True
+                self._persist_alert_state()
 
     # ── loop ──
     async def _loop(self) -> None:
@@ -146,7 +184,11 @@ class UptimeWatchdog:
                     ok = await self._check_deployment(dep)
                     await self._record(f"dep:{dep['id']}", ok,
                                        f"deployment {dep['name']} ({dep['host']})")
+                retired = self._retired_strategy_ids()
                 for name in ("gamma_scalp", "btc_wheel", "btc_wheel_delta"):
+                    rid = "spy_gamma_scalp" if name == "gamma_scalp" else name
+                    if rid in retired:
+                        continue
                     await self._record(f"sched:{name}", self._check_scheduler(name),
                                        f"local scheduler {name}")
                 self.last_run = datetime.now(timezone.utc).isoformat(timespec="seconds")

@@ -41,9 +41,39 @@ class DailyReportScheduler:
         self.config_path = config_path
         self._task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()
-        self._last_sent_date: Optional[date] = None
+        self._last_sent_date: Optional[date] = self._load_last_sent()
         self._last_run_ts: Optional[datetime] = None
         self._last_error: Optional[str] = None
+
+    # persistence: without this, every backend restart after send-time
+    # re-triggered the catch-up send (duplicate daily emails, 2026-07-12)
+    _STATE_PATH = None  # set lazily to avoid import-order issues
+
+    def _state_path(self) -> Path:
+        from core.paths import get_data_dir
+        return get_data_dir() / "report_scheduler_state.json"
+
+    def _load_last_sent(self) -> Optional[date]:
+        try:
+            import json
+            p = self._state_path()
+            if p.exists():
+                raw = json.loads(p.read_text()).get("last_sent_date")
+                return date.fromisoformat(raw) if raw else None
+        except Exception:
+            pass
+        return None
+
+    def _persist_last_sent(self) -> None:
+        try:
+            import json
+            p = self._state_path()
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps({
+                "last_sent_date": (self._last_sent_date.isoformat()
+                                   if self._last_sent_date else None)}))
+        except Exception as e:
+            logger.warning("report_scheduler_persist_failed", error=str(e))
 
     # ------------------------------------------------------------------
     # Config
@@ -115,6 +145,7 @@ class DailyReportScheduler:
             logger.info("report_scheduler_skipping_stale_window",
                         target=target_dt.isoformat(), now=now.isoformat())
             self._last_sent_date = today
+            self._persist_last_sent()
             return
 
         logger.info("report_scheduler_firing", target=target_dt.isoformat())
@@ -122,6 +153,7 @@ class DailyReportScheduler:
         self._last_run_ts = now
         if ok:
             self._last_sent_date = today
+            self._persist_last_sent()
             self._last_error = None
         else:
             # Retry on next tick; don't mark today as sent
@@ -162,6 +194,7 @@ class DailyReportScheduler:
         self._last_run_ts = datetime.now(timezone.utc)
         if ok and not self._last_sent_date:
             self._last_sent_date = datetime.now(timezone.utc).date()
+            self._persist_last_sent()
         return ok
 
     # ------------------------------------------------------------------
