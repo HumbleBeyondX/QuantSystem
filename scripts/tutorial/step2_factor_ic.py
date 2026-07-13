@@ -19,23 +19,33 @@ sys.path.insert(0, str(ROOT))
 from research.factor_mining.data_panel import DataPanel  # noqa: E402
 from research.factor_mining.evaluator import evaluate_factor  # noqa: E402
 
-LOOKBACK = 20        # ← 练习:改成 120 重跑
+LOOKBACK = 120        # ← 练习:改成 120 重跑
 SKIP_DAYS = 1        # 跳过最近 1 天(避开短期反转污染)
 
+import time as _t
+_t0 = _t.time()
+
+def say(msg: str) -> None:
+    print(f"[{_t.time()-_t0:5.1f}s] {msg}", flush=True)
+
 # 1. 数据:从统一 catalog 读(和 Data Layer 页 Catalog tab 同一份字节)
+say("读取 SP500 面板 (43万行 parquet)...")
 panel = DataPanel.from_parquet(
     ROOT / "data/catalog/panel/sp500/1d.parquet", validate=False)
-print(f"panel: {panel}")
+say(f"长转宽 pivot... {panel}")
 
 # 2. 因子(宽格式计算):过去 LOOKBACK 日动量,跳过最近 SKIP_DAYS 日
 closes = panel.closes_wide
 factor = closes.shift(SKIP_DAYS) / closes.shift(SKIP_DAYS + LOOKBACK) - 1.0
+say(f"因子矩阵就绪 {factor.shape}")
 
 # 3. 评估:每日截面 Spearman IC(rebalance_lag=1:t 日信号 t+1 日才可交易)
+say("评估中: 3 个期限 × (IC + rankIC) × 2849 截面 + 五分层回测 ...")
 m = evaluate_factor(factor, panel,
                     factor_name=f"momentum_{LOOKBACK}d_skip{SKIP_DAYS}",
                     universe="sp500_current_members(有幸存者偏差!)",
                     horizons=[1, 5, 20], rebalance_lag=1)
+say("完成")
 
 print("\n" + "=" * 66)
 print(f"因子: {m.factor_name}   区间: {m.period_start[:10]} -> {m.period_end[:10]}")
