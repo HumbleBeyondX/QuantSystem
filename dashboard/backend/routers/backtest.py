@@ -1401,6 +1401,8 @@ class V2SweepRequest(BaseModel):
     asset_class: str = "tokenized_stock"
     freq: Optional[str] = None
     initial_equity: float = 5_000.0
+    start: Optional[str] = None
+    end: Optional[str] = None
 
 
 _sweeps: Dict[str, Dict[str, Any]] = {}
@@ -1437,6 +1439,10 @@ async def v2_sweep(req: V2SweepRequest, background_tasks: BackgroundTasks):
             for sym in symbols:
                 df = catalog.read(req.asset_class, sym, freq)
                 df.columns = [c.lower() for c in df.columns]
+                if req.start:
+                    df = df[df["timestamp"] >= pd.Timestamp(req.start)]
+                if req.end:
+                    df = df[df["timestamp"] <= pd.Timestamp(req.end)]
                 data[sym] = df.reset_index(drop=True)
             n = min(len(d) for d in data.values())
             data = {s: d.tail(n).reset_index(drop=True)
@@ -1473,3 +1479,251 @@ async def v2_sweep_status(sweep_id: str):
     if sweep_id not in _sweeps:
         raise HTTPException(404, "unknown sweep")
     return _sweeps[sweep_id]
+
+
+# ---------------------------------------------------------------------------
+# Workbench UX v2 (W1): data coverage, windowed sweeps, walk-forward.
+# Professional-platform patterns (TradingView deep-backtest date ranges,
+# MT5 optimization, institutional WF) + this platform's OOS discipline.
+# ---------------------------------------------------------------------------
+
+TOKENIZED_LISTING = "2026-06-30"
+
+
+def _coverage_for(asset_class: str, symbols: List[str],
+                  freq: str) -> Dict[str, Any]:
+    from data.catalog_api import catalog
+    entries = {(e["asset_class"], e["symbol"], e["freq"]): e
+               for e in catalog.list()}
+    per = {}
+    for sym in symbols:
+        e = entries.get((asset_class, sym, freq))
+        if e:
+            per[sym] = {"start": str(e["start"])[:10],
+                        "end": str(e["end"])[:10], "rows": e["rows"]}
+        else:
+            per[sym] = None
+    have = [v for v in per.values() if v]
+    inter = None
+    if have:
+        inter = {"start": max(v["start"] for v in have),
+                 "end": min(v["end"] for v in have)}
+    return {"asset_class": asset_class, "freq": freq, "symbols": per,
+            "intersection": inter}
+
+
+def _window_check(asset_class: str, symbols: List[str], freq: str,
+                  start: Optional[str], end: Optional[str]) -> Optional[dict]:
+    """None if OK; else a structured 'insufficient data' payload."""
+    cov = _coverage_for(asset_class, symbols, freq)
+    missing = []
+    for sym, c in cov["symbols"].items():
+        if c is None:
+            missing.append({"symbol": sym, "have": None,
+                            "requested": [start, end],
+                            "reason": "not_in_catalog"})
+            continue
+        if start and start < c["start"]:
+            pre_listing = (asset_class == "tokenized_stock"
+                           and start < TOKENIZED_LISTING)
+            missing.append({
+                "symbol": sym, "have": [c["start"], c["end"]],
+                "requested": [start, end],
+                "reason": ("does_not_exist_pre_listing" if pre_listing
+                           else "not_collected"),
+                "collectable": not pre_listing,
+                "hint": (f"{sym} listed {TOKENIZED_LISTING} — data before "
+                         f"that does not exist; truncate the window"
+                         if pre_listing else
+                         f"collectable: run scripts/collect_tokenized_stocks.py"
+                         f" or scripts/fetch_market_data.py for {sym}"),
+            })
+        if end and end > c["end"]:
+            missing.append({"symbol": sym, "have": [c["start"], c["end"]],
+                            "requested": [start, end],
+                            "reason": "not_collected_yet",
+                            "collectable": True,
+                            "hint": "run the collector to extend history"})
+    if missing:
+        return {"error": "insufficient_data", "missing": missing,
+                "coverage": cov}
+    return None
+
+
+@router.get("/v2/coverage")
+async def v2_coverage(strategy_id: Optional[str] = None,
+                      symbols: Optional[str] = None,
+                      asset_class: str = "tokenized_stock",
+                      freq: Optional[str] = None):
+    """Per-symbol data spans + intersection — drives the date picker."""
+    import strategies_v2
+    syms = symbols.split(",") if symbols else None
+    f = freq
+    if strategy_id and strategy_id in strategies_v2.REGISTRY:
+        cls = strategies_v2.REGISTRY[strategy_id]
+        syms = syms or list(cls.universe)
+        f = f or cls.primary_tf
+    if not syms or not f:
+        raise HTTPException(400, "need strategy_id or symbols+freq")
+    import asyncio as _aio
+    return await _aio.to_thread(_coverage_for, asset_class, syms, f)
+
+
+# ── walk-forward ─────────────────────────────────────────────────
+
+class V2WalkForwardRequest(BaseModel):
+    strategy_id: str
+    params: Dict[str, Any] = {}
+    symbols: Optional[List[str]] = None
+    asset_class: str = "tokenized_stock"
+    freq: Optional[str] = None
+    initial_equity: float = 5_000.0
+    start: Optional[str] = None
+    end: Optional[str] = None
+    train_days: float = 3.0
+    test_days: float = 1.0
+    step_days: Optional[float] = None        # default = test_days
+    optimize: Optional[Dict[str, List[Any]]] = None   # param -> values
+
+
+_wf_jobs: Dict[str, Dict[str, Any]] = {}
+
+
+@router.post("/v2/walkforward")
+async def v2_walkforward(req: V2WalkForwardRequest,
+                         background_tasks: BackgroundTasks):
+    import strategies_v2
+    if req.strategy_id not in strategies_v2.REGISTRY:
+        raise HTTPException(404, f"unknown v2 strategy {req.strategy_id}")
+    cls = strategies_v2.REGISTRY[req.strategy_id]
+    symbols = req.symbols or list(cls.universe)
+    freq = req.freq or cls.primary_tf
+    bad = _window_check(req.asset_class, symbols, freq, req.start, req.end)
+    if bad:
+        return JSONResponse(status_code=422, content=_sanitize(bad))
+    if req.optimize and len(req.optimize) > 2:
+        raise HTTPException(400, "optimize supports 1-2 params")
+
+    wf_id = f"wf_{uuid.uuid4().hex[:8]}"
+    _wf_jobs[wf_id] = {"status": "running", "folds_done": 0,
+                       "folds_total": None, "folds": [],
+                       "strategy_id": req.strategy_id}
+
+    async def _run_wf():
+        import itertools
+        import asyncio as _aio
+        import pandas as pd
+        from core.runtime.backtest_host import run_backtest as _rb
+        from data.catalog_api import catalog
+        job = _wf_jobs[wf_id]
+        try:
+            data = {}
+            for sym in symbols:
+                df = catalog.read(req.asset_class, sym, freq)
+                df.columns = [c.lower() for c in df.columns]
+                if req.start:
+                    df = df[df["timestamp"] >= pd.Timestamp(req.start)]
+                if req.end:
+                    df = df[df["timestamp"] <= pd.Timestamp(req.end)]
+                data[sym] = df.reset_index(drop=True)
+            t0 = max(d["timestamp"].min() for d in data.values())
+            t1 = min(d["timestamp"].max() for d in data.values())
+            step = pd.Timedelta(days=req.step_days or req.test_days)
+            train = pd.Timedelta(days=req.train_days)
+            test = pd.Timedelta(days=req.test_days)
+
+            folds = []
+            cur = t0
+            while cur + train + test <= t1:
+                folds.append((cur, cur + train, cur + train + test))
+                cur += step
+            if len(folds) < 2:
+                span_needed = req.train_days + 2 * req.test_days
+                job.update(status="failed", error="insufficient_data",
+                           detail={
+                               "have_days": round((t1 - t0).total_seconds()
+                                                  / 86400, 1),
+                               "need_days_min": span_needed,
+                               "hint": ("shrink train/test windows, or "
+                                        "extend the window / collect more "
+                                        "history (collector runs hourly)")})
+                return
+            job["folds_total"] = len(folds)
+
+            def _slice(a, b):
+                return {s: d[(d["timestamp"] >= a) & (d["timestamp"] < b)]
+                        .reset_index(drop=True) for s, d in data.items()}
+
+            combos = None
+            if req.optimize:
+                keys = list(req.optimize)
+                combos = [dict(zip(keys, v)) for v in
+                          itertools.product(*req.optimize.values())]
+
+            stitched = []
+            base = req.initial_equity
+            for (a, b, c) in folds:
+                best_params = dict(req.params)
+                best_train_sharpe = None
+                if combos:
+                    best_s = -1e9
+                    for ov in combos:
+                        p = {**req.params, **ov}
+                        r = await _aio.to_thread(
+                            _rb, strategies_v2.REGISTRY[req.strategy_id](p),
+                            _slice(a, b), req.initial_equity)
+                        s = r["metrics"]["sharpe_ratio"] or -1e9
+                        if s > best_s:
+                            best_s, best_params = s, p
+                    best_train_sharpe = None if best_s == -1e9 else best_s
+                rt = await _aio.to_thread(
+                    _rb, strategies_v2.REGISTRY[req.strategy_id](best_params),
+                    _slice(b, c), req.initial_equity)
+                m = rt["metrics"]
+                # stitch: compound fold return onto the running base
+                fold_ret = m["end_value"] / req.initial_equity
+                for pt in rt["equity_curve"]:
+                    stitched.append({
+                        "timestamp": pt["timestamp"],
+                        "total_value": round(
+                            base * pt["total_value"] / req.initial_equity, 2)})
+                base *= fold_ret
+                job["folds"].append(_sanitize({
+                    "train": [str(a)[:16], str(b)[:16]],
+                    "test": [str(b)[:16], str(c)[:16]],
+                    "best_params": {k: best_params[k]
+                                    for k in (req.optimize or {})},
+                    "train_sharpe": best_train_sharpe,
+                    "test_sharpe": m["sharpe_ratio"],
+                    "test_return_pct": m["total_return_pct"],
+                    "test_max_dd": m["max_drawdown"],
+                    "test_trades": m["total_trades"]}))
+                job["folds_done"] += 1
+
+            # aggregate OOS from the stitched curve
+            eq = pd.Series([p["total_value"] for p in stitched],
+                           index=pd.to_datetime(
+                               [p["timestamp"] for p in stitched]))
+            daily = eq.resample("D").last().dropna()
+            r = daily.pct_change().dropna()
+            oos_sharpe = (round(float(r.mean() / r.std() * (365 ** 0.5)), 2)
+                          if len(r) > 3 and r.std() > 0 else None)
+            job.update(status="completed", stitched_curve=stitched[::max(
+                1, len(stitched) // 400)],
+                oos_sharpe=oos_sharpe,
+                oos_return_pct=round((base / req.initial_equity - 1) * 100, 2),
+                gate={"threshold": 1.5,
+                      "passed": bool(oos_sharpe and oos_sharpe >= 1.5)})
+        except Exception as e:
+            logger.exception("walkforward failed")
+            job.update(status="failed", error=str(e))
+
+    background_tasks.add_task(_run_wf)
+    return {"walkforward_id": wf_id}
+
+
+@router.get("/v2/walkforward/{wf_id}")
+async def v2_walkforward_status(wf_id: str):
+    if wf_id not in _wf_jobs:
+        raise HTTPException(404, "unknown walkforward job")
+    return _wf_jobs[wf_id]
