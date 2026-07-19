@@ -313,3 +313,41 @@ def test_fee_stress_breakeven():
     b = rep["breakeven_mult"]
     assert isinstance(b, float) and 2.0 <= b <= 3.0
     assert rep["passed"] is True
+
+
+# ── runtime v2: backtest host mechanics ──
+
+def test_runtime_backtest_host_standard_output():
+    """One Strategy class, standard result schema, engine-managed exits."""
+    import numpy as np, pandas as pd
+    from core.runtime.backtest_host import run_backtest
+    from core.runtime.strategy import ParamSpec, Strategy
+    from core.runtime.intents import Intent
+
+    class Toy(Strategy):
+        id = "toy"; book_type = "linear"; asset_domain = "test"
+        universe = ["X"]; primary_tf = "5m"
+        params_schema = [ParamSpec("hold", "int", 5)]
+        rails = {"leverage": 20.0, "risk_per_trade": 0.01}
+        def warmup_bars(self): return 3
+        def on_tick(self, ctx):
+            if ctx.position("X"):
+                return []
+            return [Intent(action="open", symbol="X", side="long",
+                           stop_dist=1.0, max_hold_ticks=self.p["hold"])]
+
+    rng = np.random.RandomState(0)
+    px = 100 + np.cumsum(rng.normal(0, 0.3, 300))
+    df = pd.DataFrame({
+        "timestamp": pd.date_range("2026-01-01", periods=300, freq="5min"),
+        "open": px, "high": px + 0.2, "low": px - 0.2,
+        "close": px + rng.normal(0, 0.05, 300), "volume": 1.0})
+    res = run_backtest(Toy(), {"X": df}, initial_equity=10_000)
+    assert {"equity_curve", "trades", "metrics", "n_trades"} <= set(res)
+    assert res["n_trades"] > 5                      # engine exits fired
+    assert res["metrics"]["end_value"] > 0
+    reasons = {t.get("reason") for t in res["trades"] if t.get("reason")}
+    assert reasons & {"stop", "time"}               # both exit paths exercised
+    # determinism: same inputs -> same result
+    res2 = run_backtest(Toy(), {"X": df}, initial_equity=10_000)
+    assert res2["metrics"] == res["metrics"]

@@ -137,10 +137,14 @@ class DataCatalog:
                 )
                 quality = str(rep)
 
-        # persist + hash
+        # persist + hash — ATOMIC: write tmp then rename, so a killed
+        # process can never leave a truncated parquet behind
+        # (0-byte SPCX/5m.parquet incident, 2026-07-19)
         path = self._path(asset_class, symbol, freq)
         path.parent.mkdir(parents=True, exist_ok=True)
-        df.to_parquet(path, index=False)
+        tmp = path.with_suffix(".parquet.tmp")
+        df.to_parquet(tmp, index=False)
+        tmp.replace(path)
         sha = _sha256_file(path)
         manifest = record_data_manifest([path], tag=f"catalog_{symbol}_{freq}")
 
