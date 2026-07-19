@@ -52,6 +52,23 @@ class StrategyHost:
         events = self.engine.manage(st["positions"], self.ctx)
         self.ledger.record_fills(st, events)
 
+        # funding accrual hook (carry-type strategies): prorated per tick.
+        # Short leg RECEIVES positive funding; long leg pays.
+        if getattr(self.strat, "accrue_funding", False):
+            frac = self.strat.cadence_sec / 28_800.0        # of an 8h period
+            for sym, pos in st["positions"].items():
+                f = self.ctx.funding(sym)
+                if f is None:
+                    continue
+                bid, ask = self.ctx.book(sym)
+                if not bid or not ask:
+                    continue
+                mark = (bid + ask) / 2
+                d = 1 if pos["side"] == "long" else -1
+                accr = -d * f * pos["qty"] * mark * frac
+                st["equity"] += accr
+                st["funding_pnl"] = round(st.get("funding_pnl", 0.0) + accr, 6)
+
         # daily cap check (single implementation for the whole fleet)
         cap = self.cfg.daily_loss_cap * self.ledger.initial_equity
         if st["realized_today"] <= -cap and not st["halted"]:

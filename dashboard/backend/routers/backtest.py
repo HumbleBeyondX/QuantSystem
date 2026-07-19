@@ -1272,3 +1272,204 @@ async def promote_result(backtest_id: str, req: PromoteRequest):
     except Exception:
         pass
     return {"id": rid, "status": "candidate", "file": f"results/records/{rid}.json"}
+
+
+# ---------------------------------------------------------------------------
+# Runtime v2 backtests — same Strategy class as paper/live, over catalog
+# data, results into the SAME store (status/results/analytics/tear-sheet
+# endpoints all work unchanged).
+# ---------------------------------------------------------------------------
+
+@router.get("/v2/strategies")
+async def v2_strategies():
+    """Runtime strategies + their param schemas (drives the UI form)."""
+    import strategies_v2
+    out = []
+    for sid, cls in strategies_v2.REGISTRY.items():
+        out.append({
+            "id": sid,
+            "book_type": cls.book_type,
+            "asset_domain": cls.asset_domain,
+            "universe": list(cls.universe),
+            "primary_tf": cls.primary_tf,
+            "cadence_sec": cls.cadence_sec,
+            "maker_only": bool(getattr(cls, "maker_only", False)),
+            "params_schema": [
+                {"name": s.name, "type": s.type, "default": s.default,
+                 "min": s.min, "max": s.max, "step": s.step,
+                 "choices": s.choices, "help": s.help}
+                for s in cls.params_schema],
+        })
+    return {"strategies": out}
+
+
+class V2RunRequest(BaseModel):
+    strategy_id: str
+    params: Dict[str, Any] = {}
+    symbols: Optional[List[str]] = None      # default: strategy universe
+    asset_class: str = "tokenized_stock"
+    freq: Optional[str] = None               # default: strategy primary_tf
+    initial_equity: float = 5_000.0
+    start: Optional[str] = None
+    end: Optional[str] = None
+
+
+async def _run_v2_task(backtest_id: str, req: V2RunRequest):
+    import pandas as pd
+    try:
+        _running_tasks[backtest_id] = "running"
+        import strategies_v2
+        from core.runtime.backtest_host import run_backtest as _rb
+        from data.catalog_api import catalog
+
+        cls = strategies_v2.REGISTRY[req.strategy_id]
+        strat = cls(req.params)
+        freq = req.freq or cls.primary_tf
+        symbols = req.symbols or list(cls.universe)
+        data = {}
+        for sym in symbols:
+            df = catalog.read(req.asset_class, sym, freq)
+            df.columns = [c.lower() for c in df.columns]
+            if req.start:
+                df = df[df["timestamp"] >= pd.Timestamp(req.start)]
+            if req.end:
+                df = df[df["timestamp"] <= pd.Timestamp(req.end)]
+            if len(df) > strat.warmup_bars() + 10:
+                data[sym] = df.reset_index(drop=True)
+        if not data:
+            raise ValueError("no catalog data for requested symbols/freq")
+        n = min(len(d) for d in data.values())
+        data = {s: d.tail(n).reset_index(drop=True) for s, d in data.items()}
+
+        import asyncio as _aio
+        res = await _aio.to_thread(_rb, strat, data, req.initial_equity)
+
+        record = _sanitize({
+            "backtest_id": backtest_id, "engine": "runtime_v2",
+            "strategy": req.strategy_id,
+            "symbol": ",".join(symbols),
+            "status": "completed",
+            "created_at": datetime.utcnow().isoformat(),
+            "initial_capital": req.initial_equity,
+            "parameters": req.params,
+            "data_file": f"catalog:{req.asset_class}/{freq} x{n}bars",
+            "metrics": res["metrics"],
+            "n_trades": res["n_trades"],
+            "final_value": res["final_value"],
+            "equity_curve": [{"timestamp": c["timestamp"],
+                              "total_value": c["total_value"]}
+                             for c in res["equity_curve"]],
+            "trades": res["trades"][-500:],
+        })
+        _backtest_store[backtest_id] = record
+        _running_tasks[backtest_id] = "completed"
+        RESULTS_DIR.mkdir(exist_ok=True)
+        with open(RESULTS_DIR / f"{backtest_id}.json", "w") as f:
+            json.dump(record, f, indent=1, default=str)
+    except Exception as e:
+        logger.exception("v2 backtest failed")
+        _backtest_store[backtest_id] = {
+            "backtest_id": backtest_id, "strategy": req.strategy_id,
+            "symbol": "", "status": "failed",
+            "created_at": datetime.utcnow().isoformat(), "error": str(e),
+            "metrics": {}, "n_trades": 0, "final_value": 0,
+            "equity_curve": [], "trades": []}
+        _running_tasks[backtest_id] = "failed"
+
+
+@router.post("/v2/run")
+async def v2_run(req: V2RunRequest, background_tasks: BackgroundTasks):
+    import strategies_v2
+    if req.strategy_id not in strategies_v2.REGISTRY:
+        raise HTTPException(404, f"unknown v2 strategy {req.strategy_id}")
+    backtest_id = f"v2_{uuid.uuid4().hex[:10]}"
+    _running_tasks[backtest_id] = "queued"
+    _backtest_store[backtest_id] = {
+        "backtest_id": backtest_id, "strategy": req.strategy_id,
+        "symbol": ",".join(req.symbols or []), "status": "running",
+        "created_at": datetime.utcnow().isoformat(), "metrics": {},
+        "n_trades": 0, "final_value": 0, "equity_curve": [], "trades": []}
+    background_tasks.add_task(_run_v2_task, backtest_id, req)
+    return {"backtest_id": backtest_id, "status": "submitted"}
+
+
+class V2SweepRequest(BaseModel):
+    strategy_id: str
+    base_params: Dict[str, Any] = {}
+    sweep: Dict[str, List[Any]]              # param -> values (1-2 params)
+    symbols: Optional[List[str]] = None
+    asset_class: str = "tokenized_stock"
+    freq: Optional[str] = None
+    initial_equity: float = 5_000.0
+
+
+_sweeps: Dict[str, Dict[str, Any]] = {}
+
+
+@router.post("/v2/sweep")
+async def v2_sweep(req: V2SweepRequest, background_tasks: BackgroundTasks):
+    """Grid sweep over 1-2 params. Runs sequentially in background."""
+    import itertools
+    import strategies_v2
+    if req.strategy_id not in strategies_v2.REGISTRY:
+        raise HTTPException(404, f"unknown v2 strategy {req.strategy_id}")
+    if not (1 <= len(req.sweep) <= 2):
+        raise HTTPException(400, "sweep supports 1-2 params")
+    keys = list(req.sweep)
+    combos = list(itertools.product(*req.sweep.values()))
+    if len(combos) > 60:
+        raise HTTPException(400, f"{len(combos)} combos > 60 cap")
+    sweep_id = f"sw_{uuid.uuid4().hex[:8]}"
+    _sweeps[sweep_id] = {"status": "running", "total": len(combos),
+                         "done": 0, "results": [],
+                         "strategy_id": req.strategy_id, "keys": keys}
+
+    async def _run_all():
+        import pandas as pd
+        import asyncio as _aio
+        from core.runtime.backtest_host import run_backtest as _rb
+        from data.catalog_api import catalog
+        cls = strategies_v2.REGISTRY[req.strategy_id]
+        freq = req.freq or cls.primary_tf
+        symbols = req.symbols or list(cls.universe)
+        data = {}
+        try:
+            for sym in symbols:
+                df = catalog.read(req.asset_class, sym, freq)
+                df.columns = [c.lower() for c in df.columns]
+                data[sym] = df.reset_index(drop=True)
+            n = min(len(d) for d in data.values())
+            data = {s: d.tail(n).reset_index(drop=True)
+                    for s, d in data.items()}
+            for vals in combos:
+                params = {**req.base_params, **dict(zip(keys, vals))}
+                try:
+                    res = await _aio.to_thread(
+                        _rb, cls(params), data, req.initial_equity)
+                    _sweeps[sweep_id]["results"].append(_sanitize({
+                        "params": dict(zip(keys, vals)),
+                        **{k: res["metrics"].get(k) for k in
+                           ("sharpe_ratio", "max_drawdown",
+                            "total_return_pct", "total_trades",
+                            "win_rate", "profit_factor")}}))
+                except Exception as e:
+                    _sweeps[sweep_id]["results"].append(
+                        {"params": dict(zip(keys, vals)),
+                         "error": str(e)[:80]})
+                _sweeps[sweep_id]["done"] += 1
+            _sweeps[sweep_id]["results"].sort(
+                key=lambda r: r.get("sharpe_ratio") or -999, reverse=True)
+            _sweeps[sweep_id]["status"] = "completed"
+        except Exception as e:
+            _sweeps[sweep_id]["status"] = "failed"
+            _sweeps[sweep_id]["error"] = str(e)
+
+    background_tasks.add_task(_run_all)
+    return {"sweep_id": sweep_id, "combos": len(combos)}
+
+
+@router.get("/v2/sweep/{sweep_id}")
+async def v2_sweep_status(sweep_id: str):
+    if sweep_id not in _sweeps:
+        raise HTTPException(404, "unknown sweep")
+    return _sweeps[sweep_id]

@@ -64,6 +64,17 @@ def run_backtest(strategy: Strategy,
                 trades.append(dict(ev))
 
         _apply(engine.manage(st["positions"], ctx))
+
+        # funding accrual hook (carry strategies) — mirrors the paper runner
+        if getattr(strategy, "accrue_funding", False):
+            frac = strategy.cadence_sec / 28_800.0
+            for sym, pos in st["positions"].items():
+                f = ctx.funding(sym)
+                if f is None:
+                    continue
+                mark = float(ctx.current_bar(sym)["open"])
+                d = 1 if pos["side"] == "long" else -1
+                st["equity"] += -d * f * pos["qty"] * mark * frac
         if st["realized_today"] <= -cfg.daily_loss_cap * initial_equity:
             st["halted"] = True
         intents = strategy.on_tick(ctx) or []

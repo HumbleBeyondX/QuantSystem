@@ -110,69 +110,113 @@ class TakerShadow(BaseFillEngine):
 
 
 class MakerShadow(BaseFillEngine):
-    """Quotes rest in `quotes`; fills checked against prev-bar extremes."""
+    """Quotes rest in `quotes` keyed by "{symbol}:{side}" — a symbol can
+    carry a bid AND an ask simultaneously (market making). Fills check
+    prev-bar extremes; opposite-side fills NET against the position
+    (realizing pnl on the netted quantity) instead of being blocked."""
 
-    def submit(self, intents, positions, quotes, ctx) -> List[FillEvent]:
-        events: List[FillEvent] = []
+    @staticmethod
+    def _qkey(symbol: str, side: str) -> str:
+        return f"{symbol}:{side}"
+
+    def _apply_fill(self, sym, side, px, qty, positions, ctx,
+                    tag="", q=None):
+        """Netting-aware fill: extends same-side, nets opposite-side."""
+        ts = ctx.now().isoformat(timespec="seconds")
+        fee = abs(px * qty) * self.cfg.maker_fee
+        events = []
+        pos = positions.get(sym)
+        d_new = 1 if side == "long" else -1
+        if pos is None:
+            positions[sym] = {
+                "side": side, "entry": px, "qty": qty,
+                "stop_px": (px - d_new * q["stop_dist"]
+                            if q and q.get("stop_dist") else None),
+                "trail_dist": q.get("trail_dist") if q else None,
+                "trail_activate": q.get("trail_activate") if q else None,
+                "max_hold_ticks": q.get("max_hold_ticks") if q else None,
+                "best": px, "ticks_held": 0, "tag": tag,
+                "opened": ts, "entry_fee": fee,
+            }
+            events.append(FillEvent(ts=ts, symbol=sym,
+                                    action=f"{side.upper()}_MAKER",
+                                    price=px, qty=qty, fee=round(fee, 4),
+                                    tag=tag))
+        elif pos["side"] == side:                      # extend, avg entry
+            tot = pos["qty"] + qty
+            pos["entry"] = (pos["entry"] * pos["qty"] + px * qty) / tot
+            pos["qty"] = tot
+            events.append(FillEvent(ts=ts, symbol=sym,
+                                    action=f"{side.upper()}_MAKER_ADD",
+                                    price=px, qty=qty, fee=round(fee, 4),
+                                    tag=tag))
+        else:                                          # net against position
+            d_pos = 1 if pos["side"] == "long" else -1
+            netted = min(qty, pos["qty"])
+            pnl = (px - pos["entry"]) * d_pos * netted - fee
+            events.append(FillEvent(ts=ts, symbol=sym,
+                                    action=f"NET_{pos['side'].upper()}",
+                                    price=px, qty=netted,
+                                    pnl=round(pnl, 4),
+                                    reason=tag or "maker_net"))
+            pos["qty"] -= netted
+            if pos["qty"] <= 1e-12:
+                del positions[sym]
+                rem = qty - netted
+                if rem > 1e-12:                        # flips through zero
+                    positions[sym] = {
+                        "side": side, "entry": px, "qty": rem,
+                        "stop_px": None, "trail_dist": None,
+                        "trail_activate": None, "max_hold_ticks": None,
+                        "best": px, "ticks_held": 0, "tag": tag,
+                        "opened": ts, "entry_fee": 0.0,
+                    }
+        return events
+
+    def submit(self, intents, positions, quotes, ctx):
+        events = []
         # 1. fill checks on resting quotes
-        for sym, q in list(quotes.items()):
+        for key, q in list(quotes.items()):
+            sym = q["symbol"]
             hi, lo = ctx.prev_bar_extremes(sym)
-            filled = ((q["side"] in ("long",) and lo < q["price"])
+            filled = ((q["side"] == "long" and lo < q["price"])
                       or (q["side"] == "short" and hi > q["price"]))
             q["ticks"] = q.get("ticks", 0) + 1
             if filled:
-                px = q["price"]
-                fee = abs(px * q["qty"]) * self.cfg.maker_fee
-                if q.get("closing") and sym in positions:
-                    pos = positions.pop(sym)
-                    d = 1 if pos["side"] == "long" else -1
-                    pnl = (px - pos["entry"]) * d * pos["qty"] - fee
-                    events.append(FillEvent(
-                        ts=ctx.now().isoformat(timespec="seconds"), symbol=sym,
-                        action=f"CLOSE_{pos['side'].upper()}", price=px,
-                        qty=pos["qty"], pnl=round(pnl, 4),
-                        reason=q.get("tag") or "maker_exit"))
-                elif not q.get("closing"):
-                    d = 1 if q["side"] == "long" else -1
-                    positions[sym] = {
-                        "side": q["side"], "entry": px, "qty": q["qty"],
-                        "stop_px": px - d * q["stop_dist"] if q.get("stop_dist") else None,
-                        "trail_dist": q.get("trail_dist"),
-                        "trail_activate": q.get("trail_activate"),
-                        "max_hold_ticks": q.get("max_hold_ticks"),
-                        "best": px, "ticks_held": 0, "tag": q.get("tag", ""),
-                        "opened": ctx.now().isoformat(timespec="seconds"),
-                        "entry_fee": fee,
-                    }
-                    events.append(FillEvent(
-                        ts=ctx.now().isoformat(timespec="seconds"), symbol=sym,
-                        action=f"{q['side'].upper()}_MAKER", price=px,
-                        qty=q["qty"], fee=round(fee, 4), tag=q.get("tag", "")))
-                del quotes[sym]
+                events.extend(self._apply_fill(
+                    sym, q["side"], q["price"], q["qty"], positions, ctx,
+                    tag=q.get("tag", ""), q=q))
+                del quotes[key]
             elif q.get("ttl_ticks") and q["ticks"] >= q["ttl_ticks"]:
-                del quotes[sym]                  # expire unfilled quote
+                del quotes[key]
 
         # 2. new intents
         for it in intents:
             if it.action == "cancel_quotes":
-                quotes.pop(it.symbol, None)
-            elif it.action in ("open", "quote", "close") and it.maker:
-                if it.action == "open" and it.symbol in positions:
+                for key in [k for k, q in quotes.items()
+                            if q["symbol"] == it.symbol]:
+                    del quotes[key]
+                continue
+            if not it.maker or it.action not in ("open", "quote", "close"):
+                continue
+            side = it.side
+            if it.action == "close":
+                pos = positions.get(it.symbol)
+                if not pos:
                     continue
-                bid, ask = ctx.book(it.symbol)
-                px = it.price or (bid if it.side == "long" else ask)
-                if not px:
-                    continue
-                quotes[it.symbol] = {
-                    "side": it.side or ("short" if it.action == "close"
-                                        and positions.get(it.symbol, {})
-                                        .get("side") == "long" else it.side),
-                    "price": px, "qty": it.qty,
-                    "stop_dist": it.stop_dist, "trail_dist": it.trail_dist,
-                    "trail_activate": it.trail_activate,
-                    "max_hold_ticks": it.max_hold_ticks,
-                    "closing": it.action == "close", "ticks": 0,
-                    "ttl_ticks": it.meta.get("ttl_ticks", 12),
-                    "tag": it.tag,
-                }
+                side = "short" if pos["side"] == "long" else "long"
+                it.qty = it.qty or pos["qty"]
+            bid, ask = ctx.book(it.symbol)
+            px = it.price or (bid if side == "long" else ask)
+            if not px or not it.qty:
+                continue
+            quotes[self._qkey(it.symbol, side)] = {
+                "symbol": it.symbol, "side": side, "price": px,
+                "qty": it.qty, "stop_dist": it.stop_dist,
+                "trail_dist": it.trail_dist,
+                "trail_activate": it.trail_activate,
+                "max_hold_ticks": it.max_hold_ticks,
+                "ticks": 0, "ttl_ticks": it.meta.get("ttl_ticks", 12),
+                "tag": it.tag,
+            }
         return events
