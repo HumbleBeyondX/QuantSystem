@@ -30,6 +30,13 @@ budgets:
   # plus a sold SPY straddle should stay under 1.2x combined equity.
   max_short_vol_notional_pct: 1.2
 
+  # Combined gross notional / combined equity across ALL six books
+  # (options short-premium notional + linear/mm/carry position
+  # notional). Universal leverage rail — meaningful for any strategy
+  # type; sized so the three small tokenized sleeves can't quietly run
+  # 20x while the options books look calm.
+  max_gross_leverage: 3.0
+
   # Max tolerated loss per stress scenario, as fraction of combined
   # paper equity. 10% is the same number as the portfolio max-drawdown
   # limit in config/risk/risk_limits.yaml — a single tail scenario
@@ -52,6 +59,14 @@ scenarios:
     domain: spy
     spot_shock: -0.10
     vol_multiplier: 2.0    # shocked IV = current IV x 2
+  tokenized_crash_10:
+    description: "Tokenized-stock perps -10% gap"
+    domain: tokenized
+    spot_shock: -0.10
+    # Linear/mm/carry books are revalued first-order in
+    # core/risk/portfolio.stress(): pnl = net_notional x spot_shock.
+    # No convexity in a perp book — honest and deterministic. The carry
+    # pair nets to ~0 by construction, so it should show ~0 here.
 
 # What happens on breach. v1: advisory only — the report flags the
 # offending strategy REDUCE_ONLY (no new risk-adding trades); nothing

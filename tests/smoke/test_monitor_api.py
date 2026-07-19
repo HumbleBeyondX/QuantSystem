@@ -254,12 +254,22 @@ def test_portfolio_risk_report(client):
     assert r.status_code == 200
     body = r.json()
     for key in ("budgets", "exposures", "breaches", "utilization",
-                "stress", "flags", "generated_at"):
+                "stress", "flags", "equity_curves", "generated_at"):
         assert key in body, f"missing key {key}"
     assert body["advisory"] is True
-    # all three books are reported (possibly with an 'error' field)
+    # all SIX books are reported (possibly with an 'error' field)
     strategies = body["exposures"].get("strategies", {})
-    assert {"spy_gamma_scalp", "btc_wheel", "btc_wheel_delta"} <= set(strategies)
+    assert {"spy_gamma_scalp", "btc_wheel", "btc_wheel_delta",
+            "scalp_sleeve", "funding_carry", "mm_sleeve"} <= set(strategies)
+    # every book carries the universal schema with finite numbers
+    for sid, b in strategies.items():
+        assert b["book_type"] in ("options", "linear", "mm", "carry"), sid
+        assert b["asset"] in ("spy", "btc", "tokenized"), sid
+        for f in ("equity_usd", "day_pnl_usd", "gross_notional_usd",
+                  "net_notional_usd", "leverage"):
+            assert _m.isfinite(b[f]), f"{sid}.{f} not finite: {b[f]}"
+        assert {"daily_loss_cap_pct", "daily_used_pct", "halted"} <= set(b["rails"]), sid
+        assert {"last_telemetry", "fresh"} <= set(b["freshness"]), sid
     # utilization numbers are finite floats with sane fields
     assert isinstance(body["utilization"], list) and body["utilization"]
     for u in body["utilization"]:
