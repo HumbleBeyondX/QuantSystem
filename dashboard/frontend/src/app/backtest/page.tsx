@@ -1420,7 +1420,72 @@ interface V2SweepState {
   results: V2SweepRow[]
 }
 
+interface V2CoverageSpan {
+  start: string
+  end: string
+  rows?: number
+}
+
+interface V2Coverage {
+  asset_class: string
+  freq: string
+  symbols: Record<string, V2CoverageSpan | null>
+  intersection: { start: string; end: string } | null
+}
+
+interface V2MissingItem {
+  symbol: string
+  have: [string, string] | null
+  requested: [string, string]
+  reason: 'does_not_exist_pre_listing' | 'not_collected' | 'not_in_catalog' | string
+  collectable: boolean
+  hint?: string
+}
+
+interface V2InsufficientPayload {
+  error: string
+  missing: V2MissingItem[]
+  coverage?: V2Coverage
+}
+
+interface V2WfFold {
+  train: [string, string]
+  test: [string, string]
+  best_params?: Record<string, any>
+  train_sharpe?: number | null
+  test_sharpe?: number | null
+  test_return_pct?: number | null
+  test_max_dd?: number | null
+  test_trades?: number | null
+}
+
+interface V2WfState {
+  status: 'running' | 'completed' | 'failed' | string
+  folds_done: number
+  folds_total: number
+  folds: V2WfFold[]
+  stitched_curve?: Array<{ timestamp: string; total_value: number }>
+  oos_sharpe?: number | null
+  oos_return_pct?: number | null
+  gate?: { threshold: number; passed: boolean }
+  error?: string
+  detail?: { have_days?: number; need_days_min?: number; hint?: string }
+}
+
 const V2_ASSET_CLASS = 'tokenized_stock'
+const V2_DAY_MS = 86400000
+const V2_RANGE_PRESETS = ['1W', '1M', '3M', 'All', 'Custom'] as const
+type V2RangePreset = (typeof V2_RANGE_PRESETS)[number]
+type V2Mode = 'run' | 'sweep' | 'wf'
+type V2ResultTab = 'overview' | 'tearsheet' | 'trades'
+
+function v2DateMs(d: string): number {
+  return Date.parse(d)
+}
+
+function v2MsToISO(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 10)
+}
 const V2_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ec4899']
 
 function v2Defaults(s: V2Strategy): Record<string, any> {
@@ -1466,7 +1531,8 @@ function RuntimeV2Workbench() {
   const [compareIds, setCompareIds] = useState<string[]>([])
   const [resultCache, setResultCache] = useState<Record<string, any>>({})
 
-  const [sweepOpen, setSweepOpen] = useState(false)
+  const [mode, setMode] = useState<V2Mode>('run')
+
   const [sweepP1, setSweepP1] = useState('')
   const [sweepP2, setSweepP2] = useState('')
   const [sweepV1, setSweepV1] = useState('')
@@ -1474,6 +1540,33 @@ function RuntimeV2Workbench() {
   const [sweepBusy, setSweepBusy] = useState(false)
   const [sweepMsg, setSweepMsg] = useState('')
   const [sweepState, setSweepState] = useState<V2SweepState | null>(null)
+  const [sweepView, setSweepView] = useState<'heatmap' | 'table'>('heatmap')
+
+  // Single-run result tabs
+  const [resultTab, setResultTab] = useState<V2ResultTab>('overview')
+
+  // Date range + coverage
+  const [coverage, setCoverage] = useState<V2Coverage | null>(null)
+  const [covLoading, setCovLoading] = useState(false)
+  const [rangePreset, setRangePreset] = useState<V2RangePreset>('All')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+
+  // Insufficient-data (HTTP 422) dialog
+  const [insufficient, setInsufficient] = useState<V2InsufficientPayload | null>(null)
+
+  // Walk-forward
+  const [wfTrain, setWfTrain] = useState('2')
+  const [wfTest, setWfTest] = useState('1')
+  const [wfStep, setWfStep] = useState('1')
+  const [wfOptimize, setWfOptimize] = useState(false)
+  const [wfP1, setWfP1] = useState('')
+  const [wfP2, setWfP2] = useState('')
+  const [wfV1, setWfV1] = useState('')
+  const [wfV2, setWfV2] = useState('')
+  const [wfBusy, setWfBusy] = useState(false)
+  const [wfMsg, setWfMsg] = useState('')
+  const [wfState, setWfState] = useState<V2WfState | null>(null)
 
   const aliveRef = useRef(true)
   useEffect(() => {
@@ -1530,6 +1623,126 @@ function RuntimeV2Workbench() {
     setSweepV2('')
     setSweepState(null)
     setSweepMsg('')
+    setWfP1('')
+    setWfP2('')
+    setWfV1('')
+    setWfV2('')
+    setWfState(null)
+    setWfMsg('')
+    setInsufficient(null)
+  }
+
+  // -------------------------------------------------------------------------
+  // Coverage + date range
+  // -------------------------------------------------------------------------
+
+  const applyPreset = (p: V2RangePreset, cov: V2Coverage | null = coverage) => {
+    setRangePreset(p)
+    if (p === 'Custom') return
+    const inter = cov?.intersection
+    if (!inter) return
+    if (p === 'All') {
+      setStartDate(inter.start)
+      setEndDate(inter.end)
+      return
+    }
+    const days = p === '1W' ? 7 : p === '1M' ? 30 : 90
+    const endMs = v2DateMs(inter.end)
+    const startMs = Math.max(v2DateMs(inter.start), endMs - days * V2_DAY_MS)
+    setStartDate(v2MsToISO(startMs))
+    setEndDate(inter.end)
+  }
+
+  const presetRef = useRef<V2RangePreset>('All')
+  useEffect(() => {
+    presetRef.current = rangePreset
+  }, [rangePreset])
+
+  const symbolsKey = symbols.join(',')
+  useEffect(() => {
+    if (!selId || symbols.length === 0) {
+      setCoverage(null)
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      setCovLoading(true)
+      try {
+        const qs = new URLSearchParams({
+          symbols: symbolsKey,
+          freq,
+          asset_class: V2_ASSET_CLASS,
+        })
+        const res = await fetch(`${API}/api/backtest/v2/coverage?${qs.toString()}`)
+        if (res.ok) {
+          const data: V2Coverage = await res.json()
+          if (cancelled) return
+          setCoverage(data)
+          // Re-derive the window from the (possibly changed) coverage
+          const prev = presetRef.current
+          const inter = data.intersection
+          if (prev !== 'Custom' && inter) {
+            if (prev === 'All') {
+              setStartDate(inter.start)
+              setEndDate(inter.end)
+            } else {
+              const days = prev === '1W' ? 7 : prev === '1M' ? 30 : 90
+              const endMs = v2DateMs(inter.end)
+              const startMs = Math.max(v2DateMs(inter.start), endMs - days * V2_DAY_MS)
+              setStartDate(v2MsToISO(startMs))
+              setEndDate(inter.end)
+            }
+          }
+        } else if (!cancelled) {
+          setCoverage(null)
+        }
+      } catch {
+        if (!cancelled) setCoverage(null)
+      }
+      if (!cancelled) setCovLoading(false)
+    })()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selId, symbolsKey, freq])
+
+  // Axis bounds across all covered symbols (min start → max end)
+  const covAxis = (() => {
+    if (!coverage) return null
+    const spans = Object.values(coverage.symbols).filter((s): s is V2CoverageSpan => s != null)
+    if (spans.length === 0) return null
+    const start = Math.min(...spans.map(s => v2DateMs(s.start)))
+    const end = Math.max(...spans.map(s => v2DateMs(s.end)))
+    if (!isFinite(start) || !isFinite(end) || end <= start) return null
+    return { start, end }
+  })()
+
+  const truncateToAvailable = () => {
+    const inter = insufficient?.coverage?.intersection ?? coverage?.intersection
+    if (inter) {
+      setStartDate(inter.start)
+      setEndDate(inter.end)
+      setRangePreset('Custom')
+    }
+    setInsufficient(null)
+  }
+
+  // Parse a failed response; returns a display message, or null if the
+  // insufficient-data dialog took over.
+  const handleFailedResponse = async (res: Response): Promise<string | null> => {
+    const text = await res.text().catch(() => '')
+    if (res.status === 422) {
+      try {
+        const j = JSON.parse(text)
+        const payload: V2InsufficientPayload = j?.detail?.error ? j.detail : j
+        if (payload?.error === 'insufficient_data') {
+          setInsufficient(payload)
+          return null
+        }
+      } catch {}
+    }
+    return text || `Status ${res.status}`
   }
 
   // Symbol choices: catalog tokenized symbols ∪ strategy universe
@@ -1575,6 +1788,8 @@ function RuntimeV2Workbench() {
         asset_class: V2_ASSET_CLASS,
         freq,
         initial_equity: parseFloat(equity) || 5000,
+        start: startDate || undefined,
+        end: endDate || undefined,
       }
       const res = await fetch(`${API}/api/backtest/v2/run`, {
         method: 'POST',
@@ -1582,8 +1797,8 @@ function RuntimeV2Workbench() {
         body: JSON.stringify(body),
       })
       if (!res.ok) {
-        const errText = await res.text().catch(() => `Status ${res.status}`)
-        setRunMsg(`Error: ${errText}`)
+        const errText = await handleFailedResponse(res)
+        setRunMsg(errText ? `Error: ${errText}` : 'Insufficient data for the selected window')
         setRunning(false)
         return
       }
@@ -1722,6 +1937,8 @@ function RuntimeV2Workbench() {
         asset_class: V2_ASSET_CLASS,
         freq,
         initial_equity: parseFloat(equity) || 5000,
+        start: startDate || undefined,
+        end: endDate || undefined,
       }
       const res = await fetch(`${API}/api/backtest/v2/sweep`, {
         method: 'POST',
@@ -1729,8 +1946,8 @@ function RuntimeV2Workbench() {
         body: JSON.stringify(body),
       })
       if (!res.ok) {
-        const errText = await res.text().catch(() => `Status ${res.status}`)
-        setSweepMsg(`Error: ${errText}`)
+        const errText = await handleFailedResponse(res)
+        setSweepMsg(errText ? `Error: ${errText}` : 'Insufficient data for the selected window')
         setSweepBusy(false)
         return
       }
@@ -1768,6 +1985,100 @@ function RuntimeV2Workbench() {
   }
 
   // -------------------------------------------------------------------------
+  // Walk-forward
+  // -------------------------------------------------------------------------
+
+  const runWalkforward = async () => {
+    if (!sel) return
+    const trainD = parseInt(wfTrain, 10)
+    const testD = parseInt(wfTest, 10)
+    const stepD = parseInt(wfStep, 10)
+    if (!trainD || !testD || trainD < 1 || testD < 1) {
+      setWfMsg('train_days and test_days must be >= 1')
+      return
+    }
+    let optimize: Record<string, number[]> | undefined
+    if (wfOptimize && wfP1) {
+      const spec1 = sel.params_schema.find(p => p.name === wfP1)
+      if (spec1) {
+        const vals1 = parseValues(spec1, wfV1)
+        if (vals1.length === 0) {
+          setWfMsg('Enter at least one value for the first optimize parameter')
+          return
+        }
+        optimize = { [wfP1]: vals1 }
+        if (wfP2 && wfP2 !== wfP1) {
+          const spec2 = sel.params_schema.find(p => p.name === wfP2)
+          if (spec2) {
+            const vals2 = parseValues(spec2, wfV2)
+            if (vals2.length > 0) optimize[wfP2] = vals2
+          }
+        }
+      }
+    }
+    setWfBusy(true)
+    setWfState(null)
+    setWfMsg('Submitting walk-forward...')
+    try {
+      const body = {
+        strategy_id: sel.id,
+        params,
+        symbols,
+        asset_class: V2_ASSET_CLASS,
+        freq,
+        initial_equity: parseFloat(equity) || 5000,
+        start: startDate || undefined,
+        end: endDate || undefined,
+        train_days: trainD,
+        test_days: testD,
+        step_days: stepD || 1,
+        ...(optimize ? { optimize } : {}),
+      }
+      const res = await fetch(`${API}/api/backtest/v2/walkforward`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const errText = await handleFailedResponse(res)
+        setWfMsg(errText ? `Error: ${errText}` : 'Insufficient data for the selected window')
+        setWfBusy(false)
+        return
+      }
+      const data = await res.json()
+      const wfId: string = data.walkforward_id
+      setWfMsg(`Walk-forward ${wfId} started...`)
+
+      for (let i = 0; i < 900; i++) {
+        await new Promise(r => setTimeout(r, 2000))
+        if (!aliveRef.current) return
+        try {
+          const st = await fetch(`${API}/api/backtest/v2/walkforward/${wfId}`)
+          if (!st.ok) continue
+          const stData: V2WfState = await st.json()
+          setWfState(stData)
+          if (stData.status === 'completed') {
+            setWfMsg(`Completed — ${stData.folds_total} folds`)
+            setWfBusy(false)
+            return
+          }
+          if (stData.status === 'failed') {
+            setWfMsg(`Failed: ${stData.error || 'unknown error'}`)
+            setWfBusy(false)
+            return
+          }
+          setWfMsg(`Running fold ${stData.folds_done}/${stData.folds_total}...`)
+        } catch {}
+      }
+      setWfMsg('Timeout waiting for walk-forward')
+      setWfBusy(false)
+    } catch (e: any) {
+      setWfMsg(`Error: ${e.message}`)
+      setWfBusy(false)
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
 
@@ -1783,6 +2094,73 @@ function RuntimeV2Workbench() {
         return (b.sharpe_ratio ?? -Infinity) - (a.sharpe_ratio ?? -Infinity)
       })
     : []
+
+  // Sweep dimensionality — 2-param sweeps unlock the heatmap view
+  const sweepKeys = sweepState && sweepState.results.length > 0
+    ? Object.keys(sweepState.results[0].params || {})
+    : []
+  const isTwoParamSweep = sweepKeys.length === 2
+
+  // Shared 1–2 param picker (used by Sweep and Walk-Forward optimize)
+  const renderParamSlots = (
+    slots: Array<{
+      pick: string
+      setPick: (v: string) => void
+      vals: string
+      setVals: (v: string) => void
+      label: string
+    }>
+  ) => {
+    if (!sel) return null
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {slots.map((slot, idx) => {
+          const spec = sel.params_schema.find(p => p.name === slot.pick)
+          return (
+            <div key={idx} className="space-y-1.5">
+              <label className="block text-[11px] text-gray-500">{slot.label}</label>
+              <select
+                value={slot.pick}
+                onChange={e => {
+                  slot.setPick(e.target.value)
+                  const sp = sel.params_schema.find(p => p.name === e.target.value)
+                  if (sp) slot.setVals(autoRange(sp))
+                  else slot.setVals('')
+                }}
+                className="w-full bg-surface border border-border rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-accent font-mono"
+              >
+                <option value="">— none —</option>
+                {sel.params_schema
+                  .filter(p => p.type === 'float' || p.type === 'int')
+                  .map(p => (
+                    <option key={p.name} value={p.name}>{p.name}</option>
+                  ))}
+              </select>
+              {slot.pick && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={slot.vals}
+                    onChange={e => slot.setVals(e.target.value)}
+                    placeholder="comma-separated values"
+                    className="flex-1 bg-surface border border-border rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-accent font-mono"
+                  />
+                  {spec && (
+                    <button
+                      onClick={() => slot.setVals(autoRange(spec))}
+                      className="text-[11px] text-accent hover:underline whitespace-nowrap"
+                    >
+                      auto 5
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
 
   return (
     <div className="bg-surface rounded-xl border border-border p-6 space-y-5">
@@ -1989,100 +2367,209 @@ function RuntimeV2Workbench() {
               {symbols.length} symbol{symbols.length === 1 ? '' : 's'} selected
             </span>
           </div>
-        </div>
-      )}
 
-      {/* D + F. Run / Sweep buttons */}
-      {sel && (
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <span className="text-sm text-gray-500">{runMsg}</span>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSweepOpen(o => !o)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                sweepOpen
-                  ? 'border-warning text-warning bg-warning/10'
-                  : 'border-warning/40 text-warning hover:bg-warning/10'
-              }`}
-            >
-              Sweep {sweepOpen ? '▾' : '▸'}
-            </button>
-            <button
-              onClick={runV2}
-              disabled={running || symbols.length === 0}
-              className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${
-                running || symbols.length === 0
-                  ? 'bg-accent/50 text-white/50 cursor-not-allowed'
-                  : 'bg-accent text-white hover:bg-accent/80'
-              }`}
-            >
-              {running ? (
-                <span className="flex items-center gap-2">
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Running...
+          {/* Date range + per-symbol coverage bars */}
+          <div className="pt-3 border-t border-border/50 space-y-3">
+            <div className="flex items-end gap-4 flex-wrap">
+              <div>
+                <label className="block text-[11px] text-gray-500 mb-1">Date range</label>
+                <div className="flex items-center gap-1">
+                  {V2_RANGE_PRESETS.map(p => (
+                    <button
+                      key={p}
+                      onClick={() => applyPreset(p)}
+                      disabled={p !== 'Custom' && !coverage?.intersection}
+                      className={`px-2 py-1 rounded text-[11px] border transition-colors ${
+                        rangePreset === p
+                          ? 'border-accent text-accent bg-accent/10'
+                          : 'border-border text-gray-500 hover:text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] text-gray-500 mb-1">Start</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  min={covAxis ? v2MsToISO(covAxis.start) : undefined}
+                  max={endDate || (covAxis ? v2MsToISO(covAxis.end) : undefined)}
+                  onChange={e => {
+                    setStartDate(e.target.value)
+                    setRangePreset('Custom')
+                  }}
+                  className="bg-surface border border-border rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-accent font-mono [color-scheme:dark]"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] text-gray-500 mb-1">End</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  min={startDate || (covAxis ? v2MsToISO(covAxis.start) : undefined)}
+                  max={covAxis ? v2MsToISO(covAxis.end) : undefined}
+                  onChange={e => {
+                    setEndDate(e.target.value)
+                    setRangePreset('Custom')
+                  }}
+                  className="bg-surface border border-border rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-accent font-mono [color-scheme:dark]"
+                />
+              </div>
+              {covLoading && <span className="text-[11px] text-gray-500 pb-1.5">loading coverage...</span>}
+              {!covLoading && coverage?.intersection && (
+                <span className="text-[11px] text-gray-500 pb-1.5 font-mono">
+                  intersection {coverage.intersection.start} → {coverage.intersection.end}
                 </span>
-              ) : 'Run Backtest'}
-            </button>
+              )}
+              {!covLoading && coverage && !coverage.intersection && (
+                <span className="text-[11px] text-warning pb-1.5">no common window across symbols</span>
+              )}
+            </div>
+            {coverage && covAxis && (
+              <V2CoverageBars
+                coverage={coverage}
+                symbols={symbols}
+                startDate={startDate}
+                endDate={endDate}
+                axis={covAxis}
+              />
+            )}
+            {coverage && !covAxis && (
+              <p className="text-[11px] text-gray-500">No coverage data for the selected symbols.</p>
+            )}
           </div>
         </div>
       )}
 
-      {/* F. Sweep expander */}
-      {sel && sweepOpen && (
-        <div className="p-4 bg-background rounded-lg border border-warning/30 space-y-3">
-          <p className="text-sm font-medium text-warning">Parameter sweep</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[
-              { pick: sweepP1, setPick: setSweepP1, vals: sweepV1, setVals: setSweepV1, label: 'Param 1' },
-              { pick: sweepP2, setPick: setSweepP2, vals: sweepV2, setVals: setSweepV2, label: 'Param 2 (optional)' },
-            ].map((slot, idx) => {
-              const spec = sel.params_schema.find(p => p.name === slot.pick)
+      {/* Insufficient-data dialog (HTTP 422) */}
+      {insufficient && (
+        <div className="rounded-xl border border-rose-500/40 bg-rose-500/5 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-rose-400">Insufficient data for requested window</p>
+            <button
+              onClick={() => setInsufficient(null)}
+              className="text-gray-500 hover:text-gray-300 text-sm leading-none"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="space-y-2">
+            {(insufficient.missing || []).map((m, i) => {
+              const preListing = m.reason === 'does_not_exist_pre_listing'
+              const notCollected =
+                !preListing && m.reason !== 'not_in_catalog' && (m.reason === 'not_collected' || m.collectable)
+              const badge = preListing
+                ? { cls: 'bg-rose-500/15 text-rose-400 border-rose-500/40', label: '上市前数据不存在' }
+                : notCollected
+                ? { cls: 'bg-amber-500/15 text-amber-400 border-amber-500/40', label: '未采集 (可补)' }
+                : { cls: 'bg-gray-500/15 text-gray-400 border-gray-500/40', label: '不在目录' }
               return (
-                <div key={idx} className="space-y-1.5">
-                  <label className="block text-[11px] text-gray-500">{slot.label}</label>
-                  <select
-                    value={slot.pick}
-                    onChange={e => {
-                      slot.setPick(e.target.value)
-                      const sp = sel.params_schema.find(p => p.name === e.target.value)
-                      if (sp) slot.setVals(autoRange(sp))
-                      else slot.setVals('')
-                    }}
-                    className="w-full bg-surface border border-border rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-accent font-mono"
-                  >
-                    <option value="">— none —</option>
-                    {sel.params_schema
-                      .filter(p => p.type === 'float' || p.type === 'int')
-                      .map(p => (
-                        <option key={p.name} value={p.name}>{p.name}</option>
-                      ))}
-                  </select>
-                  {slot.pick && (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={slot.vals}
-                        onChange={e => slot.setVals(e.target.value)}
-                        placeholder="comma-separated values"
-                        className="flex-1 bg-surface border border-border rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-accent font-mono"
-                      />
-                      {spec && (
-                        <button
-                          onClick={() => slot.setVals(autoRange(spec))}
-                          className="text-[11px] text-accent hover:underline whitespace-nowrap"
-                        >
-                          auto 5
-                        </button>
-                      )}
+                <div
+                  key={i}
+                  className="px-3 py-2 rounded-lg bg-background border border-border/50 text-xs space-y-1.5"
+                >
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="font-mono text-gray-100 font-medium">{m.symbol}</span>
+                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-medium whitespace-nowrap ${badge.cls}`}>
+                      {badge.label}
+                    </span>
+                    <span className="text-gray-500 font-mono">
+                      requested {m.requested?.[0]} → {m.requested?.[1]}
+                      {m.have ? ` · have ${m.have[0]} → ${m.have[1]}` : ' · no data'}
+                    </span>
+                  </div>
+                  {notCollected && m.hint && (
+                    <div>
+                      <p className="text-[10px] text-gray-500 mb-1">run this:</p>
+                      <V2CopyCommand cmd={m.hint} />
                     </div>
+                  )}
+                  {!notCollected && m.hint && (
+                    <p className="text-[11px] text-gray-400 font-mono break-all">{m.hint}</p>
                   )}
                 </div>
               )
             })}
           </div>
+          <div className="flex items-center justify-end gap-3">
+            <button
+              onClick={() => setInsufficient(null)}
+              className="px-3 py-1.5 rounded-lg text-xs border border-border text-gray-400 hover:text-gray-200 transition-colors"
+            >
+              Dismiss
+            </button>
+            <button
+              onClick={truncateToAvailable}
+              disabled={!(insufficient.coverage?.intersection ?? coverage?.intersection)}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-accent text-white hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Truncate to available
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Mode tabs: Backtest | Sweep | Walk-Forward */}
+      {sel && (
+        <div className="flex items-center gap-1 border-b border-border">
+          {([
+            ['run', 'Backtest'],
+            ['sweep', 'Sweep'],
+            ['wf', 'Walk-Forward'],
+          ] as Array<[V2Mode, string]>).map(([m, label]) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                mode === m
+                  ? 'border-accent text-accent'
+                  : 'border-transparent text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Mode: Backtest */}
+      {sel && mode === 'run' && (
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <span className="text-sm text-gray-500">{runMsg}</span>
+          <button
+            onClick={runV2}
+            disabled={running || symbols.length === 0}
+            className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${
+              running || symbols.length === 0
+                ? 'bg-accent/50 text-white/50 cursor-not-allowed'
+                : 'bg-accent text-white hover:bg-accent/80'
+            }`}
+          >
+            {running ? (
+              <span className="flex items-center gap-2">
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Running...
+              </span>
+            ) : 'Run Backtest'}
+          </button>
+        </div>
+      )}
+
+      {/* Mode: Sweep */}
+      {sel && mode === 'sweep' && (
+        <div className="p-4 bg-background rounded-lg border border-warning/30 space-y-3">
+          <p className="text-sm font-medium text-warning">Parameter sweep</p>
+          {renderParamSlots([
+            { pick: sweepP1, setPick: setSweepP1, vals: sweepV1, setVals: setSweepV1, label: 'Param 1' },
+            { pick: sweepP2, setPick: setSweepP2, vals: sweepV2, setVals: setSweepV2, label: 'Param 2 (optional)' },
+          ])}
           <div className="flex items-center justify-between flex-wrap gap-2">
             <span className="text-xs text-gray-500">{sweepMsg}</span>
             <button
@@ -2105,7 +2592,31 @@ function RuntimeV2Workbench() {
               />
             </div>
           )}
-          {sortedSweepRows.length > 0 && (
+          {sortedSweepRows.length > 0 && isTwoParamSweep && (
+            <div className="flex items-center gap-1">
+              {(['heatmap', 'table'] as const).map(v => (
+                <button
+                  key={v}
+                  onClick={() => setSweepView(v)}
+                  className={`px-2.5 py-1 rounded text-[11px] border transition-colors capitalize ${
+                    sweepView === v
+                      ? 'border-warning text-warning bg-warning/10'
+                      : 'border-border text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          )}
+          {sortedSweepRows.length > 0 && isTwoParamSweep && sweepView === 'heatmap' && sweepState && (
+            <V2SweepHeatmap
+              rows={sweepState.results}
+              keys={sweepKeys as [string, string]}
+              onPick={applySweepRow}
+            />
+          )}
+          {sortedSweepRows.length > 0 && !(isTwoParamSweep && sweepView === 'heatmap') && (
             <div className="overflow-x-auto">
               <p className="text-[11px] text-gray-500 mb-1.5">
                 Sorted by Sharpe — click a row to apply its params to the form
@@ -2175,6 +2686,186 @@ function RuntimeV2Workbench() {
         </div>
       )}
 
+      {/* Mode: Walk-Forward */}
+      {sel && mode === 'wf' && (
+        <div className="p-4 bg-background rounded-lg border border-accent/30 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <p className="text-sm font-medium text-gray-300">Walk-forward validation</p>
+            <span className="text-[11px] text-gray-500">rolling train → test folds, stitched OOS equity, Sharpe gate 1.5</span>
+          </div>
+          <div className="flex items-end gap-4 flex-wrap">
+            {([
+              ['train_days', wfTrain, setWfTrain],
+              ['test_days', wfTest, setWfTest],
+              ['step_days', wfStep, setWfStep],
+            ] as Array<[string, string, (v: string) => void]>).map(([label, val, setter]) => (
+              <div key={label}>
+                <label className="block text-[11px] text-gray-500 mb-1 font-mono">{label}</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={val}
+                  onChange={e => setter(e.target.value)}
+                  className="w-20 bg-surface border border-border rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-accent font-mono text-right"
+                />
+              </div>
+            ))}
+            <div className="pb-1">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <button
+                  onClick={() => setWfOptimize(v => !v)}
+                  className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors ${
+                    wfOptimize ? 'bg-accent' : 'bg-border'
+                  }`}
+                >
+                  <span
+                    className="inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform"
+                    style={{ transform: wfOptimize ? 'translateX(22px)' : 'translateX(3px)' }}
+                  />
+                </button>
+                <span className="text-xs text-gray-400">optimize per fold</span>
+              </label>
+            </div>
+          </div>
+          {wfOptimize &&
+            renderParamSlots([
+              { pick: wfP1, setPick: setWfP1, vals: wfV1, setVals: setWfV1, label: 'Optimize param 1' },
+              { pick: wfP2, setPick: setWfP2, vals: wfV2, setVals: setWfV2, label: 'Optimize param 2 (optional)' },
+            ])}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-xs text-gray-500">{wfMsg}</span>
+            <button
+              onClick={runWalkforward}
+              disabled={wfBusy || symbols.length === 0 || (wfOptimize && !wfP1)}
+              className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                wfBusy || symbols.length === 0 || (wfOptimize && !wfP1)
+                  ? 'bg-accent/30 text-white/50 cursor-not-allowed'
+                  : 'bg-accent text-white hover:bg-accent/80'
+              }`}
+            >
+              {wfBusy
+                ? `Running... ${wfState ? `${wfState.folds_done}/${wfState.folds_total}` : ''}`
+                : 'Run Walk-Forward'}
+            </button>
+          </div>
+
+          {wfState && wfState.folds_total > 0 && wfState.status === 'running' && (
+            <div className="h-1.5 bg-surface rounded-full overflow-hidden">
+              <div
+                className="h-full bg-accent transition-all"
+                style={{ width: `${(wfState.folds_done / wfState.folds_total) * 100}%` }}
+              />
+            </div>
+          )}
+
+          {wfState?.status === 'failed' && (
+            <div className="rounded-lg border border-danger/30 bg-danger/5 px-4 py-3 space-y-1">
+              <p className="text-sm text-danger font-medium">Walk-forward failed</p>
+              {wfState.error && <p className="text-xs text-gray-400 font-mono">{wfState.error}</p>}
+              {wfState.detail && (
+                <p className="text-xs text-gray-400">
+                  {wfState.detail.have_days != null && wfState.detail.need_days_min != null && (
+                    <>have {wfState.detail.have_days}d, need ≥ {wfState.detail.need_days_min}d. </>
+                  )}
+                  {wfState.detail.hint}
+                </p>
+              )}
+            </div>
+          )}
+
+          {wfState?.status === 'completed' && wfState.gate && (
+            <div
+              className={`rounded-lg px-4 py-3 border ${
+                wfState.gate.passed
+                  ? 'border-success/40 bg-success/10'
+                  : 'border-rose-500/40 bg-rose-500/10'
+              }`}
+            >
+              <p className={`text-sm font-semibold ${wfState.gate.passed ? 'text-success' : 'text-rose-400'}`}>
+                OOS Sharpe {(wfState.oos_sharpe ?? 0).toFixed(2)} vs gate {wfState.gate.threshold ?? 1.5} —{' '}
+                {wfState.gate.passed ? 'PASSED' : 'FAILED'}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                Pure out-of-sample across {wfState.folds_total} folds · stitched OOS return{' '}
+                {(wfState.oos_return_pct ?? 0).toFixed(2)}%
+              </p>
+            </div>
+          )}
+
+          {wfState && wfState.folds && wfState.folds.length > 0 && (() => {
+            const showBest = wfState.folds.some(
+              f => f.best_params && Object.keys(f.best_params).length > 0
+            )
+            return (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-gray-500 border-b border-border">
+                      <th className="text-left pb-2 pr-3">#</th>
+                      <th className="text-left pb-2 pr-3">Train</th>
+                      <th className="text-left pb-2 pr-3">Test</th>
+                      {showBest && <th className="text-left pb-2 pr-3">Best params</th>}
+                      <th className="text-right pb-2 pr-3">Train Sharpe</th>
+                      <th className="text-right pb-2 pr-3">Test Sharpe</th>
+                      <th className="text-right pb-2 pr-3">Return</th>
+                      <th className="text-right pb-2 pr-3">MaxDD</th>
+                      <th className="text-right pb-2">Trades</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {wfState.folds.map((f, i) => (
+                      <tr key={i} className="border-b border-border/30">
+                        <td className="py-1.5 pr-3 text-gray-500">{i + 1}</td>
+                        <td className="py-1.5 pr-3 font-mono text-gray-400 whitespace-nowrap">
+                          {String(f.train?.[0] ?? '').slice(0, 10)} → {String(f.train?.[1] ?? '').slice(0, 10)}
+                        </td>
+                        <td className="py-1.5 pr-3 font-mono text-gray-300 whitespace-nowrap">
+                          {String(f.test?.[0] ?? '').slice(0, 10)} → {String(f.test?.[1] ?? '').slice(0, 10)}
+                        </td>
+                        {showBest && (
+                          <td className="py-1.5 pr-3 font-mono text-gray-400">
+                            {f.best_params ? v2ParamsDiff(f.best_params, {}) : '—'}
+                          </td>
+                        )}
+                        <td className="py-1.5 pr-3 text-right text-gray-400">
+                          {f.train_sharpe == null ? '—' : f.train_sharpe.toFixed(2)}
+                        </td>
+                        <td
+                          className={`py-1.5 pr-3 text-right font-medium ${
+                            (f.test_sharpe ?? 0) >= 1.5
+                              ? 'text-success'
+                              : (f.test_sharpe ?? 0) >= 0
+                              ? 'text-gray-100'
+                              : 'text-danger'
+                          }`}
+                        >
+                          {f.test_sharpe == null ? '—' : f.test_sharpe.toFixed(2)}
+                        </td>
+                        <td
+                          className={`py-1.5 pr-3 text-right ${
+                            (f.test_return_pct ?? 0) >= 0 ? 'text-success' : 'text-danger'
+                          }`}
+                        >
+                          {(f.test_return_pct ?? 0).toFixed(2)}%
+                        </td>
+                        <td className="py-1.5 pr-3 text-right text-danger">
+                          {v2AsPct(f.test_max_dd).toFixed(1)}%
+                        </td>
+                        <td className="py-1.5 text-right text-gray-400">{f.test_trades ?? 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          })()}
+
+          {wfState?.status === 'completed' &&
+            Array.isArray(wfState.stitched_curve) &&
+            wfState.stitched_curve.length > 1 && <V2StitchedCurve curve={wfState.stitched_curve} />}
+        </div>
+      )}
+
       {/* D. Active result */}
       {activeResult && activeResult.status === 'failed' && (
         <div className="rounded-lg border border-danger/30 bg-danger/5 px-4 py-3">
@@ -2192,7 +2883,32 @@ function RuntimeV2Workbench() {
             <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-success/10 text-success">completed</span>
           </div>
 
-          {/* KPI row */}
+          {/* Result tabs */}
+          <div className="flex items-center gap-1 border-b border-border">
+            {([
+              ['overview', 'Overview'],
+              ['tearsheet', 'Tear Sheet'],
+              ...(Array.isArray(activeResult.trades) && activeResult.trades.length > 0
+                ? ([['trades', `Trades (${activeResult.trades.length})`]] as Array<[V2ResultTab, string]>)
+                : []),
+            ] as Array<[V2ResultTab, string]>).map(([t, label]) => (
+              <button
+                key={t}
+                onClick={() => setResultTab(t)}
+                className={`px-3 py-1.5 text-xs font-medium border-b-2 -mb-px transition-colors ${
+                  resultTab === t
+                    ? 'border-accent text-accent'
+                    : 'border-transparent text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Overview tab: KPI row + equity curve */}
+          {resultTab === 'overview' && (
+          <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
               {
@@ -2221,23 +2937,36 @@ function RuntimeV2Workbench() {
             ))}
           </div>
 
-          {/* Tear sheet */}
-          <TearSheet
-            key={activeResult.backtest_id}
-            analyticsUrl={`/api/backtest/results/${activeResult.backtest_id}/analytics`}
-          />
-
-          {/* Collapsible trades table */}
-          {Array.isArray(activeResult.trades) && activeResult.trades.length > 0 && (
+          {/* Equity curve */}
+          {Array.isArray(activeResult.equity_curve) && activeResult.equity_curve.length > 1 && (
             <div>
-              <button
-                onClick={() => setShowTrades(v => !v)}
-                className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-200 transition-colors"
-              >
-                <span className={`transition-transform ${showTrades ? 'rotate-90' : ''}`}>&#9654;</span>
-                Trades (last {Math.min(activeResult.trades.length, 50)} of {activeResult.trades.length})
-              </button>
-              {showTrades && (
+              <h5 className="text-xs font-semibold text-gray-400 mb-2">Equity Curve</h5>
+              <div className="h-44 relative">
+                <EquityCurveSVG
+                  data={activeResult.equity_curve}
+                  initialCash={activeResult.initial_capital ?? parseFloat(equity) ?? 5000}
+                />
+              </div>
+            </div>
+          )}
+          </div>
+          )}
+
+          {/* Tear Sheet tab */}
+          {resultTab === 'tearsheet' && (
+            <TearSheet
+              key={activeResult.backtest_id}
+              analyticsUrl={`/api/backtest/results/${activeResult.backtest_id}/analytics`}
+            />
+          )}
+
+          {/* Trades tab */}
+          {resultTab === 'trades' && Array.isArray(activeResult.trades) && activeResult.trades.length > 0 && (
+            <div>
+              <p className="text-[11px] text-gray-500 mb-2">
+                Last {Math.min(activeResult.trades.length, 50)} of {activeResult.trades.length}
+              </p>
+              {(
                 <div className="overflow-x-auto max-h-72 overflow-y-auto mt-2">
                   <table className="w-full text-xs">
                     <thead className="sticky top-0 bg-surface">
@@ -2352,6 +3081,156 @@ function RuntimeV2Workbench() {
   )
 }
 
+function V2CoverageBars({
+  coverage,
+  symbols,
+  startDate,
+  endDate,
+  axis,
+}: {
+  coverage: V2Coverage
+  symbols: string[]
+  startDate: string
+  endDate: string
+  axis: { start: number; end: number }
+}) {
+  const span = axis.end - axis.start || 1
+  const pct = (ms: number) => Math.max(0, Math.min(100, ((ms - axis.start) / span) * 100))
+  const winStart = startDate ? v2DateMs(startDate) : null
+  const winEnd = endDate ? v2DateMs(endDate) : null
+  const hasWin =
+    winStart != null && winEnd != null && !isNaN(winStart) && !isNaN(winEnd) && winEnd >= winStart
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-[10px] text-gray-500 font-mono pl-16 pr-28">
+        <span>{v2MsToISO(axis.start)}</span>
+        <span>{v2MsToISO(axis.end)}</span>
+      </div>
+      {symbols.map(sym => {
+        const s = coverage.symbols[sym] ?? null
+        if (!s) {
+          return (
+            <div key={sym} className="flex items-center gap-2">
+              <span className="w-14 text-[10px] font-mono text-gray-500 text-right shrink-0">{sym}</span>
+              <div className="flex-1 h-4 rounded bg-gray-700/40 flex items-center justify-center">
+                <span className="text-[9px] text-gray-500">not in catalog</span>
+              </div>
+              <span className="w-24 shrink-0" />
+            </div>
+          )
+        }
+        const sMs = v2DateMs(s.start)
+        const eMs = v2DateMs(s.end)
+        const left = pct(sMs)
+        const width = Math.max(pct(eMs) - left, 0.5)
+        let inLeft = 0
+        let inWidth = 0
+        const outSegs: Array<[number, number]> = []
+        if (hasWin) {
+          const iS = Math.max(winStart!, sMs)
+          const iE = Math.min(winEnd!, eMs)
+          if (iE > iS) {
+            inLeft = pct(iS)
+            inWidth = pct(iE) - inLeft
+          }
+          if (winStart! < sMs) outSegs.push([pct(winStart!), pct(Math.min(winEnd!, sMs))])
+          if (winEnd! > eMs) outSegs.push([pct(Math.max(winStart!, eMs)), pct(winEnd!)])
+        }
+        return (
+          <div key={sym} className="flex items-center gap-2">
+            <span className="w-14 text-[10px] font-mono text-gray-300 text-right shrink-0">{sym}</span>
+            <div
+              className="flex-1 relative h-4 rounded bg-surface border border-border/50 overflow-hidden"
+              title={`${s.start} → ${s.end} · ${s.rows ?? '?'} rows`}
+            >
+              {/* available span */}
+              <div
+                className="absolute inset-y-0 bg-accent/20"
+                style={{ left: `${left}%`, width: `${width}%` }}
+              />
+              {/* selected window ∩ span → highlighted */}
+              {hasWin && inWidth > 0 && (
+                <div
+                  className="absolute inset-y-0 bg-accent/60"
+                  style={{ left: `${inLeft}%`, width: `${inWidth}%` }}
+                />
+              )}
+              {/* selected window outside span → red */}
+              {outSegs.map(([l, r], i) =>
+                r > l ? (
+                  <div
+                    key={i}
+                    className="absolute inset-y-0 bg-rose-500/50"
+                    style={{ left: `${l}%`, width: `${r - l}%` }}
+                  />
+                ) : null
+              )}
+            </div>
+            <span className="w-24 text-[9px] text-gray-500 font-mono shrink-0 text-right">
+              {(s.rows ?? 0).toLocaleString()} rows
+            </span>
+          </div>
+        )
+      })}
+      <div className="flex items-center gap-4 pl-16 text-[10px] text-gray-500">
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-2 rounded-sm bg-accent/20" /> available
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-2 rounded-sm bg-accent/60" /> selected window
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-2 rounded-sm bg-rose-500/50" /> window outside coverage
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function V2StitchedCurve({ curve }: { curve: Array<{ timestamp: string; total_value: number }> }) {
+  const w = 800
+  const h = 200
+  const base = curve[0]?.total_value || 1
+  const vals = curve.map(p => ((p.total_value ?? 0) / base) * 100)
+  let minV = 100
+  let maxV = 100
+  for (const v of vals) {
+    if (v < minV) minV = v
+    if (v > maxV) maxV = v
+  }
+  minV *= 0.998
+  maxV *= 1.002
+  const range = maxV - minV || 1
+  const yOf = (v: number) => h - ((v - minV) / range) * h
+  const baseY = yOf(100)
+  const d = vals
+    .map((v, i) => `${i === 0 ? 'M' : 'L'}${((i / (vals.length - 1)) * w).toFixed(2)},${yOf(v).toFixed(2)}`)
+    .join(' ')
+  const last = vals[vals.length - 1]
+  const color = last >= 100 ? '#10b981' : '#ef4444'
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <p className="text-xs font-medium text-gray-300">Stitched OOS equity — rebased to 100</p>
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-medium">
+          pure OOS, stitched
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full">
+        <line x1="0" y1={baseY} x2={w} y2={baseY} stroke="#374151" strokeWidth="1" strokeDasharray="4" />
+        <text x="4" y={baseY - 4} fill="#6b7280" fontSize="10">100</text>
+        <path d={d} fill="none" stroke={color} strokeWidth="1.75" />
+      </svg>
+      <div className="flex items-center justify-between text-[10px] text-gray-500 font-mono">
+        <span>{String(curve[0].timestamp || '').slice(0, 10)}</span>
+        <span>{String(curve[curve.length - 1].timestamp || '').slice(0, 10)}</span>
+      </div>
+    </div>
+  )
+}
+
 function V2CompareOverlay({ runs }: { runs: Array<{ id: string; run: V2RunEntry; result: any }> }) {
   const w = 800
   const h = 240
@@ -2454,6 +3333,131 @@ function V2CompareOverlay({ runs }: { runs: Array<{ id: string; run: V2RunEntry;
           </tbody>
         </table>
       </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Sweep heatmap — 2-param grid, Sharpe colour-coded (green→red), click to apply
+// ---------------------------------------------------------------------------
+
+function V2SweepHeatmap({
+  rows,
+  keys,
+  onPick,
+}: {
+  rows: V2SweepRow[]
+  keys: [string, string]
+  onPick: (row: V2SweepRow) => void
+}) {
+  const [rowKey, colKey] = keys
+  const uniq = (k: string) =>
+    Array.from(new Set(rows.map(r => r.params?.[k]))).sort(
+      (a, b) => Number(a) - Number(b)
+    )
+  const rowVals = uniq(rowKey)
+  const colVals = uniq(colKey)
+
+  const cellFor = (rv: any, cv: any) =>
+    rows.find(r => r.params?.[rowKey] === rv && r.params?.[colKey] === cv)
+
+  // Normalise colour intensity to the largest |Sharpe| in the grid
+  let maxAbs = 0
+  for (const r of rows) {
+    if (r.error) continue
+    const s = Math.abs(r.sharpe_ratio ?? 0)
+    if (s > maxAbs) maxAbs = s
+  }
+  maxAbs = maxAbs || 1
+
+  const bgFor = (r: V2SweepRow | undefined): string => {
+    if (!r || r.error || r.sharpe_ratio == null) return 'transparent'
+    const s = r.sharpe_ratio
+    const alpha = 0.12 + 0.68 * Math.min(1, Math.abs(s) / maxAbs)
+    return s >= 0 ? `rgba(16,185,129,${alpha})` : `rgba(244,63,94,${alpha})`
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[11px] text-gray-500">
+        Sharpe heatmap — rows <span className="font-mono text-gray-400">{rowKey}</span>, cols{' '}
+        <span className="font-mono text-gray-400">{colKey}</span>. Click a cell to apply both params.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="text-xs border-separate" style={{ borderSpacing: '3px' }}>
+          <thead>
+            <tr>
+              <th className="p-1 text-right text-gray-500 font-mono">
+                {rowKey}\{colKey}
+              </th>
+              {colVals.map(cv => (
+                <th key={String(cv)} className="p-1 text-center text-gray-400 font-mono font-medium">
+                  {String(cv)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rowVals.map(rv => (
+              <tr key={String(rv)}>
+                <td className="p-1 text-right text-gray-400 font-mono font-medium">{String(rv)}</td>
+                {colVals.map(cv => {
+                  const r = cellFor(rv, cv)
+                  const disabled = !r || !!r.error || r.sharpe_ratio == null
+                  return (
+                    <td
+                      key={String(cv)}
+                      onClick={() => r && !r.error && onPick(r)}
+                      title={
+                        r
+                          ? r.error
+                            ? r.error
+                            : `${rowKey}=${rv} ${colKey}=${cv} · Sharpe ${(r.sharpe_ratio ?? 0).toFixed(
+                                2
+                              )} · ret ${(r.total_return_pct ?? 0).toFixed(1)}% · ${r.total_trades ?? 0} trades`
+                          : 'no result'
+                      }
+                      style={{ backgroundColor: bgFor(r) }}
+                      className={`w-14 h-10 text-center rounded border border-border/40 font-mono transition-transform ${
+                        disabled
+                          ? 'text-gray-600 cursor-default'
+                          : 'text-gray-100 cursor-pointer hover:scale-105'
+                      }`}
+                    >
+                      {r && !r.error && r.sharpe_ratio != null ? r.sharpe_ratio.toFixed(2) : '—'}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// Copyable command box — used by the insufficient-data "Queue collection" hint.
+function V2CopyCommand({ cmd }: { cmd: string }) {
+  const [copied, setCopied] = useState(false)
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(cmd)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {}
+  }
+  return (
+    <div className="flex items-stretch gap-2">
+      <code className="flex-1 bg-black/40 border border-border rounded px-2 py-1.5 text-[11px] text-gray-300 font-mono break-all">
+        {cmd}
+      </code>
+      <button
+        onClick={copy}
+        className="px-2.5 py-1.5 rounded border border-border text-[11px] text-gray-400 hover:text-gray-200 hover:border-gray-500 transition-colors whitespace-nowrap"
+      >
+        {copied ? 'Copied' : 'Copy'}
+      </button>
     </div>
   )
 }

@@ -1382,6 +1382,17 @@ async def v2_run(req: V2RunRequest, background_tasks: BackgroundTasks):
     import strategies_v2
     if req.strategy_id not in strategies_v2.REGISTRY:
         raise HTTPException(404, f"unknown v2 strategy {req.strategy_id}")
+    # window guard: same structured 422 the UI dialog consumes on WF/sweep,
+    # so selecting a pre-listing / uncollected range on a plain Run also
+    # surfaces the insufficient-data dialog instead of silently truncating
+    if req.start or req.end:
+        cls = strategies_v2.REGISTRY[req.strategy_id]
+        symbols = req.symbols or list(cls.universe)
+        freq = req.freq or cls.primary_tf
+        bad = _window_check(req.asset_class, symbols, freq,
+                            req.start, req.end)
+        if bad:
+            return JSONResponse(status_code=422, content=_sanitize(bad))
     backtest_id = f"v2_{uuid.uuid4().hex[:10]}"
     _running_tasks[backtest_id] = "queued"
     _backtest_store[backtest_id] = {
