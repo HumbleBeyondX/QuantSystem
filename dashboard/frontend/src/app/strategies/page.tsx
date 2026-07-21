@@ -428,7 +428,10 @@ function StrategyCard({
 }: {
   strategy: RegistryStrategy
   deployed: DeployedStrategy | undefined
-  monitorStatus: string | undefined
+  monitorStatus: {
+    status: string; today_realized: number | null; unrealized: number | null;
+    equity: number | null; today_pct: number | null
+  } | undefined
   onRefresh: () => void
 }) {
   const [promoOpen, setPromoOpen] = useState(false)
@@ -475,7 +478,7 @@ function StrategyCard({
         </div>
         {(deployed || monitorStatus) && (() => {
           // deployment record wins; otherwise live telemetry from /api/monitor
-          const status = deployed ? deployed.status : (monitorStatus as string)
+          const status = deployed ? deployed.status : monitorStatus!.status
           const good = status === 'running' || status === 'flat'
           return (
             <span
@@ -496,6 +499,32 @@ function StrategyCard({
       <div className="mb-3">
         <GateChip gate={strategy.gate} />
       </div>
+
+      {/* Today's P&L from live paper telemetry (/api/monitor) */}
+      {monitorStatus && (monitorStatus.today_realized != null || monitorStatus.unrealized != null) && (
+        <div className="mb-3 flex items-center gap-3 rounded-lg bg-background/60 border border-border px-3 py-2">
+          <div>
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Today P&L</p>
+            <p className={`text-sm font-bold font-mono ${
+              ((monitorStatus.today_realized ?? 0) + (monitorStatus.unrealized ?? 0)) >= 0
+                ? 'text-emerald-400' : 'text-rose-400'
+            }`}>
+              {((monitorStatus.today_realized ?? 0) + (monitorStatus.unrealized ?? 0)) >= 0 ? '+' : ''}
+              ${((monitorStatus.today_realized ?? 0) + (monitorStatus.unrealized ?? 0)).toFixed(2)}
+            </p>
+          </div>
+          <div className="text-[10px] text-gray-500">
+            <p>realized {((monitorStatus.today_realized ?? 0) >= 0 ? '+' : '')}${(monitorStatus.today_realized ?? 0).toFixed(2)}</p>
+            <p>unrealized {((monitorStatus.unrealized ?? 0) >= 0 ? '+' : '')}${(monitorStatus.unrealized ?? 0).toFixed(2)}</p>
+          </div>
+          {monitorStatus.equity != null && (
+            <div className="ml-auto text-right">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wider">Equity</p>
+              <p className="text-sm font-mono text-gray-200">${monitorStatus.equity.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Promotion provenance (live via promotion system) */}
       {strategy.stage === 'live' && strategy.links?.promotion && (
@@ -679,7 +708,10 @@ export default function StrategiesPage() {
   const [filter, setFilter] = useState<string>('All')
   const [registry, setRegistry] = useState<RegistryResponse | null>(null)
   const [deployed, setDeployed] = useState<DeployedStrategy[]>([])
-  const [monitorStatus, setMonitorStatus] = useState<Record<string, string>>({})
+  const [monitorStatus, setMonitorStatus] = useState<Record<string, {
+    status: string; today_realized: number | null; unrealized: number | null;
+    equity: number | null; today_pct: number | null
+  }>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -695,11 +727,21 @@ export default function StrategiesPage() {
       if (depRes.ok) setDeployed(await depRes.json())
       if (monRes.ok) {
         const snap = await monRes.json()
-        const map: Record<string, string> = {}
+        const map: Record<string, {
+          status: string; today_realized: number | null;
+          unrealized: number | null; equity: number | null;
+          today_pct: number | null
+        }> = {}
         for (const card of snap.strategies ?? []) {
           // monitor ids -> registry ids
           const rid = card.id === 'gamma_scalp' ? 'spy_gamma_scalp' : card.id
-          if (card.status) map[rid] = card.status
+          if (card.status) map[rid] = {
+            status: card.status,
+            today_realized: card.today_realized ?? null,
+            unrealized: card.unrealized ?? null,
+            equity: card.equity ?? null,
+            today_pct: card.today_pct ?? null,
+          }
         }
         setMonitorStatus(map)
       }
