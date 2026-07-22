@@ -36,8 +36,13 @@ class StrategyHost:
         self.ledger = Ledger(strat.id, initial_equity)
         self.rails = RiskRails(rails_cfg)
         self.cfg = rails_cfg
-        engine_cls = MakerShadow if getattr(strat, "maker_only", False) \
-            else TakerShadow
+        if getattr(strat, "engine", None) == "options_strangle":
+            from core.runtime.options_fills import OptionsStrangleShadow
+            engine_cls = OptionsStrangleShadow
+        elif getattr(strat, "maker_only", False):
+            engine_cls = MakerShadow
+        else:
+            engine_cls = TakerShadow
         self.engine = engine_cls(rails_cfg)
         self.ctx = LiveContext(ex, primary_tf=strat.primary_tf)
         self.st = self.ledger.load()
@@ -87,14 +92,18 @@ class StrategyHost:
                                     st.setdefault("quotes", {}), self.ctx)
         self.ledger.record_fills(st, events)
 
-        # unrealized mark
-        unreal = 0.0
-        for sym, pos in st["positions"].items():
-            bid, ask = self.ctx.book(sym)
-            if bid and ask:
-                d = 1 if pos["side"] == "long" else -1
-                mark = bid if d > 0 else ask
-                unreal += (mark - pos["entry"]) * d * pos["qty"]
+        # unrealized mark — engine-owned when it knows better (options
+        # books mark at real option mark prices, not a perp bid/ask)
+        if hasattr(self.engine, "unrealized"):
+            unreal = self.engine.unrealized(st["positions"], self.ctx)
+        else:
+            unreal = 0.0
+            for sym, pos in st["positions"].items():
+                bid, ask = self.ctx.book(sym)
+                if bid and ask:
+                    d = 1 if pos["side"] == "long" else -1
+                    mark = bid if d > 0 else ask
+                    unreal += (mark - pos["entry"]) * d * pos["qty"]
         self.ledger.snapshot(st, unreal)
         self.ledger.save(st)
         for ev in events:
@@ -119,7 +128,8 @@ def main() -> None:
             continue
         strat = cls()
         rails = RailsConfig(**getattr(cls, "rails", {}))
-        hosts.append(StrategyHost(strat, ex, args.equity, rails))
+        equity = getattr(cls, "initial_equity", args.equity)
+        hosts.append(StrategyHost(strat, ex, equity, rails))
         logger.info("strategy_loaded", strategy=sid,
                     cadence=strat.cadence_sec,
                     engine=type(hosts[-1].engine).__name__)

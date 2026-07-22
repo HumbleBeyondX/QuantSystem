@@ -14,3 +14,4 @@ def register(cls):
 from strategies_v2 import scalp_trend  # noqa: E402,F401
 from strategies_v2 import funding_carry  # noqa: E402,F401
 from strategies_v2 import market_maker  # noqa: E402,F401
+from strategies_v2 import wheel_shadow  # noqa: E402,F401

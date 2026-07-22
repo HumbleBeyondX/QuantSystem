@@ -47,6 +47,12 @@ class RiskRails:
             if halted:
                 rejected.append({"intent": it.symbol, "reason": "daily_cap_halted"})
                 continue
+            if it.meta.get("engine") == "options":
+                # options strangles: sized by the strategy against its
+                # notional_pct; no perp price/stop semantics apply. The
+                # daily-cap halt above still blocks these opens.
+                ok.append(it)
+                continue
             px = it.price or price_of(it.symbol)
             if not px or px <= 0:
                 rejected.append({"intent": it.symbol, "reason": "no_price"})
