@@ -64,9 +64,15 @@ class LiveContext(MarketContext):
         return datetime.now(timezone.utc)
 
     def bars(self, symbol: str, tf: str, n: int) -> pd.DataFrame:
+        if n > 298:
+            raise ValueError(
+                f"bars(n={n}) exceeds the venue's 300-bar single-fetch cap; "
+                "larger lookbacks must come from the catalog")
         key = (symbol, tf)
         cached = self._bar_cache.get(key)
-        if cached and time.time() - cached[0] < 30:
+        # cache hit only if it HOLDS enough rows — a smaller earlier fetch
+        # must not silently short-change a larger request
+        if cached and time.time() - cached[0] < 30 and len(cached[1]) >= n:
             return cached[1].tail(n)
         raw = self.ex.fetch_ohlcv(self._sym(symbol), tf, limit=min(n + 2, 300))
         df = pd.DataFrame(raw, columns=["timestamp", "open", "high", "low",

@@ -96,7 +96,10 @@ def run_backtest(strategy: Strategy,
                    index=pd.to_datetime([c["timestamp"] for c in curve]))
     daily = eq.resample("D").last().dropna()
     r = daily.pct_change().dropna()
-    closes = [t for t in trades if str(t.get("action", "")).startswith("CLOSE")]
+    # a realized trade is any event carrying pnl: CLOSE_* (taker/stop/trail/
+    # time exits) AND NET_* (maker netting fills) — same criterion as the
+    # in-loop n_trades counter, so the two counts can never drift apart
+    closes = [t for t in trades if "pnl" in t]
     wins = [t for t in closes if t.get("pnl", 0) > 0]
     gross_w = sum(t["pnl"] for t in wins)
     gross_l = -sum(t["pnl"] for t in closes if t.get("pnl", 0) <= 0)
