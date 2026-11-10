@@ -8,6 +8,7 @@ logs/paper_trading/{sid}_daily.jsonl and {sid}_trades.jsonl.
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from typing import Dict, List
 
@@ -36,9 +37,13 @@ class Ledger:
                 "positions": {}, "quotes": {}, "n_trades": 0, "wins": 0}
 
     def save(self, st: dict) -> None:
+        # atomic write (tmp + rename): a crash mid-write must never leave a
+        # truncated state file — same discipline as the data catalog
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
-        self.state_path.write_text(json.dumps(st, indent=1, default=str),
-                                   encoding="utf-8")
+        tmp = self.state_path.with_name(self.state_path.name + ".tmp")
+        tmp.write_text(json.dumps(st, indent=1, default=str),
+                       encoding="utf-8")
+        os.replace(tmp, self.state_path)
 
     # ── events ──
     def record_fills(self, st: dict, events: List[FillEvent]) -> None:
